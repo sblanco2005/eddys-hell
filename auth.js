@@ -442,12 +442,17 @@
       setUser(null);
       return;
     }
-    if (isAllowedEmail(user.email)) {
+    const normalized = {
+      ...user,
+      email: normalizeEmail(user.email),
+    };
+    // Admins in admins.json are always allowed (even if missing from members).
+    if (isAllowedEmail(normalized.email)) {
       blockMessage = null;
-      setUser(user);
+      setUser(normalized);
       return;
     }
-    await rejectUnauthorized(user);
+    await rejectUnauthorized(normalized);
   }
 
   function mockSignIn(role) {
@@ -495,6 +500,9 @@
     );
     const {
       getAuth,
+      initializeAuth,
+      browserLocalPersistence,
+      setPersistence,
       GoogleAuthProvider,
       signInWithPopup,
       signInWithRedirect,
@@ -519,6 +527,9 @@
     return {
       initializeApp,
       getAuth,
+      initializeAuth,
+      browserLocalPersistence,
+      setPersistence,
       GoogleAuthProvider,
       signInWithPopup,
       signInWithRedirect,
@@ -562,14 +573,20 @@
   let firestoreOnSnapshot = null;
 
   /**
-   * Mobile Safari often fails Firebase popups with auth/cancelled-popup-request.
-   * Prefer signInWithRedirect on mobile; desktop keeps popup with redirect fallback.
-   * Firebase authorized domains must already include sblanco2005.github.io (and
-   * localhost) — leave Console Auth settings alone from this app.
+   * Auth strategy (GitHub Pages):
+   * signInWithRedirect is BROKEN on sblanco2005.github.io while authDomain is
+   * eddy-s-hell.firebaseapp.com — browsers block the cross-origin storage the
+   * redirect helper needs (Safari 16.1+, Firefox 109+, Chrome M115+). Google
+   * appears to succeed, then getRedirectResult is null and the user lands back
+   * on sign-in. Prefer signInWithPopup everywhere on github.io. Redirect remains
+   * available only off Pages (e.g. localhost) as a popup-blocked fallback.
+   * Authorized domains already include sblanco2005.github.io.
    */
   const REDIRECT_PENDING_KEY = "eddys-hell-auth-redirect-pending";
 
   function prefersRedirectSignIn() {
+    // Never prefer redirect on GitHub Pages (third-party storage partitioned).
+    if (isGithubPages()) return false;
     const ua = navigator.userAgent || "";
     const isIOS =
       /iPad|iPhone|iPod/i.test(ua) ||
@@ -609,10 +626,47 @@
     }
   }
 
+  function userFromFirebase(user) {
+    return {
+      email: normalizeEmail(user.email || ""),
+      displayName: user.displayName || user.email || "User",
+      photoURL: user.photoURL || null,
+      uid: user.uid,
+      provider: "google",
+    };
+  }
+
+  async function handleFirebaseUser(user) {
+    if (gating) return;
+    if (user) {
+      await admitOrReject(userFromFirebase(user));
+      return;
+    }
+    if (isLocalhost() && loadMockSession()) {
+      await admitOrReject(loadMockSession());
+      return;
+    }
+    setUser(null);
+  }
+
   async function initFirebase(cfg) {
     const mod = await loadFirebaseModular();
     const app = mod.initializeApp(cfg);
-    fbAuth = mod.getAuth(app);
+
+    // Explicit local persistence so redirect/popup sessions survive reloads.
+    try {
+      fbAuth = mod.initializeAuth(app, {
+        persistence: mod.browserLocalPersistence,
+      });
+    } catch (_) {
+      fbAuth = mod.getAuth(app);
+      try {
+        await mod.setPersistence(fbAuth, mod.browserLocalPersistence);
+      } catch (err) {
+        console.warn("Firebase setPersistence:", err);
+      }
+    }
+
     GoogleAuthProviderCtor = mod.GoogleAuthProvider;
     signInWithPopupFn = mod.signInWithPopup;
     signInWithRedirectFn = mod.signInWithRedirect;
@@ -636,37 +690,43 @@
       firestoreStatus = "local";
     }
 
-    // Finish redirect return (mobile). Clear pending flag; ignore benign noise.
+    // Finish redirect return before listening. On github.io this often yields
+    // null (third-party storage) even after Google "succeeded".
+    const hadPendingRedirect = consumeRedirectPending();
+    let redirectUser = null;
     try {
       const redirectCred = await mod.getRedirectResult(fbAuth);
-      consumeRedirectPending();
       if (redirectCred && redirectCred.user) {
+        redirectUser = redirectCred.user;
         blockMessage = null;
       }
     } catch (err) {
-      consumeRedirectPending();
       if (!isBenignPopupError(err)) {
         console.warn("Firebase redirect result:", err);
+        if (hadPendingRedirect) {
+          blockMessage =
+            "Sign-in did not complete in this browser. Try again, or allow popups for this site.";
+        }
       }
     }
 
+    // Wait until Auth has settled so boot() does not paint guest over a session.
+    if (typeof fbAuth.authStateReady === "function") {
+      await fbAuth.authStateReady();
+    }
+
+    if (!redirectUser && hadPendingRedirect && !fbAuth.currentUser) {
+      // Classic GH Pages + redirect failure: Google OK, session never restored.
+      blockMessage =
+        "Sign-in redirect could not restore your session on this browser. Tap Sign in again (popup).";
+    }
+
     mod.onAuthStateChanged(fbAuth, (user) => {
-      if (gating) return;
-      if (user) {
-        admitOrReject({
-          email: user.email || "",
-          displayName: user.displayName || user.email || "User",
-          photoURL: user.photoURL || null,
-          uid: user.uid,
-          provider: "google",
-        });
-      } else if (isLocalhost() && loadMockSession()) {
-        const mock = loadMockSession();
-        admitOrReject(mock);
-      } else {
-        setUser(null);
-      }
+      handleFirebaseUser(user);
     });
+
+    // Apply current user now (do not wait for a later notification).
+    await handleFirebaseUser(fbAuth.currentUser);
 
     firebaseReady = true;
   }
@@ -678,7 +738,8 @@
     const provider = new GoogleAuthProviderCtor();
     provider.setCustomParameters({ prompt: "select_account" });
 
-    // Mobile / iOS Safari: skip popup (cancelled-popup-request).
+    // Redirect only off GitHub Pages (see prefersRedirectSignIn). On Pages,
+    // redirect loses the session after Google succeeds.
     if (prefersRedirectSignIn()) {
       markRedirectPending();
       await signInWithRedirectFn(fbAuth, provider);
@@ -686,11 +747,19 @@
     }
 
     try {
+      clearBlockMessage();
       await signInWithPopupFn(fbAuth, provider);
       return { method: "popup" };
     } catch (err) {
-      // Treat cancelled / closed / blocked as non-fatal → redirect fallback.
+      // On GitHub Pages do NOT fall back to redirect — it cannot restore session.
       if (isBenignPopupError(err)) {
+        if (isGithubPages()) {
+          const e = new Error(
+            "Popup blocked or closed. Allow popups for sblanco2005.github.io and try again."
+          );
+          e.code = err.code;
+          throw e;
+        }
         markRedirectPending();
         await signInWithRedirectFn(fbAuth, provider);
         return { method: "redirect" };
@@ -717,10 +786,12 @@
       const res = await fetch("data/admins.json", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        adminEmails = Array.isArray(data.emails) ? data.emails : [];
+        adminEmails = Array.isArray(data.emails)
+          ? data.emails.map(normalizeEmail).filter(Boolean)
+          : [];
       }
     } catch (_) {
-      adminEmails = ["sblanco2005@gmail.com"];
+      adminEmails = [normalizeEmail("sblanco2005@gmail.com")];
     }
 
     // Members allowlist (repo then newer localStorage)

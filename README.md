@@ -36,8 +36,10 @@ Without Firebase config, localhost shows **Continue as Admin / Member** mock but
 2. Add a **Web** app; copy the config object.
 3. Paste into `data/firebase-config.json` (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`).
 4. Authentication → Sign-in method → enable **Google**.
-5. Authentication → Settings → Authorized domains → add `sblanco2005.github.io` (and `localhost` for local testing).
+5. Authentication → Settings → Authorized domains → add `sblanco2005.github.io` (and `localhost` for local testing). **Already configured** for project `eddy-s-hell`: `localhost`, `eddy-s-hell.firebaseapp.com`, `eddy-s-hell.web.app`, `sblanco2005.github.io`.
 6. Rebuild `dist/` and run `scripts/publish-pages.sh`.
+
+**GitHub Pages + mobile:** `signInWithRedirect` cannot restore the session when `authDomain` is `*.firebaseapp.com` (browsers partition that storage). The app uses **popup** sign-in on `*.github.io`. Allow popups for the site if the browser blocks them. Making redirect work would require self-hosting Firebase `/__/auth` helpers on `sblanco2005.github.io` and setting `authDomain` to that host, plus adding `https://sblanco2005.github.io/__/auth/handler` under Google Cloud → Credentials → OAuth 2.0 Web client → Authorized redirect URIs.
 
 Until those keys are filled, production Pages shows **“Auth not configured”** and Google sign-in stays hidden. Localhost still has mock sign-in.
 
