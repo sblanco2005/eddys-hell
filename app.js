@@ -385,20 +385,6 @@
     updatePublishPendingHint();
   }
 
-  function downloadMembersJson(payload) {
-    const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "members.json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
   function parsePTPayload(data) {
     return {
       email: String(data && data.email || "").trim().toLowerCase(),
@@ -435,20 +421,6 @@
     return ptSummary;
   }
 
-  function downloadPTJson(payload) {
-    const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "pt.json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
   function savePTSummary() {
     const input = $("pt-email-input");
     const email = String(input.value || "").trim().toLowerCase();
@@ -463,11 +435,10 @@
     ptSummary = payload;
     localStorage.setItem(PT_KEY, JSON.stringify(payload));
     localStorage.setItem(PT_PENDING_KEY, "1");
-    downloadPTJson(payload);
     renderPTUI();
     const toast = $("pt-toast");
     toast.hidden = false;
-    toast.textContent = "PT summary address saved — downloaded pt.json. Re-publish to share it.";
+    toast.textContent = "PT email saved — Publish pending. Grok Bot will sync.";
     $("pt-publish-hint").hidden = false;
     setTimeout(() => {
       toast.hidden = true;
@@ -689,12 +660,10 @@
     const payload = window.EddysHellAuth.saveMembers(membersDraft);
     membersDraft = [...payload.emails];
     localStorage.setItem(MEMBERS_PENDING_KEY, "1");
-    downloadMembersJson(payload);
     renderMembersUI();
     const toast = $("members-toast");
     toast.hidden = false;
-    toast.textContent =
-      "Members saved — downloaded members.json. Re-publish so friends get the list.";
+    toast.textContent = "Members saved — Publish pending. Grok Bot will sync.";
     $("members-publish-hint").hidden = false;
     setTimeout(() => {
       toast.hidden = true;
