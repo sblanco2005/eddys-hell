@@ -1,6 +1,6 @@
 /**
  * Eddy's Hell — Thursday workout (admin + member)
- * Storage: eddys-hell-admin-v1, eddys-hell-checkins-v1, eddys-hell-members-v1
+ * Storage: eddys-hell-admin-v1, eddys-hell-checkins-v1, eddys-hell-members-v1, eddys-hell-pt-v1
  */
 (function () {
   "use strict";
@@ -340,8 +340,14 @@
   }
 
   function savePTSummary() {
+    const input = $("pt-email-input");
+    const email = String(input.value || "").trim().toLowerCase();
+    if (!email || !input.checkValidity()) {
+      alert("Enter a valid PT summary email address.");
+      return;
+    }
     const payload = {
-      email: String($("pt-email-input").value || "").trim().toLowerCase(),
+      email,
       updatedAt: new Date().toISOString(),
     };
     ptSummary = payload;
