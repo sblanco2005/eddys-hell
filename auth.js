@@ -18,7 +18,11 @@
   /** @type {string|null} */
   let membersUpdatedAt = null;
   /** @type {string|null} */
-  let blockMessage = null;
+  let blockMessage = null; // member allowlist denial only
+  /** @type {string|null} */
+  let authHintMessage = null; // redirect/popup/privacy hints (NOT member denial)
+  /** @type {boolean} */
+  let forcePopupOnce = false; // after a failed redirect restore on hosting
   /** @type {object|null} */
   let firebaseConfig = null;
   /** @type {boolean} */
@@ -35,6 +39,17 @@
 
   function isGithubPages() {
     return /\.github\.io$/i.test(location.hostname);
+  }
+
+  /** Firebase Hosting origins where authDomain can match the page origin. */
+  function isFirebaseHosting() {
+    const h = location.hostname;
+    return (
+      h === "eddy-s-hell.web.app" ||
+      h === "eddy-s-hell.firebaseapp.com" ||
+      /\.web\.app$/i.test(h) ||
+      /\.firebaseapp\.com$/i.test(h)
+    );
   }
 
   /**
@@ -117,24 +132,28 @@
       /argument-error/i.test(msg)
     ) {
       if (isInAppBrowser()) return openInBrowserMessage();
-      // Classic GitHub Pages + Firebase Auth mismatch: authDomain is
-      // *.firebaseapp.com while the page is on *.github.io — popup/redirect
-      // often fails on mobile Safari even outside WhatsApp.
       if (isGithubPages()) {
         return (
           "Sign-in on this GitHub Pages mirror is unreliable on many phones. " +
           "Open " + preferredLiveUrl() + " instead (same app, matching auth domain), then sign in."
         );
       }
+      // On web.app / firebaseapp.com: privacy / popup — not "open Safari".
       return (
-        "Sign-in could not start in this browser. Open this page in Safari " +
-        "(or Chrome), allow popups for this site, and try again."
+        "Sign-in could not start. Allow popups for this site, or in Safari turn off " +
+        "\"Reduce Advanced Privacy Protections\" for this site / try again."
       );
     }
     if (code === "auth/popup-blocked" || code === "auth/popup-closed-by-user") {
+      if (isFirebaseHosting()) {
+        return (
+          "Popup blocked or closed. Allow popups for this site, or reduce privacy " +
+          "protections for eddy-s-hell.web.app, then try again."
+        );
+      }
       return (
         "Popup blocked or closed. Allow popups for this site and try again, " +
-        "or open the link in Safari."
+        "or open " + preferredLiveUrl() + " in Safari."
       );
     }
     if (code === "auth/unauthorized-domain") {
@@ -143,11 +162,10 @@
     if (code === "auth/network-request-failed") {
       return "Network error during sign-in. Check your connection and try again.";
     }
-    // Strip raw "Firebase: Error (...)" wrapper when we already have a clear code.
     if (/^Firebase:\s*Error\s*\(/i.test(msg) && code) {
-      return "Sign-in failed (" + code + "). Try again in Safari.";
+      return "Sign-in failed (" + code + "). Try again.";
     }
-    return msg || "Sign-in failed. Try again in Safari.";
+    return msg || "Sign-in failed. Try again.";
   }
 
   /** ?admin=1 bypass — localhost only, never on github.io */
@@ -309,8 +327,35 @@
     return blockMessage;
   }
 
+  function getAuthHintMessage() {
+    return authHintMessage;
+  }
+
+  /** Banner for landing: member denial vs sign-in hint (separate titles in UI). */
+  function getAuthBanner() {
+    if (blockMessage) {
+      return {
+        kind: "denied",
+        title: "Not on the member list",
+        message: blockMessage,
+      };
+    }
+    if (authHintMessage) {
+      return {
+        kind: "hint",
+        title: "Sign-in issue",
+        message: authHintMessage,
+      };
+    }
+    return null;
+  }
+
   function clearBlockMessage() {
     blockMessage = null;
+  }
+
+  function clearAuthHintMessage() {
+    authHintMessage = null;
   }
 
   // ——— Check-ins (Firestore when available, else localStorage) ———
@@ -562,6 +607,8 @@
     // Admins in admins.json are always allowed (even if missing from members).
     if (isAllowedEmail(normalized.email)) {
       blockMessage = null;
+      authHintMessage = null;
+      forcePopupOnce = false;
       setUser(normalized);
       return;
     }
@@ -686,20 +733,19 @@
   let firestoreOnSnapshot = null;
 
   /**
-   * Auth strategy (GitHub Pages):
-   * signInWithRedirect is BROKEN on sblanco2005.github.io while authDomain is
-   * eddy-s-hell.firebaseapp.com — browsers block the cross-origin storage the
-   * redirect helper needs (Safari 16.1+, Firefox 109+, Chrome M115+). Google
-   * appears to succeed, then getRedirectResult is null and the user lands back
-   * on sign-in. Prefer signInWithPopup everywhere on github.io. Redirect remains
-   * available only off Pages (e.g. localhost) as a popup-blocked fallback.
-   * Authorized domains already include sblanco2005.github.io.
+   * Auth strategy:
+   * - github.io: popup-only (authDomain is web.app / firebaseapp.com — cross-origin
+   *   redirect storage is partitioned; getRedirectResult comes back null).
+   * - eddy-s-hell.web.app / *.firebaseapp.com: prefer signInWithRedirect (authDomain
+   *   matches hosting origin so redirect restore works).
+   * - After a failed redirect restore on hosting, force one popup attempt.
    */
   const REDIRECT_PENDING_KEY = "eddys-hell-auth-redirect-pending";
 
   function prefersRedirectSignIn() {
-    // Never prefer redirect on GitHub Pages (third-party storage partitioned).
+    if (forcePopupOnce) return false;
     if (isGithubPages()) return false;
+    if (isFirebaseHosting()) return true;
     const ua = navigator.userAgent || "";
     const isIOS =
       /iPad|iPhone|iPod/i.test(ua) ||
@@ -803,8 +849,9 @@
       firestoreStatus = "local";
     }
 
-    // Finish redirect return before listening. On github.io this often yields
-    // null (third-party storage) even after Google "succeeded".
+    // Finish redirect return before listening. With authDomain matching the
+    // hosting origin (eddy-s-hell.web.app), getRedirectResult should restore.
+    // On github.io (cross-origin authDomain) this often yields null.
     const hadPendingRedirect = consumeRedirectPending();
     let redirectUser = null;
     try {
@@ -812,13 +859,18 @@
       if (redirectCred && redirectCred.user) {
         redirectUser = redirectCred.user;
         blockMessage = null;
+        authHintMessage = null;
+        forcePopupOnce = false;
       }
     } catch (err) {
       if (!isBenignPopupError(err)) {
         console.warn("Firebase redirect result:", err);
         if (hadPendingRedirect) {
-          blockMessage =
-            "Sign-in did not complete in this browser. Try again, or allow popups for this site.";
+          // Never reuse member-denial blockMessage for redirect failures.
+          authHintMessage =
+            "Sign-in did not complete. Tap Sign in with Google again. " +
+            "Allow popups, or reduce privacy protections for this site.";
+          if (isFirebaseHosting()) forcePopupOnce = true;
         }
       }
     }
@@ -828,10 +880,28 @@
       await fbAuth.authStateReady();
     }
 
+    // If redirect returned a user, prefer that; else currentUser after authStateReady.
+    if (!redirectUser && fbAuth.currentUser) {
+      redirectUser = fbAuth.currentUser;
+      authHintMessage = null;
+      forcePopupOnce = false;
+    }
+
     if (!redirectUser && hadPendingRedirect && !fbAuth.currentUser) {
-      // Classic GH Pages + redirect failure: Google OK, session never restored.
-      blockMessage =
-        "Sign-in redirect could not restore your session on this browser. Tap Sign in again (popup).";
+      // Redirect completed at Google but session was not restored.
+      if (isFirebaseHosting()) {
+        forcePopupOnce = true;
+        authHintMessage =
+          "Sign-in redirect did not restore your session. Tap Sign in with Google again " +
+          "(this try uses a popup). Allow popups or reduce privacy protections if asked.";
+      } else if (isGithubPages()) {
+        authHintMessage =
+          "Sign-in redirect cannot restore a session on GitHub Pages. " +
+          "Open " + preferredLiveUrl() + " and sign in there.";
+      } else {
+        authHintMessage =
+          "Sign-in redirect did not restore your session. Tap Sign in again.";
+      }
     }
 
     mod.onAuthStateChanged(fbAuth, (user) => {
@@ -861,9 +931,10 @@
     // prompt is an official OAuth param; keep select_account for account picker.
     provider.setCustomParameters({ prompt: "select_account" });
 
-    // Redirect only off GitHub Pages (see prefersRedirectSignIn). On Pages,
-    // redirect loses the session after Google succeeds — keep popup-first.
+    // Hosting (web.app): redirect first. GitHub Pages: popup only.
+    // After a failed redirect restore, forcePopupOnce makes this popup.
     if (prefersRedirectSignIn()) {
+      clearAuthHintMessage();
       markRedirectPending();
       await signInWithRedirectFn(fbAuth, provider);
       return { method: "redirect" };
@@ -871,8 +942,11 @@
 
     try {
       clearBlockMessage();
+      clearAuthHintMessage();
+      const usedForcedPopup = forcePopupOnce;
+      forcePopupOnce = false;
       await signInWithPopupFn(fbAuth, provider);
-      return { method: "popup" };
+      return { method: "popup", forced: usedForcedPopup };
     } catch (err) {
       // On GitHub Pages do NOT fall back to redirect — it cannot restore session.
       if (isBenignPopupError(err)) {
@@ -883,9 +957,12 @@
           e.code = err.code;
           throw e;
         }
-        markRedirectPending();
-        await signInWithRedirectFn(fbAuth, provider);
-        return { method: "redirect" };
+        // Off Pages: popup blocked → redirect (hosting) as fallback.
+        if (isFirebaseHosting() || !isGithubPages()) {
+          markRedirectPending();
+          await signInWithRedirectFn(fbAuth, provider);
+          return { method: "redirect" };
+        }
       }
       const e = new Error(friendlyAuthError(err));
       e.code = (err && err.code) || "auth/unknown";
@@ -967,6 +1044,7 @@
     isConfigured: () => firebaseReady,
     isLocalhost,
     isGithubPages,
+    isFirebaseHosting,
     isInAppBrowser,
     publicAppUrl,
     openInBrowserMessage,
@@ -995,6 +1073,9 @@
     isAdminEmail,
     normalizeEmail,
     getBlockMessage,
+    getAuthHintMessage,
+    getAuthBanner,
     clearBlockMessage,
+    clearAuthHintMessage,
   };
 })();

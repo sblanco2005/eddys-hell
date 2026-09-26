@@ -573,11 +573,21 @@
     $("btn-google").hidden = !configured || inApp;
     $("mock-signin").hidden = !(!configured && local);
 
-    const denied = Auth.getBlockMessage();
     const deniedEl = $("auth-denied");
-    if (denied && !inApp) {
+    const banner =
+      (Auth.getAuthBanner && Auth.getAuthBanner()) ||
+      (Auth.getBlockMessage && Auth.getBlockMessage()
+        ? { kind: "denied", title: "Not on the member list", message: Auth.getBlockMessage() }
+        : null);
+    if (banner && banner.message && !inApp) {
       deniedEl.hidden = false;
-      $("auth-denied-msg").textContent = denied;
+      const titleEl = $("auth-denied-title");
+      if (titleEl) {
+        titleEl.textContent =
+          banner.title ||
+          (banner.kind === "denied" ? "Not on the member list" : "Sign-in issue");
+      }
+      $("auth-denied-msg").textContent = banner.message;
     } else {
       deniedEl.hidden = true;
     }
