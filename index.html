@@ -240,14 +240,13 @@
             <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
           </dl>
           <div class="why" id="pick-why"></div>
-          <div class="actions">
+          <div class="actions" id="pick-actions">
             <button type="button" class="btn secondary" id="btn-again">Pick again</button>
-            <button type="button" class="btn accent" id="btn-accept">Accept as this week</button>
+            <button type="button" class="btn accent" id="btn-keep" hidden>Keep this week</button>
+            <button type="button" class="btn accent" id="btn-accept" hidden>Set as this week</button>
           </div>
-          <p class="toast" id="accept-toast" hidden>Accepted as this week’s pick.</p>
-          <p class="hint publish-hint" id="publish-hint" hidden>
-            Downloaded <code>this-week.json</code> — drop it into <code>data/</code> and re-run <code>scripts/publish-pages.sh</code> so the group sees it on Pages.
-          </p>
+          <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
+          <p class="hint publish-pending" id="publish-pending" hidden>Publish pending — Grok Bot will sync to Pages.</p>
 
           <div class="yt-admin" id="yt-admin">
             <header class="card-head yt-admin-head">
@@ -256,16 +255,6 @@
             </header>
             <div class="yt-embed-wrap" id="admin-yt-embed" hidden></div>
             <p class="yt-pending" id="admin-yt-pending">Video not published yet</p>
-            <label class="field-label" for="yt-url-input">Paste YouTube URL or video id</label>
-            <input type="text" id="yt-url-input" placeholder="https://youtu.be/… or 11-char id" autocomplete="off" />
-            <div class="actions">
-              <button type="button" class="btn primary" id="btn-yt-save">Save video</button>
-              <button type="button" class="btn ghost" id="btn-yt-clear">Clear video</button>
-            </div>
-            <p class="toast" id="yt-toast" hidden>YouTube link saved.</p>
-            <p class="hint publish-hint" id="yt-publish-hint" hidden>
-              Downloaded updated <code>this-week.json</code> — drop into <code>data/</code> and re-run <code>scripts/publish-pages.sh</code>.
-            </p>
           </div>
         </article>
 

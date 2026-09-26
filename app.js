@@ -35,6 +35,8 @@
   let currentResult = null;
   /** @type {object|null} published this-week from repo */
   let thisWeekFile = null;
+  /** Dry-run candidate not yet set as this week */
+  let pickIsCandidate = false;
   /** @type {object|null} auth user with role */
   let authUser = null;
 
@@ -348,133 +350,39 @@
     const embed = $("admin-yt-embed");
     const pending = $("admin-yt-pending");
     const badge = $("yt-status-badge");
-    const input = $("yt-url-input");
     const id = tw && tw.youtubeId;
     if (id) {
       fillYtEmbed(embed, id);
       embed.hidden = false;
       pending.hidden = true;
       badge.textContent = "Published";
-      if (input && document.activeElement !== input) {
-        input.value = tw.youtubeUrl || youtubeWatchUrl(id) || id;
-      }
     } else {
       embed.innerHTML = "";
       embed.hidden = true;
       pending.hidden = false;
       badge.textContent = "Not set";
-      if (input && document.activeElement !== input && !(input.value || "").trim()) {
-        /* leave empty */
-      }
     }
-    const pendingPub = localStorage.getItem(PENDING_PUBLISH_KEY) === "1";
-    $("yt-publish-hint").hidden = !pendingPub;
+    updatePublishPendingHint();
   }
 
-  function buildThisWeekPayloadFromCurrent(extra) {
-    const tw = resolveThisWeek();
-    const base = tw
-      ? {
-          pickId: tw.id,
-          filename: tw.filename,
-          folderType: tw.folderType,
-          hr: tw.hr,
-          relPath: tw.relPath,
-          sizeBytes: tw.sizeBytes,
-          mtime: tw.mtime,
-          rawTags: tw.rawTags || [],
-          pickedAt: tw.pickedAt,
-          why: tw.why,
-          matchCount: tw.matchCount,
-          youtubeId: tw.youtubeId || null,
-          youtubeUrl: tw.youtubeUrl || null,
-        }
-      : null;
-    if (!base) return null;
-    return { ...base, ...(extra || {}) };
+  function updatePublishPendingHint() {
+    const el = $("publish-pending");
+    if (!el) return;
+    el.hidden = localStorage.getItem(PENDING_PUBLISH_KEY) !== "1";
   }
 
-  function persistThisWeekPayload(payload) {
-    thisWeekFile = payload;
-    if (state.lastPick && (state.lastPick.id === payload.pickId || state.lastPick.id === payload.id)) {
-      state.lastPick = {
-        ...state.lastPick,
-        youtubeId: payload.youtubeId || null,
-        youtubeUrl: payload.youtubeUrl || null,
-      };
-      saveState();
+  function updatePickActions() {
+    const btnAccept = $("btn-accept");
+    const btnKeep = $("btn-keep");
+    if (!btnAccept || !btnKeep) return;
+    if (pickIsCandidate) {
+      btnAccept.hidden = false;
+      btnKeep.hidden = true;
+    } else {
+      btnAccept.hidden = true;
+      btnKeep.hidden = !resolveThisWeek();
     }
-    localStorage.setItem(PENDING_PUBLISH_KEY, "1");
-    downloadThisWeekJson(payload);
-    try {
-      localStorage.setItem(
-        "eddys-hell-this-week-broadcast-v1",
-        JSON.stringify({ ...payload, _ts: Date.now() })
-      );
-    } catch (_) { /* ok */ }
-  }
-
-  function saveYoutubeVideo() {
-    const tw = resolveThisWeek();
-    if (!tw) {
-      alert("Accept a pick as this week first, then paste the YouTube link.");
-      return;
-    }
-    const id = parseYoutubeId($("yt-url-input").value);
-    if (!id) {
-      alert("Could not parse a YouTube video id. Paste a full URL or an 11-character id.");
-      return;
-    }
-    const payload = buildThisWeekPayloadFromCurrent({
-      youtubeId: id,
-      youtubeUrl: youtubeWatchUrl(id),
-    });
-    persistThisWeekPayload(payload);
-    const toast = $("yt-toast");
-    toast.hidden = false;
-    toast.textContent = "YouTube link saved — downloaded this-week.json.";
-    $("yt-publish-hint").hidden = false;
-    setTimeout(() => {
-      toast.hidden = true;
-    }, 3500);
-    renderYoutubeAdminControls();
-    renderAdminCheckins();
-  }
-
-  function clearYoutubeVideo() {
-    const tw = resolveThisWeek();
-    if (!tw) {
-      alert("No this-week pick to update.");
-      return;
-    }
-    $("yt-url-input").value = "";
-    const payload = buildThisWeekPayloadFromCurrent({
-      youtubeId: null,
-      youtubeUrl: null,
-    });
-    persistThisWeekPayload(payload);
-    const toast = $("yt-toast");
-    toast.hidden = false;
-    toast.textContent = "Video cleared — downloaded this-week.json.";
-    $("yt-publish-hint").hidden = false;
-    setTimeout(() => {
-      toast.hidden = true;
-    }, 3500);
-    renderYoutubeAdminControls();
-  }
-
-  function downloadThisWeekJson(payload) {
-    const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "this-week.json";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    updatePublishPendingHint();
   }
 
   function downloadMembersJson(payload) {
@@ -918,8 +826,7 @@
     $("pick-why").textContent = result.why;
     showPickPanels({ empty: false, result: true, error: false });
     $("accept-toast").hidden = true;
-    const pending = localStorage.getItem(PENDING_PUBLISH_KEY) === "1";
-    $("publish-hint").hidden = !pending;
+    updatePickActions();
     renderYoutubeAdminControls();
   }
 
@@ -971,10 +878,13 @@
     state.rule = rule;
     const result = pick(catalog.files, rule, state.usedHistory);
     currentResult = result.ok ? result : null;
+    pickIsCandidate = !!(result.ok && result.pick);
     showView("pick");
     if (!result.ok) {
+      pickIsCandidate = false;
       renderPickError(result.error);
       renderAdminCheckins();
+      updatePickActions();
       return;
     }
     renderPickResult(result);
@@ -996,8 +906,11 @@
       result = pick(catalog.files, rule, state.usedHistory);
     }
     currentResult = result.ok ? result : null;
+    pickIsCandidate = !!(result.ok && result.pick);
     if (!result.ok) {
+      pickIsCandidate = false;
       renderPickError(result.error);
+      updatePickActions();
       return;
     }
     renderPickResult(result);
@@ -1007,6 +920,12 @@
     if (!currentResult || !currentResult.pick) return;
     const f = currentResult.pick;
     const now = new Date().toISOString();
+    // Keep existing YouTube id only if re-accepting the same published pick
+    const prev = resolveThisWeek();
+    const keepYt =
+      prev && prev.id === f.id
+        ? { youtubeId: prev.youtubeId || null, youtubeUrl: prev.youtubeUrl || null }
+        : { youtubeId: null, youtubeUrl: null };
     state.lastPick = {
       id: f.id,
       filename: f.filename,
@@ -1019,8 +938,8 @@
       pickedAt: now,
       why: currentResult.why,
       matchCount: currentResult.matches.length,
-      youtubeId: null,
-      youtubeUrl: null,
+      youtubeId: keepYt.youtubeId,
+      youtubeUrl: keepYt.youtubeUrl,
     };
     state.usedHistory = [
       ...(state.usedHistory || []),
@@ -1040,13 +959,13 @@
       pickedAt: now,
       why: currentResult.why,
       matchCount: currentResult.matches.length,
-      youtubeId: null,
-      youtubeUrl: null,
+      youtubeId: keepYt.youtubeId,
+      youtubeUrl: keepYt.youtubeUrl,
     };
-    // In-memory for this browser; members on Pages need the committed file
+    // In-memory only — browser cannot write GitHub; Grok Bot / publish-pages syncs
     thisWeekFile = payload;
     localStorage.setItem(PENDING_PUBLISH_KEY, "1");
-    downloadThisWeekJson(payload);
+    pickIsCandidate = false;
 
     try {
       localStorage.setItem(
@@ -1059,22 +978,38 @@
     updateMatchBadge();
     const toast = $("accept-toast");
     toast.hidden = false;
-    toast.textContent =
-      "Accepted — downloaded this-week.json. Re-publish to share with the group.";
-    $("publish-hint").hidden = false;
+    toast.textContent = "Set as this week’s pick.";
+    updatePickActions();
     setTimeout(() => {
       toast.hidden = true;
-    }, 4000);
+    }, 3500);
+    renderAdminCheckins();
+    renderYoutubeAdminControls();
+  }
+
+  function keepThisWeek() {
+    pickIsCandidate = false;
+    // Re-show published / in-memory this week
+    currentResult = null;
+    ensurePickViewFromPublished();
+    const toast = $("accept-toast");
+    toast.hidden = false;
+    toast.textContent = "Keeping this week’s pick.";
+    setTimeout(() => {
+      toast.hidden = true;
+    }, 2500);
+    updatePickActions();
     renderAdminCheckins();
     renderYoutubeAdminControls();
   }
 
   function ensurePickViewFromPublished() {
-    if (currentResult) {
-      /* keep current dry-run / in-memory pick */
+    if (currentResult && pickIsCandidate) {
+      /* keep current dry-run candidate */
       renderPickResult(currentResult);
       return;
     }
+    pickIsCandidate = false;
     if (state.lastPick) {
       restoreLastPickIfAny();
       return;
@@ -1102,9 +1037,11 @@
       return;
     }
     showPickPanels({ empty: true, result: false, error: false });
+    updatePickActions();
   }
 
   function restoreLastPickIfAny() {
+    pickIsCandidate = false;
     if (!state.lastPick) {
       // Fall through to published this-week.json when lastPick is missing
       const tw = resolveThisWeek();
@@ -1288,6 +1225,7 @@
     $("btn-dryrun").addEventListener("click", runDryRun);
     $("btn-again").addEventListener("click", pickAgain);
     $("btn-accept").addEventListener("click", acceptPick);
+    $("btn-keep").addEventListener("click", keepThisWeek);
     $("btn-goto-rule").addEventListener("click", () => showView("rule"));
     $("btn-error-rule").addEventListener("click", () => showView("rule"));
 
@@ -1300,14 +1238,6 @@
     });
     $("btn-members-save").addEventListener("click", saveMembersList);
     $("btn-pt-save").addEventListener("click", savePTSummary);
-    $("btn-yt-save").addEventListener("click", saveYoutubeVideo);
-    $("btn-yt-clear").addEventListener("click", clearYoutubeVideo);
-    $("yt-url-input").addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
-        saveYoutubeVideo();
-      }
-    });
 
     await window.EddysHellAuth.init();
     syncMembersDraftFromAuth();
