@@ -561,6 +561,54 @@
   /** @type {any} */
   let firestoreOnSnapshot = null;
 
+  /**
+   * Mobile Safari often fails Firebase popups with auth/cancelled-popup-request.
+   * Prefer signInWithRedirect on mobile; desktop keeps popup with redirect fallback.
+   * Firebase authorized domains must already include sblanco2005.github.io (and
+   * localhost) — leave Console Auth settings alone from this app.
+   */
+  const REDIRECT_PENDING_KEY = "eddys-hell-auth-redirect-pending";
+
+  function prefersRedirectSignIn() {
+    const ua = navigator.userAgent || "";
+    const isIOS =
+      /iPad|iPhone|iPod/i.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const isAndroid = /Android/i.test(ua);
+    return (
+      isIOS ||
+      isAndroid ||
+      /Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)
+    );
+  }
+
+  function isBenignPopupError(err) {
+    const code = err && err.code;
+    return (
+      code === "auth/cancelled-popup-request" ||
+      code === "auth/popup-closed-by-user" ||
+      code === "auth/popup-blocked"
+    );
+  }
+
+  function markRedirectPending() {
+    try {
+      sessionStorage.setItem(REDIRECT_PENDING_KEY, "1");
+    } catch (_) {
+      /* ok */
+    }
+  }
+
+  function consumeRedirectPending() {
+    try {
+      const v = sessionStorage.getItem(REDIRECT_PENDING_KEY);
+      if (v) sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+      return !!v;
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function initFirebase(cfg) {
     const mod = await loadFirebaseModular();
     const app = mod.initializeApp(cfg);
@@ -588,10 +636,18 @@
       firestoreStatus = "local";
     }
 
+    // Finish redirect return (mobile). Clear pending flag; ignore benign noise.
     try {
-      await mod.getRedirectResult(fbAuth);
+      const redirectCred = await mod.getRedirectResult(fbAuth);
+      consumeRedirectPending();
+      if (redirectCred && redirectCred.user) {
+        blockMessage = null;
+      }
     } catch (err) {
-      console.warn("Firebase redirect result:", err);
+      consumeRedirectPending();
+      if (!isBenignPopupError(err)) {
+        console.warn("Firebase redirect result:", err);
+      }
     }
 
     mod.onAuthStateChanged(fbAuth, (user) => {
@@ -621,17 +677,23 @@
     }
     const provider = new GoogleAuthProviderCtor();
     provider.setCustomParameters({ prompt: "select_account" });
+
+    // Mobile / iOS Safari: skip popup (cancelled-popup-request).
+    if (prefersRedirectSignIn()) {
+      markRedirectPending();
+      await signInWithRedirectFn(fbAuth, provider);
+      return { method: "redirect" };
+    }
+
     try {
       await signInWithPopupFn(fbAuth, provider);
+      return { method: "popup" };
     } catch (err) {
-      // Popup blocked / COOP → redirect fallback
-      if (
-        err &&
-        (err.code === "auth/popup-blocked" ||
-          err.code === "auth/popup-closed-by-user")
-      ) {
+      // Treat cancelled / closed / blocked as non-fatal → redirect fallback.
+      if (isBenignPopupError(err)) {
+        markRedirectPending();
         await signInWithRedirectFn(fbAuth, provider);
-        return;
+        return { method: "redirect" };
       }
       throw err;
     }
@@ -710,6 +772,7 @@
     isGithubPages,
     adminBypassEnabled,
     signInWithGoogle,
+    isBenignPopupError,
     mockSignIn,
     signOut,
     loadCheckins,

@@ -1141,8 +1141,17 @@
   function wireAuthButtons() {
     $("btn-google").addEventListener("click", async () => {
       try {
-        await window.EddysHellAuth.signInWithGoogle();
+        const result = await window.EddysHellAuth.signInWithGoogle();
+        // Redirect navigates away; popup resolves via onAuthStateChanged.
+        if (result && result.method === "redirect") return;
       } catch (err) {
+        // cancelled-popup-request / popup-closed are non-fatal (redirect retry).
+        if (
+          window.EddysHellAuth.isBenignPopupError &&
+          window.EddysHellAuth.isBenignPopupError(err)
+        ) {
+          return;
+        }
         alert("Sign-in failed: " + (err.message || err));
       }
     });
