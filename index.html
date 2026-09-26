@@ -189,6 +189,25 @@
             Downloaded <code>members.json</code> — drop it into <code>data/</code> and re-run <code>scripts/publish-pages.sh</code> so friends on other devices get the list (localStorage alone won’t sync).
           </p>
         </article>
+
+        <article class="card members-card" id="pt-card">
+          <header class="card-head">
+            <h2>PT summary</h2>
+            <span class="badge">Weekly email</span>
+          </header>
+          <p class="hint">Thursday check-in summaries go to this address after check-ins.</p>
+          <div class="field">
+            <label for="pt-email-input">Summary email</label>
+            <input type="email" id="pt-email-input" placeholder="eddy_pazmino@yahoo.com" autocomplete="email" />
+          </div>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-pt-save">Save PT email</button>
+          </div>
+          <p class="toast" id="pt-toast" hidden>PT summary address saved.</p>
+          <p class="hint publish-hint" id="pt-publish-hint" hidden>
+            Downloaded <code>pt.json</code> — drop it into <code>data/</code> and re-run <code>scripts/publish-pages.sh</code> so the published app has the address.
+          </p>
+        </article>
       </section>
 
       <!-- PICK VIEW (admin) -->

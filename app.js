@@ -8,8 +8,12 @@
   const STORAGE_KEY = "eddys-hell-admin-v1";
   const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
   const MEMBERS_PENDING_KEY = "eddys-hell-members-pending-v1";
+  const PT_KEY = "eddys-hell-pt-v1";
+  const PT_PENDING_KEY = "eddys-hell-pt-pending-v1";
   /** @type {string[]} draft emails in Members UI */
   let membersDraft = [];
+  /** @type {{ email: string, updatedAt: string|null }} PT summary destination */
+  let ptSummary = { email: "", updatedAt: null };
   const EXCLUDE_TYPES = new Set(["OutsideRoot"]);
   const POOL_SIZE = 20;
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -285,6 +289,75 @@
     URL.revokeObjectURL(url);
   }
 
+  function parsePTPayload(data) {
+    return {
+      email: String(data && data.email || "").trim().toLowerCase(),
+      updatedAt: (data && data.updatedAt) || null,
+    };
+  }
+
+  async function loadPTSummary() {
+    let fileParsed = { email: "", updatedAt: null };
+    try {
+      const res = await fetch("data/pt.json", { cache: "no-store" });
+      if (res.ok) fileParsed = parsePTPayload(await res.json());
+    } catch (_) {
+      /* optional */
+    }
+
+    let localParsed = null;
+    try {
+      const raw = localStorage.getItem(PT_KEY);
+      if (raw) localParsed = parsePTPayload(JSON.parse(raw));
+    } catch (_) {
+      localParsed = null;
+    }
+
+    if (localParsed && localParsed.updatedAt) {
+      const localTs = Date.parse(localParsed.updatedAt);
+      const fileTs = fileParsed.updatedAt ? Date.parse(fileParsed.updatedAt) : 0;
+      if (Number.isFinite(localTs) && localTs > (Number.isFinite(fileTs) ? fileTs : 0)) {
+        ptSummary = localParsed;
+        return ptSummary;
+      }
+    }
+    ptSummary = fileParsed;
+    return ptSummary;
+  }
+
+  function downloadPTJson(payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pt.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function savePTSummary() {
+    const payload = {
+      email: String($("pt-email-input").value || "").trim().toLowerCase(),
+      updatedAt: new Date().toISOString(),
+    };
+    ptSummary = payload;
+    localStorage.setItem(PT_KEY, JSON.stringify(payload));
+    localStorage.setItem(PT_PENDING_KEY, "1");
+    downloadPTJson(payload);
+    renderPTUI();
+    const toast = $("pt-toast");
+    toast.hidden = false;
+    toast.textContent = "PT summary address saved — downloaded pt.json. Re-publish to share it.";
+    $("pt-publish-hint").hidden = false;
+    setTimeout(() => {
+      toast.hidden = true;
+    }, 3500);
+  }
+
   // ——— UI helpers ———
 
   function $(id) {
@@ -539,6 +612,12 @@
     }, 3500);
   }
 
+  function renderPTUI() {
+    $("pt-email-input").value = ptSummary.email || "";
+    const pending = localStorage.getItem(PT_PENDING_KEY) === "1";
+    $("pt-publish-hint").hidden = !pending;
+  }
+
   function applyRoleUI() {
     renderUserSlot();
     if (!authUser) {
@@ -549,6 +628,7 @@
     if (authUser.role === "admin") {
       syncMembersDraftFromAuth();
       renderMembersUI();
+      renderPTUI();
       renderAdminShell("rule");
       return;
     }
@@ -889,6 +969,7 @@
 
   async function boot() {
     loadState();
+    await loadPTSummary();
 
     try {
       const had = localStorage.getItem(STORAGE_KEY);
@@ -940,6 +1021,7 @@
         if (tab.dataset.view === "rule") {
           syncMembersDraftFromAuth();
           renderMembersUI();
+          renderPTUI();
         }
         if (tab.dataset.view === "pick") {
           if (!currentResult && state.lastPick) restoreLastPickIfAny();
@@ -977,10 +1059,12 @@
       }
     });
     $("btn-members-save").addEventListener("click", saveMembersList);
+    $("btn-pt-save").addEventListener("click", savePTSummary);
 
     await window.EddysHellAuth.init();
     syncMembersDraftFromAuth();
     renderMembersUI();
+    renderPTUI();
     window.EddysHellAuth.onAuthChange((user) => {
       authUser = user;
       applyRoleUI();

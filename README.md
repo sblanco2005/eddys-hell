@@ -14,6 +14,8 @@ Static app with Google sign-in (Firebase) — or localhost mock roles until Fire
 
 Admin allowlist: **`data/admins.json`** — currently `sblanco2005@gmail.com` only. Edit the `emails` array to add more.
 
+PT summary destination: **`data/pt.json`**. Admin · Rule → **PT summary** lets you edit the email for Thursday check-in summaries, saves it to localStorage key `eddys-hell-pt-v1`, and downloads `pt.json` for publishing. Load order is repo `data/pt.json` first, then newer localStorage.
+
 Member allowlist: **`data/members.json`**. Empty `emails` = **strict** — only admins can use the app. Anyone else who signs in is signed out with “Ask Santiago to add your email.” Admins are always allowed even if missing from the members list. Santiago should add friends’ emails (Admin · Rule → Members, or edit the JSON), then re-publish so other devices get the list.
 
 Localhost debug: `?admin=1` grants admin UI **only on localhost / 127.0.0.1**. Disabled automatically on `*.github.io`.
@@ -71,6 +73,7 @@ Load order: repo `data/members.json` first, then override from localStorage if i
 - `data/this-week.json` — published pick for members
 - `data/admins.json` — admin email allowlist
 - `data/members.json` — member email allowlist (empty = admins only)
+- `data/pt.json` — editable PT summary email destination
 - `data/firebase-config.json` — Firebase web config (empty until you paste)
 
 ## Publish
