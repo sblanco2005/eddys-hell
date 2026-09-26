@@ -200,7 +200,20 @@
     blockMessage = null;
   }
 
-  // ——— Check-ins (localStorage, keyed by pickId + email) ———
+  // ——— Check-ins (Firestore when available, else localStorage) ———
+
+  /** @type {any} */
+  let fbDb = null;
+  /** @type {boolean} */
+  let firestoreReady = false;
+  /** @type {string|null} */
+  let firestoreStatus = null; // "cloud" | "local" | "error"
+  /** @type {(() => void)|null} */
+  let checkinsUnsub = null;
+  /** @type {string|null} */
+  let checkinsWatchPickId = null;
+  /** @type {Array<() => void>} */
+  const checkinListeners = [];
 
   function loadCheckins() {
     try {
@@ -217,23 +230,91 @@
     localStorage.setItem(CHECKINS_KEY, JSON.stringify(list));
   }
 
-  function upsertCheckin({ email, displayName, pickId, notes }) {
+  function mergeCheckinRow(list, row) {
+    const e = normalizeEmail(row.email);
+    const idx = list.findIndex(
+      (c) => normalizeEmail(c.email) === e && c.pickId === row.pickId
+    );
+    if (idx >= 0) {
+      const prev = list[idx];
+      const prevTs = Date.parse(prev.at || 0) || 0;
+      const nextTs = Date.parse(row.at || 0) || 0;
+      if (nextTs >= prevTs) list[idx] = { ...prev, ...row, email: e };
+    } else {
+      list.push({ ...row, email: e });
+    }
+    return list;
+  }
+
+  function notifyCheckins() {
+    for (const fn of checkinListeners) {
+      try {
+        fn();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
+  function onCheckinsChange(fn) {
+    checkinListeners.push(fn);
+    return () => {
+      const i = checkinListeners.indexOf(fn);
+      if (i >= 0) checkinListeners.splice(i, 1);
+    };
+  }
+
+  function checkinDocId(pickId, email) {
+    const e = normalizeEmail(email).replace(/[^a-z0-9@._-]/g, "_");
+    return `${pickId}__${e}`;
+  }
+
+  function getCheckinSyncMode() {
+    if (firestoreReady && firestoreStatus !== "error") return "cloud";
+    if (firestoreStatus === "error") return "local-error";
+    return "local";
+  }
+
+  function upsertCheckinLocal({ email, displayName, pickId, notes, at }) {
     const list = loadCheckins();
     const e = normalizeEmail(email);
-    const at = new Date().toISOString();
-    const idx = list.findIndex(
-      (c) => normalizeEmail(c.email) === e && c.pickId === pickId
-    );
     const row = {
       email: e,
       displayName: displayName || e,
       pickId,
-      at,
+      at: at || new Date().toISOString(),
       notes: (notes || "").trim(),
     };
-    if (idx >= 0) list[idx] = row;
-    else list.push(row);
+    mergeCheckinRow(list, row);
     saveCheckins(list);
+    return row;
+  }
+
+  async function upsertCheckin({ email, displayName, pickId, notes }) {
+    const row = upsertCheckinLocal({ email, displayName, pickId, notes });
+    notifyCheckins();
+
+    if (firestoreReady && fbDb && firestoreSetDoc && firestoreDoc) {
+      try {
+        const id = checkinDocId(pickId, row.email);
+        await firestoreSetDoc(
+          firestoreDoc(fbDb, "checkins", id),
+          {
+            email: row.email,
+            displayName: row.displayName,
+            pickId: row.pickId,
+            at: row.at,
+            notes: row.notes,
+          },
+          { merge: true }
+        );
+        firestoreStatus = "cloud";
+      } catch (err) {
+        console.warn("Firestore check-in write failed:", err);
+        firestoreStatus = "error";
+      }
+    }
+    notifyCheckins();
     return row;
   }
 
@@ -250,6 +331,77 @@
         (c) => c.pickId === pickId && normalizeEmail(c.email) === e
       ) || null
     );
+  }
+
+  async function refreshCheckinsForPick(pickId) {
+    if (!pickId) return checkinsForPick(pickId);
+    if (!firestoreReady || !fbDb || !firestoreGetDocs) {
+      firestoreStatus = firestoreReady ? firestoreStatus : "local";
+      return checkinsForPick(pickId);
+    }
+    try {
+      const q = firestoreQuery(
+        firestoreCollection(fbDb, "checkins"),
+        firestoreWhere("pickId", "==", pickId)
+      );
+      const snap = await firestoreGetDocs(q);
+      const list = loadCheckins();
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data && data.pickId && data.email) mergeCheckinRow(list, data);
+      });
+      saveCheckins(list);
+      firestoreStatus = "cloud";
+      notifyCheckins();
+    } catch (err) {
+      console.warn("Firestore check-in read failed:", err);
+      firestoreStatus = "error";
+      notifyCheckins();
+    }
+    return checkinsForPick(pickId);
+  }
+
+  function watchCheckinsForPick(pickId) {
+    if (checkinsUnsub) {
+      try {
+        checkinsUnsub();
+      } catch (_) {
+        /* ok */
+      }
+      checkinsUnsub = null;
+      checkinsWatchPickId = null;
+    }
+    if (!pickId || !firestoreReady || !fbDb || !firestoreOnSnapshot) {
+      return;
+    }
+    checkinsWatchPickId = pickId;
+    try {
+      const q = firestoreQuery(
+        firestoreCollection(fbDb, "checkins"),
+        firestoreWhere("pickId", "==", pickId)
+      );
+      checkinsUnsub = firestoreOnSnapshot(
+        q,
+        (snap) => {
+          const list = loadCheckins();
+          snap.forEach((d) => {
+            const data = d.data();
+            if (data && data.pickId && data.email) mergeCheckinRow(list, data);
+          });
+          saveCheckins(list);
+          firestoreStatus = "cloud";
+          notifyCheckins();
+        },
+        (err) => {
+          console.warn("Firestore check-in watch failed:", err);
+          firestoreStatus = "error";
+          notifyCheckins();
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore check-in watch setup failed:", err);
+      firestoreStatus = "error";
+    }
   }
 
   // ——— Mock (localhost only) ———
@@ -312,7 +464,7 @@
             provider: "mock",
           }
         : {
-            email: "member@example.com",
+            email: memberEmails[0] || "member@example.com",
             displayName: "Member (mock)",
             photoURL: null,
             uid: "mock-member",
@@ -352,6 +504,18 @@
     } = await import(
       "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"
     );
+    const {
+      getFirestore,
+      doc,
+      setDoc,
+      collection,
+      query,
+      where,
+      getDocs,
+      onSnapshot,
+    } = await import(
+      "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+    );
     return {
       initializeApp,
       getAuth,
@@ -361,6 +525,14 @@
       getRedirectResult,
       onAuthStateChanged,
       signOut,
+      getFirestore,
+      doc,
+      setDoc,
+      collection,
+      query,
+      where,
+      getDocs,
+      onSnapshot,
     };
   }
 
@@ -374,6 +546,20 @@
   let signInWithRedirectFn = null;
   /** @type {any} */
   let signOutFn = null;
+  /** @type {any} */
+  let firestoreDoc = null;
+  /** @type {any} */
+  let firestoreSetDoc = null;
+  /** @type {any} */
+  let firestoreCollection = null;
+  /** @type {any} */
+  let firestoreQuery = null;
+  /** @type {any} */
+  let firestoreWhere = null;
+  /** @type {any} */
+  let firestoreGetDocs = null;
+  /** @type {any} */
+  let firestoreOnSnapshot = null;
 
   async function initFirebase(cfg) {
     const mod = await loadFirebaseModular();
@@ -383,6 +569,24 @@
     signInWithPopupFn = mod.signInWithPopup;
     signInWithRedirectFn = mod.signInWithRedirect;
     signOutFn = mod.signOut;
+
+    firestoreDoc = mod.doc;
+    firestoreSetDoc = mod.setDoc;
+    firestoreCollection = mod.collection;
+    firestoreQuery = mod.query;
+    firestoreWhere = mod.where;
+    firestoreGetDocs = mod.getDocs;
+    firestoreOnSnapshot = mod.onSnapshot;
+    try {
+      fbDb = mod.getFirestore(app);
+      firestoreReady = true;
+      firestoreStatus = "cloud";
+    } catch (err) {
+      console.warn("Firestore init failed:", err);
+      fbDb = null;
+      firestoreReady = false;
+      firestoreStatus = "local";
+    }
 
     try {
       await mod.getRedirectResult(fbAuth);
@@ -512,6 +716,11 @@
     upsertCheckin,
     checkinsForPick,
     myCheckin,
+    refreshCheckinsForPick,
+    watchCheckinsForPick,
+    onCheckinsChange,
+    getCheckinSyncMode,
+    isFirestoreReady: () => firestoreReady,
     CHECKINS_KEY,
     MEMBERS_KEY,
     getMembers,

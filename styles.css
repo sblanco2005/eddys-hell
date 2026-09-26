@@ -617,6 +617,20 @@ input:focus {
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
+.checkin-title {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.checkin-help { margin: 0 0 12px; }
+.checkin-sync {
+  margin-top: 10px;
+  font-size: 0.78rem;
+}
+#btn-checkin:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
 .field-label {
   display: block;
   font-size: 0.78rem;

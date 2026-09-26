@@ -62,9 +62,29 @@ Seeded sample: dry-run pick `9f757b1922` (HR 140 Full).
 
 Load order: repo `data/members.json` first, then override from localStorage if its `updatedAt` is newer.
 
-## Check-ins
+## Check-ins (friend accountability)
 
-“I finished this workout” stores `{ email, displayName, pickId, at, notes }` in `localStorage` key `eddys-hell-checkins-v1` (keyed by pick id + email). Admin sees “Check-ins this week” for the current pick in **this browser only**. Structure is ready to sync to a backend later.
+Friends (members on the allowlist) sign in with Google, watch this week’s workout, then tap **Check in — I finished**. Optional notes are fine.
+
+Data shape: `{ email, displayName, pickId, at, notes }`.
+
+- **Preferred store:** Cloud Firestore collection `checkins` (doc id `pickId__email`) when Firebase Auth + Firestore are available — syncs across devices so admin sees everyone’s check-ins.
+- **Fallback:** `localStorage` key `eddys-hell-checkins-v1` (same browser only) if Firestore isn’t enabled yet.
+
+Admin → **This week’s pick** → **Who checked in this week** lists emails + timestamps.
+
+### Enable Firestore (one-time, for cross-device sync)
+
+1. Firebase console → project **eddy-s-hell** → Build → Firestore Database → Create database (production mode is fine).
+2. Paste rules from `firestore.rules` (authenticated users can read all check-ins; each user may write only their own email’s docs).
+3. Google Cloud → enable **Cloud Firestore API** for the project if prompted.
+4. Reload the live site; member check-ins should show “Synced across devices.”
+
+Until Firestore is enabled, check-ins still work on each friend’s device, but Santiago only sees them on that same browser.
+
+### PT email
+
+`data/pt.json` holds the summary destination (`eddy_pazmino@yahoo.com`). Automatic Thursday email to the PT is **not wired yet** (manual / deferred). Check-in recording in the app works independently.
 
 
 ## YouTube (this week’s video)
@@ -83,7 +103,8 @@ Load order: repo `data/members.json` first, then override from localStorage if i
 - `data/admins.json` — admin email allowlist
 - `data/members.json` — member email allowlist (empty = admins only)
 - `data/pt.json` — editable PT summary email destination
-- `data/firebase-config.json` — Firebase web config (empty until you paste)
+- `data/firebase-config.json` — Firebase web config (Auth configured; enable Firestore for check-in sync)
+- `firestore.rules` — paste into Firebase console for check-in security rules
 
 ## Publish
 

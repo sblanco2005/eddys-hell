@@ -571,9 +571,35 @@
     }
     renderYoutubeForMember(tw);
 
+    renderMemberCheckin(tw);
+    // Pull latest check-ins (Firestore when available) without blocking UI
+    window.EddysHellAuth.refreshCheckinsForPick(tw.id).then(() => {
+      if (authUser) renderMemberCheckin(tw);
+    });
+    window.EddysHellAuth.watchCheckinsForPick(tw.id);
+  }
+
+  function syncHintText() {
+    const mode = window.EddysHellAuth.getCheckinSyncMode();
+    if (mode === "cloud") {
+      return "Synced across devices.";
+    }
+    if (mode === "local-error") {
+      return "Saved on this device. Cloud sync isn’t available yet — Santiago can enable Firestore.";
+    }
+    return "Saved on this device.";
+  }
+
+  function renderMemberCheckin(tw) {
+    if (!tw || !authUser) return;
     const mine = window.EddysHellAuth.myCheckin(tw.id, authUser.email);
+    const btn = $("btn-checkin");
+    const syncHint = $("checkin-sync-hint");
+    const help = $("checkin-help");
     if (mine) {
-      $("btn-checkin").hidden = true;
+      btn.hidden = true;
+      btn.disabled = false;
+      btn.textContent = "Check in — I finished";
       $("checkin-notes").disabled = true;
       $("checkin-notes").value = mine.notes || "";
       $("checkin-done").hidden = false;
@@ -581,10 +607,18 @@
         ? "· " + formatWhen(mine.at)
         : "";
       $("checkin-toast").hidden = true;
+      if (help) help.hidden = true;
     } else {
-      $("btn-checkin").hidden = false;
+      btn.hidden = false;
+      btn.disabled = false;
+      btn.textContent = "Check in — I finished";
       $("checkin-notes").disabled = false;
       $("checkin-done").hidden = true;
+      if (help) help.hidden = false;
+    }
+    if (syncHint) {
+      syncHint.hidden = false;
+      syncHint.textContent = syncHintText();
     }
   }
 
@@ -812,14 +846,36 @@
       return;
     }
     box.hidden = false;
+    window.EddysHellAuth.watchCheckinsForPick(tw.id);
+    window.EddysHellAuth.refreshCheckinsForPick(tw.id).then(() => {
+      paintAdminCheckinsList(tw);
+    });
+    paintAdminCheckinsList(tw);
+  }
+
+  function paintAdminCheckinsList(tw) {
     const list = window.EddysHellAuth.checkinsForPick(tw.id);
     $("checkins-count").textContent = String(list.length);
+    const sync = $("admin-checkins-sync");
+    if (sync) {
+      const mode = window.EddysHellAuth.getCheckinSyncMode();
+      if (mode === "cloud") {
+        sync.textContent = "Live list — emails + timestamps (synced across devices).";
+      } else if (mode === "local-error") {
+        sync.textContent =
+          "Showing this device’s check-ins. Enable Firestore in Firebase to sync friends’ devices.";
+      } else {
+        sync.textContent =
+          "Emails and timestamps from friends who tapped Check in (this device until cloud sync is on).";
+      }
+    }
     const ul = $("checkins-list");
     ul.innerHTML = "";
     if (!list.length) {
       const li = document.createElement("li");
       li.className = "hint";
-      li.textContent = "No check-ins yet (stored in this browser).";
+      li.textContent =
+        "Nobody has checked in yet — friends tap Check in after the workout.";
       ul.appendChild(li);
       return;
     }
@@ -1099,20 +1155,30 @@
     $("btn-signout").addEventListener("click", async () => {
       await window.EddysHellAuth.signOut();
     });
-    $("btn-checkin").addEventListener("click", () => {
+    $("btn-checkin").addEventListener("click", async () => {
       const tw = resolveThisWeek();
       if (!tw || !authUser) return;
-      window.EddysHellAuth.upsertCheckin({
-        email: authUser.email,
-        displayName: authUser.displayName,
-        pickId: tw.id,
-        notes: $("checkin-notes").value,
-      });
-      $("checkin-toast").hidden = false;
-      setTimeout(() => {
-        $("checkin-toast").hidden = true;
-      }, 2500);
-      renderMemberView();
+      const btn = $("btn-checkin");
+      btn.disabled = true;
+      btn.textContent = "Checking in…";
+      try {
+        await window.EddysHellAuth.upsertCheckin({
+          email: authUser.email,
+          displayName: authUser.displayName,
+          pickId: tw.id,
+          notes: $("checkin-notes").value,
+        });
+        $("checkin-toast").hidden = false;
+        setTimeout(() => {
+          $("checkin-toast").hidden = true;
+        }, 2500);
+        renderMemberCheckin(tw);
+        if (authUser.role === "admin") paintAdminCheckinsList(tw);
+      } catch (err) {
+        alert("Check-in failed: " + (err.message || err));
+        btn.disabled = false;
+        btn.textContent = "Check in — I finished";
+      }
     });
   }
 
@@ -1215,6 +1281,17 @@
     window.EddysHellAuth.onAuthChange((user) => {
       authUser = user;
       applyRoleUI();
+    });
+    window.EddysHellAuth.onCheckinsChange(() => {
+      const tw = resolveThisWeek();
+      if (!tw || !authUser) return;
+      if (authUser.role === "member") {
+        renderMemberCheckin(tw);
+      } else if (authUser.role === "admin") {
+        const pickView = $("view-pick");
+        if (pickView && !pickView.hidden) paintAdminCheckinsList(tw);
+        // Admin viewing member-style this-week isn't used; refresh list when on pick
+      }
     });
 
     window.EddysHell = {

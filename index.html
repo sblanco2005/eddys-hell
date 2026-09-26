@@ -72,8 +72,8 @@
       <section id="view-member" class="view" aria-label="This week's workout" hidden>
         <article class="card pick-card" id="member-empty" hidden>
           <div class="empty">
-            <p class="empty-title">No workout published yet</p>
-            <p class="hint">Santiago hasn’t set this week’s pick. Check back Thursday.</p>
+            <p class="empty-title">This week’s workout isn’t up yet</p>
+            <p class="hint">Santiago will publish Thursday’s pick here. Hang tight.</p>
           </div>
         </article>
 
@@ -96,15 +96,20 @@
           </div>
 
           <div class="checkin-box" id="checkin-box">
+            <h3 class="checkin-title">Friend check-in</h3>
+            <p class="hint checkin-help" id="checkin-help">
+              After you finish the workout, tap <strong>Check in</strong> so Santiago knows you did it.
+            </p>
             <label class="field-label" for="checkin-notes">Notes <span class="opt">(optional)</span></label>
             <input type="text" id="checkin-notes" placeholder="How’d it go?" autocomplete="off" maxlength="280" />
             <div class="actions">
-              <button type="button" class="btn accent" id="btn-checkin">I finished this workout</button>
+              <button type="button" class="btn accent" id="btn-checkin">Check in — I finished</button>
             </div>
             <p class="toast" id="checkin-toast" hidden>Checked in — nice work.</p>
             <p class="checkin-done" id="checkin-done" hidden>
-              ✓ You’re marked done <span id="checkin-done-at"></span>
+              ✓ You’re checked in for this week <span id="checkin-done-at"></span>
             </p>
+            <p class="hint checkin-sync" id="checkin-sync-hint" hidden></p>
           </div>
         </article>
       </section>
@@ -200,7 +205,7 @@
             <h2>PT summary</h2>
             <span class="badge">Weekly email</span>
           </header>
-          <p class="hint">Thursday check-in summaries go to this address after check-ins.</p>
+          <p class="hint">Destination for Thursday check-in summaries (email send is still manual / deferred). Check-ins themselves are recorded in the app.</p>
           <div class="field">
             <label for="pt-email-input">Summary email</label>
             <input type="email" id="pt-email-input" placeholder="eddy_pazmino@yahoo.com" autocomplete="email" />
@@ -266,11 +271,12 @@
 
         <article class="card checkins-card" id="admin-checkins" hidden>
           <header class="card-head">
-            <h2>Check-ins this week</h2>
+            <h2>Who checked in this week</h2>
             <span class="badge" id="checkins-count">0</span>
           </header>
+          <p class="hint" id="admin-checkins-sync">Emails and timestamps from friends who tapped Check in.</p>
           <ul class="checkins-list" id="checkins-list">
-            <li class="hint">No check-ins yet (stored in this browser).</li>
+            <li class="hint">Nobody has checked in yet — friends tap Check in after the workout.</li>
           </ul>
         </article>
       </section>
