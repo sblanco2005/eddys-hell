@@ -533,6 +533,12 @@
 
     $("auth-not-configured").hidden = configured;
 
+    const mirrorBanner = $("host-mirror-banner");
+    if (mirrorBanner) {
+      const onPages = Auth.isGithubPages && Auth.isGithubPages();
+      mirrorBanner.hidden = !onPages;
+    }
+
     const inAppEl = $("auth-inapp");
     if (inAppEl) {
       if (inApp) {

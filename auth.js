@@ -104,6 +104,10 @@
     );
   }
 
+  function preferredLiveUrl() {
+    return "https://eddy-s-hell.web.app/";
+  }
+
   function friendlyAuthError(err) {
     const code = (err && err.code) || "";
     const msg = (err && err.message) || String(err || "");
@@ -113,6 +117,15 @@
       /argument-error/i.test(msg)
     ) {
       if (isInAppBrowser()) return openInBrowserMessage();
+      // Classic GitHub Pages + Firebase Auth mismatch: authDomain is
+      // *.firebaseapp.com while the page is on *.github.io — popup/redirect
+      // often fails on mobile Safari even outside WhatsApp.
+      if (isGithubPages()) {
+        return (
+          "Sign-in on this GitHub Pages mirror is unreliable on many phones. " +
+          "Open " + preferredLiveUrl() + " instead (same app, matching auth domain), then sign in."
+        );
+      }
       return (
         "Sign-in could not start in this browser. Open this page in Safari " +
         "(or Chrome), allow popups for this site, and try again."
@@ -865,7 +878,7 @@
       if (isBenignPopupError(err)) {
         if (isGithubPages()) {
           const e = new Error(
-            "Popup blocked or closed. Allow popups for sblanco2005.github.io and try again."
+            "Popup blocked or closed. Prefer https://eddy-s-hell.web.app/ — or allow popups and try again."
           );
           e.code = err.code;
           throw e;
