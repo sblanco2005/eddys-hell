@@ -7,15 +7,24 @@
 
   const CHECKINS_KEY = "eddys-hell-checkins-v1";
   const MOCK_SESSION_KEY = "eddys-hell-mock-user-v1";
+  const MEMBERS_KEY = "eddys-hell-members-v1";
 
   /** @type {{ email: string, displayName: string, photoURL: string|null, uid: string, provider: string }|null} */
   let currentUser = null;
   /** @type {string[]} */
   let adminEmails = [];
+  /** @type {string[]} */
+  let memberEmails = [];
+  /** @type {string|null} */
+  let membersUpdatedAt = null;
+  /** @type {string|null} */
+  let blockMessage = null;
   /** @type {object|null} */
   let firebaseConfig = null;
   /** @type {boolean} */
   let firebaseReady = false;
+  /** @type {boolean} */
+  let gating = false;
   /** @type {Array<(u: object|null) => void>} */
   const listeners = [];
 
@@ -53,6 +62,19 @@
     return adminEmails.some((a) => normalizeEmail(a) === e);
   }
 
+  function isMemberEmail(email) {
+    const e = normalizeEmail(email);
+    if (!e) return false;
+    return memberEmails.some((m) => normalizeEmail(m) === e);
+  }
+
+  /** Admins always allowed. Empty members list = strict (nobody else). */
+  function isAllowedEmail(email) {
+    if (adminBypassEnabled()) return true;
+    if (isAdminEmail(email)) return true;
+    return isMemberEmail(email);
+  }
+
   function getRole(user) {
     if (adminBypassEnabled()) return "admin";
     if (!user) return "guest";
@@ -83,6 +105,99 @@
       const i = listeners.indexOf(fn);
       if (i >= 0) listeners.splice(i, 1);
     };
+  }
+
+  // ——— Members allowlist ———
+
+  function parseMembersPayload(data) {
+    const emails = Array.isArray(data && data.emails)
+      ? data.emails.map(normalizeEmail).filter(Boolean)
+      : [];
+    // de-dupe preserve order
+    const seen = new Set();
+    const unique = [];
+    for (const e of emails) {
+      if (seen.has(e)) continue;
+      seen.add(e);
+      unique.push(e);
+    }
+    return {
+      emails: unique,
+      updatedAt: (data && data.updatedAt) || null,
+    };
+  }
+
+  function applyMembers(parsed) {
+    memberEmails = parsed.emails;
+    membersUpdatedAt = parsed.updatedAt;
+  }
+
+  async function loadMembers() {
+    let fileParsed = { emails: [], updatedAt: null };
+    try {
+      const res = await fetch("data/members.json", { cache: "no-store" });
+      if (res.ok) {
+        fileParsed = parseMembersPayload(await res.json());
+      }
+    } catch (_) {
+      /* empty = strict */
+    }
+
+    let localParsed = null;
+    try {
+      const raw = localStorage.getItem(MEMBERS_KEY);
+      if (raw) localParsed = parseMembersPayload(JSON.parse(raw));
+    } catch (_) {
+      localParsed = null;
+    }
+
+    if (localParsed && localParsed.updatedAt) {
+      const localTs = Date.parse(localParsed.updatedAt);
+      const fileTs = fileParsed.updatedAt ? Date.parse(fileParsed.updatedAt) : 0;
+      if (
+        Number.isFinite(localTs) &&
+        localTs > (Number.isFinite(fileTs) ? fileTs : 0)
+      ) {
+        applyMembers(localParsed);
+        return getMembers();
+      }
+    }
+    applyMembers(fileParsed);
+    return getMembers();
+  }
+
+  function getMembers() {
+    return {
+      emails: [...memberEmails],
+      updatedAt: membersUpdatedAt,
+    };
+  }
+
+  /** Update in-memory + localStorage; returns payload for download/publish. */
+  function saveMembers(emails) {
+    const parsed = parseMembersPayload({
+      emails,
+      updatedAt: new Date().toISOString(),
+    });
+    applyMembers(parsed);
+    const payload = {
+      emails: parsed.emails,
+      updatedAt: parsed.updatedAt,
+    };
+    try {
+      localStorage.setItem(MEMBERS_KEY, JSON.stringify(payload));
+    } catch (_) {
+      /* ok */
+    }
+    return payload;
+  }
+
+  function getBlockMessage() {
+    return blockMessage;
+  }
+
+  function clearBlockMessage() {
+    blockMessage = null;
   }
 
   // ——— Check-ins (localStorage, keyed by pickId + email) ———
@@ -150,6 +265,39 @@
     }
   }
 
+  async function rejectUnauthorized(user) {
+    blockMessage = "Ask Santiago to add your email.";
+    if (user && user.provider === "mock") {
+      localStorage.removeItem(MOCK_SESSION_KEY);
+      setUser(null);
+      return;
+    }
+    localStorage.removeItem(MOCK_SESSION_KEY);
+    if (firebaseReady && fbAuth && signOutFn) {
+      gating = true;
+      try {
+        await signOutFn(fbAuth);
+      } catch (_) {
+        /* ok */
+      }
+      gating = false;
+    }
+    setUser(null);
+  }
+
+  async function admitOrReject(user) {
+    if (!user) {
+      setUser(null);
+      return;
+    }
+    if (isAllowedEmail(user.email)) {
+      blockMessage = null;
+      setUser(user);
+      return;
+    }
+    await rejectUnauthorized(user);
+  }
+
   function mockSignIn(role) {
     if (!isLocalhost()) {
       throw new Error("Mock sign-in is localhost-only");
@@ -170,7 +318,14 @@
             uid: "mock-member",
             provider: "mock",
           };
+    if (!isAllowedEmail(user.email)) {
+      localStorage.removeItem(MOCK_SESSION_KEY);
+      blockMessage = "Ask Santiago to add your email.";
+      setUser(null);
+      return null;
+    }
     localStorage.setItem(MOCK_SESSION_KEY, JSON.stringify(user));
+    blockMessage = null;
     setUser(user);
     return user;
   }
@@ -236,8 +391,9 @@
     }
 
     mod.onAuthStateChanged(fbAuth, (user) => {
+      if (gating) return;
       if (user) {
-        setUser({
+        admitOrReject({
           email: user.email || "",
           displayName: user.displayName || user.email || "User",
           photoURL: user.photoURL || null,
@@ -245,8 +401,8 @@
           provider: "google",
         });
       } else if (isLocalhost() && loadMockSession()) {
-        // keep mock if present when Firebase has no user
-        setUser(loadMockSession());
+        const mock = loadMockSession();
+        admitOrReject(mock);
       } else {
         setUser(null);
       }
@@ -301,6 +457,9 @@
       adminEmails = ["sblanco2005@gmail.com"];
     }
 
+    // Members allowlist (repo then newer localStorage)
+    await loadMembers();
+
     // Firebase config
     try {
       const res = await fetch("data/firebase-config.json", { cache: "no-store" });
@@ -321,7 +480,7 @@
     // Mock restore on localhost when Firebase not ready
     if (!firebaseReady && isLocalhost()) {
       const mock = loadMockSession();
-      if (mock) setUser(mock);
+      if (mock) await admitOrReject(mock);
     }
 
     // admin bypass: synthesize a session for UI without persisting
@@ -354,5 +513,15 @@
     checkinsForPick,
     myCheckin,
     CHECKINS_KEY,
+    MEMBERS_KEY,
+    getMembers,
+    saveMembers,
+    loadMembers,
+    isAllowedEmail,
+    isMemberEmail,
+    isAdminEmail,
+    normalizeEmail,
+    getBlockMessage,
+    clearBlockMessage,
   };
 })();

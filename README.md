@@ -9,10 +9,12 @@ Static app with Google sign-in (Firebase) — or localhost mock roles until Fire
 | Role | Who | Sees |
 |------|-----|------|
 | **Guest** | Not signed in | Landing + “Sign in with Google” (workout title locked) |
-| **Member** | Signed in, not on allowlist | This week’s workout + check-in only |
-| **Admin** | Email in `data/admins.json` | Admin · Rule + dry-run + Accept + check-in list |
+| **Member** | Signed in + email in `data/members.json` | This week’s workout + check-in only |
+| **Admin** | Email in `data/admins.json` | Admin · Rule + Members + dry-run + Accept + check-in list |
 
 Admin allowlist: **`data/admins.json`** — currently `sblanco2005@gmail.com` only. Edit the `emails` array to add more.
+
+Member allowlist: **`data/members.json`**. Empty `emails` = **strict** — only admins can use the app. Anyone else who signs in is signed out with “Ask Santiago to add your email.” Admins are always allowed even if missing from the members list. Santiago should add friends’ emails (Admin · Rule → Members, or edit the JSON), then re-publish so other devices get the list.
 
 Localhost debug: `?admin=1` grants admin UI **only on localhost / 127.0.0.1**. Disabled automatically on `*.github.io`.
 
@@ -49,6 +51,15 @@ Members read `data/this-week.json` first, then fall back to their browser’s `l
 
 Seeded sample: dry-run pick `9f757b1922` (HR 140 Full).
 
+## Members (friend allowlist)
+
+1. Sign in as admin → **Admin · Rule** → **Members**.
+2. Add emails (normalized lowercase/trim), remove as needed, hit **Save members**.
+3. Save writes `localStorage` key `eddys-hell-members-v1` and **downloads `members.json`**.
+4. Drop into `data/members.json` and re-run `scripts/publish-pages.sh` so friends on other devices are allowed (localStorage alone won’t sync).
+
+Load order: repo `data/members.json` first, then override from localStorage if its `updatedAt` is newer.
+
 ## Check-ins
 
 “I finished this workout” stores `{ email, displayName, pickId, at, notes }` in `localStorage` key `eddys-hell-checkins-v1` (keyed by pick id + email). Admin sees “Check-ins this week” for the current pick in **this browser only**. Structure is ready to sync to a backend later.
@@ -59,6 +70,7 @@ Seeded sample: dry-run pick `9f757b1922` (HR 140 Full).
 - `data/default-rule.json` / `data/state.json` — rule seed
 - `data/this-week.json` — published pick for members
 - `data/admins.json` — admin email allowlist
+- `data/members.json` — member email allowlist (empty = admins only)
 - `data/firebase-config.json` — Firebase web config (empty until you paste)
 
 ## Publish

@@ -49,6 +49,11 @@
             <p>Add your Firebase web config to <code>data/firebase-config.json</code> (see README). Google sign-in stays disabled until then.</p>
           </div>
 
+          <div id="auth-denied" class="auth-banner auth-denied" hidden>
+            <strong>Not on the member list</strong>
+            <p id="auth-denied-msg">Ask Santiago to add your email.</p>
+          </div>
+
           <div class="actions landing-actions">
             <button type="button" class="btn accent" id="btn-google" hidden>Sign in with Google</button>
           </div>
@@ -161,6 +166,28 @@
             <button type="button" class="btn accent" id="btn-dryrun">Dry-run pick</button>
           </div>
           <p class="toast" id="save-toast" hidden>Rule saved.</p>
+        </article>
+
+        <article class="card members-card" id="members-card">
+          <header class="card-head">
+            <h2>Members</h2>
+            <span class="badge" id="members-count">0 members allowed</span>
+          </header>
+          <p class="hint">Allowlist who can sign in. Empty = only admins. Admins are always allowed.</p>
+          <ul class="members-list" id="members-list">
+            <li class="hint">No members yet — only admins can use the app.</li>
+          </ul>
+          <div class="members-add-row">
+            <input type="email" id="member-email-input" placeholder="friend@example.com" autocomplete="email" />
+            <button type="button" class="btn secondary btn-sm" id="btn-member-add">Add</button>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-members-save">Save members</button>
+          </div>
+          <p class="toast" id="members-toast" hidden>Members saved.</p>
+          <p class="hint publish-hint" id="members-publish-hint" hidden>
+            Downloaded <code>members.json</code> — drop it into <code>data/</code> and re-run <code>scripts/publish-pages.sh</code> so friends on other devices get the list (localStorage alone won’t sync).
+          </p>
         </article>
       </section>
 

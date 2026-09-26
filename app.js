@@ -1,12 +1,15 @@
 /**
  * Eddy's Hell — Thursday workout (admin + member)
- * Storage: eddys-hell-admin-v1, eddys-hell-checkins-v1
+ * Storage: eddys-hell-admin-v1, eddys-hell-checkins-v1, eddys-hell-members-v1
  */
 (function () {
   "use strict";
 
   const STORAGE_KEY = "eddys-hell-admin-v1";
   const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
+  const MEMBERS_PENDING_KEY = "eddys-hell-members-pending-v1";
+  /** @type {string[]} draft emails in Members UI */
+  let membersDraft = [];
   const EXCLUDE_TYPES = new Set(["OutsideRoot"]);
   const POOL_SIZE = 20;
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -268,6 +271,20 @@
     URL.revokeObjectURL(url);
   }
 
+  function downloadMembersJson(payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "members.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   // ——— UI helpers ———
 
   function $(id) {
@@ -355,6 +372,15 @@
     $("auth-not-configured").hidden = configured;
     $("btn-google").hidden = !configured;
     $("mock-signin").hidden = !(!configured && local);
+
+    const denied = window.EddysHellAuth.getBlockMessage();
+    const deniedEl = $("auth-denied");
+    if (denied) {
+      deniedEl.hidden = false;
+      $("auth-denied-msg").textContent = denied;
+    } else {
+      deniedEl.hidden = true;
+    }
   }
 
   function renderMemberView() {
@@ -440,13 +466,89 @@
     }
   }
 
+  function syncMembersDraftFromAuth() {
+    const m = window.EddysHellAuth.getMembers();
+    membersDraft = [...(m.emails || [])];
+  }
+
+  function renderMembersUI() {
+    const list = $("members-list");
+    const countEl = $("members-count");
+    const n = membersDraft.length;
+    countEl.textContent =
+      n === 1 ? "1 member allowed" : `${n} members allowed`;
+    list.innerHTML = "";
+    if (!n) {
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "No members yet — only admins can use the app.";
+      list.appendChild(li);
+    } else {
+      for (const email of membersDraft) {
+        const li = document.createElement("li");
+        li.className = "members-item";
+        const span = document.createElement("span");
+        span.className = "members-email";
+        span.textContent = email;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn ghost btn-sm";
+        btn.textContent = "Remove";
+        btn.addEventListener("click", () => {
+          membersDraft = membersDraft.filter((e) => e !== email);
+          renderMembersUI();
+        });
+        li.appendChild(span);
+        li.appendChild(btn);
+        list.appendChild(li);
+      }
+    }
+    const pending = localStorage.getItem(MEMBERS_PENDING_KEY) === "1";
+    $("members-publish-hint").hidden = !pending;
+  }
+
+  function addMemberFromInput() {
+    const input = $("member-email-input");
+    const email = window.EddysHellAuth.normalizeEmail(input.value);
+    if (!email || !email.includes("@")) {
+      alert("Enter a valid email address.");
+      return;
+    }
+    if (membersDraft.includes(email)) {
+      input.value = "";
+      return;
+    }
+    membersDraft = [...membersDraft, email];
+    input.value = "";
+    renderMembersUI();
+  }
+
+  function saveMembersList() {
+    const payload = window.EddysHellAuth.saveMembers(membersDraft);
+    membersDraft = [...payload.emails];
+    localStorage.setItem(MEMBERS_PENDING_KEY, "1");
+    downloadMembersJson(payload);
+    renderMembersUI();
+    const toast = $("members-toast");
+    toast.hidden = false;
+    toast.textContent =
+      "Members saved — downloaded members.json. Re-publish so friends get the list.";
+    $("members-publish-hint").hidden = false;
+    setTimeout(() => {
+      toast.hidden = true;
+    }, 3500);
+  }
+
   function applyRoleUI() {
     renderUserSlot();
     if (!authUser) {
       renderLanding();
       return;
     }
+    window.EddysHellAuth.clearBlockMessage();
     if (authUser.role === "admin") {
+      syncMembersDraftFromAuth();
+      renderMembersUI();
       renderAdminShell("rule");
       return;
     }
@@ -835,6 +937,10 @@
       tab.addEventListener("click", () => {
         if (!authUser || authUser.role !== "admin") return;
         showView(tab.dataset.view);
+        if (tab.dataset.view === "rule") {
+          syncMembersDraftFromAuth();
+          renderMembersUI();
+        }
         if (tab.dataset.view === "pick") {
           if (!currentResult && state.lastPick) restoreLastPickIfAny();
           else if (!currentResult && !state.lastPick) {
@@ -863,7 +969,18 @@
     $("btn-goto-rule").addEventListener("click", () => showView("rule"));
     $("btn-error-rule").addEventListener("click", () => showView("rule"));
 
+    $("btn-member-add").addEventListener("click", addMemberFromInput);
+    $("member-email-input").addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        addMemberFromInput();
+      }
+    });
+    $("btn-members-save").addEventListener("click", saveMembersList);
+
     await window.EddysHellAuth.init();
+    syncMembersDraftFromAuth();
+    renderMembersUI();
     window.EddysHellAuth.onAuthChange((user) => {
       authUser = user;
       applyRoleUI();
