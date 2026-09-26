@@ -21,8 +21,6 @@
   let blockMessage = null; // member allowlist denial only
   /** @type {string|null} */
   let authHintMessage = null; // redirect/popup/privacy hints (NOT member denial)
-  /** @type {boolean} */
-  let forcePopupOnce = false; // after a failed redirect restore on hosting
   /** @type {object|null} */
   let firebaseConfig = null;
   /** @type {boolean} */
@@ -139,11 +137,9 @@
         );
       }
       if (isFirebaseHosting()) {
-        // Redirect is first on hosting — do not tell users to "allow popups".
         return (
-          "Sign-in could not start on this device. Hard-refresh the page, then try again. " +
-          "If it still fails, in Safari turn off \"Reduce Advanced Privacy Protections\" " +
-          "for eddy-s-hell.web.app and retry."
+          "Sign-in could not start. Allow popups for eddy-s-hell.web.app, or in Safari " +
+          "turn off \"Reduce Advanced Privacy Protections\" for this site, then try again."
         );
       }
       return (
@@ -615,7 +611,6 @@
     if (isAllowedEmail(normalized.email)) {
       blockMessage = null;
       authHintMessage = null;
-      forcePopupOnce = false;
       setUser(normalized);
       return;
     }
@@ -743,29 +738,14 @@
 
   /**
    * Auth strategy:
-   * - github.io: popup-only (authDomain is web.app / firebaseapp.com — cross-origin
-   *   redirect storage is partitioned; getRedirectResult comes back null).
-   * - eddy-s-hell.web.app / *.firebaseapp.com: prefer signInWithRedirect (authDomain
-   *   matches hosting origin so redirect restore works).
-   * - After a failed redirect restore on hosting, force one popup attempt.
+   * - eddy-s-hell.web.app / *.firebaseapp.com: signInWithPopup FIRST (what works for
+   *   Santiago), then fall back to signInWithRedirect if popup blocked/cancelled.
+   * - github.io: steer users to web.app; popup ok if they insist. Never redirect
+   *   (cross-origin authDomain — getRedirectResult cannot restore the session).
+   * initializeAuth MUST include popupRedirectResolver or Firebase throws
+   * auth/argument-error on both popup and redirect.
    */
   const REDIRECT_PENDING_KEY = "eddys-hell-auth-redirect-pending";
-
-  function prefersRedirectSignIn() {
-    if (forcePopupOnce) return false;
-    if (isGithubPages()) return false;
-    if (isFirebaseHosting()) return true;
-    const ua = navigator.userAgent || "";
-    const isIOS =
-      /iPad|iPhone|iPod/i.test(ua) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-    const isAndroid = /Android/i.test(ua);
-    return (
-      isIOS ||
-      isAndroid ||
-      /Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)
-    );
-  }
 
   function isBenignPopupError(err) {
     const code = err && err.code;
@@ -861,9 +841,8 @@
       firestoreStatus = "local";
     }
 
-    // Finish redirect return before listening. With authDomain matching the
-    // hosting origin (eddy-s-hell.web.app), getRedirectResult should restore.
-    // On github.io (cross-origin authDomain) this often yields null.
+    // Finish redirect return before listening (used when popup falls back to redirect
+    // on hosting). On github.io (cross-origin authDomain) this often yields null.
     const hadPendingRedirect = consumeRedirectPending();
     let redirectUser = null;
     try {
@@ -872,17 +851,14 @@
         redirectUser = redirectCred.user;
         blockMessage = null;
         authHintMessage = null;
-        forcePopupOnce = false;
       }
     } catch (err) {
       if (!isBenignPopupError(err)) {
         console.warn("Firebase redirect result:", err);
         if (hadPendingRedirect) {
-          // Never reuse member-denial blockMessage for redirect failures.
           authHintMessage =
-            "Sign-in did not complete. Tap Sign in with Google again. " +
-            "Allow popups, or reduce privacy protections for this site.";
-          if (isFirebaseHosting()) forcePopupOnce = true;
+            "Sign-in did not complete. Tap Sign in with Google again " +
+            "(popup first). Allow popups, or reduce privacy protections for this site.";
         }
       }
     }
@@ -896,23 +872,17 @@
     if (!redirectUser && fbAuth.currentUser) {
       redirectUser = fbAuth.currentUser;
       authHintMessage = null;
-      forcePopupOnce = false;
     }
 
     if (!redirectUser && hadPendingRedirect && !fbAuth.currentUser) {
-      // Redirect completed at Google but session was not restored.
-      if (isFirebaseHosting()) {
-        forcePopupOnce = true;
-        authHintMessage =
-          "Sign-in redirect did not restore your session. Tap Sign in with Google again " +
-          "(this try uses a popup). Allow popups or reduce privacy protections if asked.";
-      } else if (isGithubPages()) {
+      if (isGithubPages()) {
         authHintMessage =
           "Sign-in redirect cannot restore a session on GitHub Pages. " +
           "Open " + preferredLiveUrl() + " and sign in there.";
       } else {
         authHintMessage =
-          "Sign-in redirect did not restore your session. Tap Sign in again.";
+          "Sign-in redirect did not restore your session. Tap Sign in with Google again " +
+          "(uses a popup). Allow popups or reduce privacy protections if asked.";
       }
     }
 
@@ -943,54 +913,14 @@
     // prompt is an official OAuth param; keep select_account for account picker.
     provider.setCustomParameters({ prompt: "select_account" });
 
-    // Hosting (web.app): redirect first. GitHub Pages: popup only.
-    // After a failed redirect restore, forcePopupOnce makes this popup.
-    if (prefersRedirectSignIn()) {
-      clearAuthHintMessage();
-      markRedirectPending();
-      try {
-        await signInWithRedirectFn(fbAuth, provider);
-        return { method: "redirect" };
-      } catch (err) {
-        // Redirect never started — clear pending so we do not force a bad popup next.
-        try {
-          sessionStorage.removeItem(REDIRECT_PENDING_KEY);
-        } catch (_) {
-          /* ok */
-        }
-        const code = (err && err.code) || "";
-        const isArg =
-          code === "auth/argument-error" ||
-          /argument-error/i.test(String((err && err.message) || ""));
-        // Do NOT fall through to popup for argument-error on iOS hosting —
-        // that produced the misleading "Allow popups" alert. Surface a clear error.
-        if (isArg && isFirebaseHosting()) {
-          forcePopupOnce = false;
-          const e = new Error(friendlyAuthError(err));
-          e.code = "auth/argument-error";
-          e.cause = err;
-          throw e;
-        }
-        // Other redirect failures on hosting: one popup retry may help (e.g. storage).
-        if (isFirebaseHosting() && !isArg) {
-          forcePopupOnce = true;
-        }
-        const e = new Error(friendlyAuthError(err));
-        e.code = code || "auth/unknown";
-        e.cause = err;
-        throw e;
-      }
-    }
-
+    // Popup first everywhere (what worked on github.io / web.app for Santiago).
+    // Redirect only as fallback when popup is blocked/cancelled on Firebase Hosting.
     try {
       clearBlockMessage();
       clearAuthHintMessage();
-      const usedForcedPopup = forcePopupOnce;
-      forcePopupOnce = false;
       await signInWithPopupFn(fbAuth, provider);
-      return { method: "popup", forced: usedForcedPopup };
+      return { method: "popup" };
     } catch (err) {
-      // On GitHub Pages do NOT fall back to redirect — it cannot restore session.
       if (isBenignPopupError(err)) {
         if (isGithubPages()) {
           const e = new Error(
@@ -999,11 +929,24 @@
           e.code = err.code;
           throw e;
         }
-        // Off Pages: popup blocked → redirect (hosting) as fallback.
+        // Hosting (and non-Pages): popup blocked/cancelled → redirect fallback.
         if (isFirebaseHosting() || !isGithubPages()) {
+          clearAuthHintMessage();
           markRedirectPending();
-          await signInWithRedirectFn(fbAuth, provider);
-          return { method: "redirect" };
+          try {
+            await signInWithRedirectFn(fbAuth, provider);
+            return { method: "redirect" };
+          } catch (redirErr) {
+            try {
+              sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+            } catch (_) {
+              /* ok */
+            }
+            const e = new Error(friendlyAuthError(redirErr));
+            e.code = (redirErr && redirErr.code) || "auth/unknown";
+            e.cause = redirErr;
+            throw e;
+          }
         }
       }
       const e = new Error(friendlyAuthError(err));
