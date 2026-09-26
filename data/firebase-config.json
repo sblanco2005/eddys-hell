@@ -1,9 +1,9 @@
 {
-  "_comment": "Paste your Firebase web app config here. Leave apiKey empty until configured. See README § Firebase setup.",
-  "apiKey": "",
-  "authDomain": "",
-  "projectId": "",
-  "storageBucket": "",
-  "messagingSenderId": "",
-  "appId": ""
+  "apiKey": "AIzaSyBKB8Qy7qGnaTQRW-luSOYP4dWBcb0uLXk",
+  "authDomain": "eddy-s-hell.firebaseapp.com",
+  "projectId": "eddy-s-hell",
+  "storageBucket": "eddy-s-hell.firebasestorage.app",
+  "messagingSenderId": "455771885406",
+  "appId": "1:455771885406:web:95615c5558e50c62b849cf",
+  "measurementId": "G-9KCZF1R926"
 }
