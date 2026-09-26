@@ -709,3 +709,62 @@ input:focus {
   .user-name { max-width: 72px; }
   .member-meta { grid-template-columns: 1fr 1fr; }
 }
+
+
+/* ——— YouTube embed ——— */
+.yt-block,
+.yt-admin {
+  margin: 0 0 18px;
+}
+
+.yt-admin {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.yt-admin-head {
+  margin-bottom: 12px;
+}
+
+.yt-admin-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.yt-embed-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #000;
+  margin: 0 0 12px;
+  border: 1px solid var(--border);
+}
+
+.yt-embed-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.yt-pending {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 196, 87, 0.08);
+  border: 1px dashed rgba(255, 196, 87, 0.35);
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  font-weight: 550;
+  text-align: center;
+}
+
+#yt-url-input {
+  width: 100%;
+  margin-bottom: 10px;
+}

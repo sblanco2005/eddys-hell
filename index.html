@@ -90,6 +90,11 @@
           </dl>
           <p class="why member-why" id="member-why" hidden></p>
 
+          <div class="yt-block" id="member-yt-block">
+            <div class="yt-embed-wrap" id="member-yt-embed" hidden></div>
+            <p class="yt-pending" id="member-yt-pending" hidden>Video not published yet</p>
+          </div>
+
           <div class="checkin-box" id="checkin-box">
             <label class="field-label" for="checkin-notes">Notes <span class="opt">(optional)</span></label>
             <input type="text" id="checkin-notes" placeholder="How’d it go?" autocomplete="off" maxlength="280" />
@@ -243,6 +248,25 @@
           <p class="hint publish-hint" id="publish-hint" hidden>
             Downloaded <code>this-week.json</code> — drop it into <code>data/</code> and re-run <code>scripts/publish-pages.sh</code> so the group sees it on Pages.
           </p>
+
+          <div class="yt-admin" id="yt-admin">
+            <header class="card-head yt-admin-head">
+              <h3>YouTube video</h3>
+              <span class="badge" id="yt-status-badge">Not set</span>
+            </header>
+            <div class="yt-embed-wrap" id="admin-yt-embed" hidden></div>
+            <p class="yt-pending" id="admin-yt-pending">Video not published yet</p>
+            <label class="field-label" for="yt-url-input">Paste YouTube URL or video id</label>
+            <input type="text" id="yt-url-input" placeholder="https://youtu.be/… or 11-char id" autocomplete="off" />
+            <div class="actions">
+              <button type="button" class="btn primary" id="btn-yt-save">Save video</button>
+              <button type="button" class="btn ghost" id="btn-yt-clear">Clear video</button>
+            </div>
+            <p class="toast" id="yt-toast" hidden>YouTube link saved.</p>
+            <p class="hint publish-hint" id="yt-publish-hint" hidden>
+              Downloaded updated <code>this-week.json</code> — drop into <code>data/</code> and re-run <code>scripts/publish-pages.sh</code>.
+            </p>
+          </div>
         </article>
 
         <article class="card pick-card error-card" id="pick-error" hidden>

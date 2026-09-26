@@ -252,13 +252,215 @@
         pickedAt: thisWeekFile.pickedAt,
         why: thisWeekFile.why,
         matchCount: thisWeekFile.matchCount,
+        youtubeId: thisWeekFile.youtubeId || null,
+        youtubeUrl: thisWeekFile.youtubeUrl || null,
         source: "file",
       };
     }
     if (state.lastPick) {
-      return { ...state.lastPick, source: "local" };
+      return {
+        ...state.lastPick,
+        youtubeId: state.lastPick.youtubeId || null,
+        youtubeUrl: state.lastPick.youtubeUrl || null,
+        source: "local",
+      };
     }
     return null;
+  }
+
+  /** Extract an 11-char YouTube video id from a URL or bare id. */
+  function parseYoutubeId(input) {
+    const raw = String(input || "").trim();
+    if (!raw) return null;
+    if (/^[A-Za-z0-9_-]{11}$/.test(raw)) return raw;
+    try {
+      const u = new URL(raw);
+      const host = u.hostname.replace(/^www\./, "");
+      if (host === "youtu.be") {
+        const id = u.pathname.split("/").filter(Boolean)[0];
+        return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+      }
+      if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
+        const v = u.searchParams.get("v");
+        if (v && /^[A-Za-z0-9_-]{11}$/.test(v)) return v;
+        const parts = u.pathname.split("/").filter(Boolean);
+        const emb = parts.indexOf("embed");
+        if (emb >= 0 && parts[emb + 1] && /^[A-Za-z0-9_-]{11}$/.test(parts[emb + 1])) {
+          return parts[emb + 1];
+        }
+        const sh = parts.indexOf("shorts");
+        if (sh >= 0 && parts[sh + 1] && /^[A-Za-z0-9_-]{11}$/.test(parts[sh + 1])) {
+          return parts[sh + 1];
+        }
+        const live = parts.indexOf("live");
+        if (live >= 0 && parts[live + 1] && /^[A-Za-z0-9_-]{11}$/.test(parts[live + 1])) {
+          return parts[live + 1];
+        }
+      }
+    } catch (_) {
+      /* not a URL */
+    }
+    const m = raw.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : null;
+  }
+
+  function youtubeWatchUrl(id) {
+    return id ? `https://www.youtube.com/watch?v=${id}` : null;
+  }
+
+  function youtubeEmbedUrl(id) {
+    return id
+      ? `https://www.youtube-nocookie.com/embed/${id}?rel=0`
+      : null;
+  }
+
+  function fillYtEmbed(wrapEl, id) {
+    wrapEl.innerHTML = "";
+    if (!id) return;
+    const iframe = document.createElement("iframe");
+    iframe.src = youtubeEmbedUrl(id);
+    iframe.title = "This week’s workout video";
+    iframe.allow =
+      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+    iframe.allowFullscreen = true;
+    iframe.loading = "lazy";
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
+    wrapEl.appendChild(iframe);
+  }
+
+  function renderYoutubeForMember(tw) {
+    const embed = $("member-yt-embed");
+    const pending = $("member-yt-pending");
+    const id = tw && tw.youtubeId;
+    if (id) {
+      fillYtEmbed(embed, id);
+      embed.hidden = false;
+      pending.hidden = true;
+    } else {
+      embed.innerHTML = "";
+      embed.hidden = true;
+      pending.hidden = false;
+    }
+  }
+
+  function renderYoutubeAdminControls() {
+    const tw = resolveThisWeek();
+    const embed = $("admin-yt-embed");
+    const pending = $("admin-yt-pending");
+    const badge = $("yt-status-badge");
+    const input = $("yt-url-input");
+    const id = tw && tw.youtubeId;
+    if (id) {
+      fillYtEmbed(embed, id);
+      embed.hidden = false;
+      pending.hidden = true;
+      badge.textContent = "Published";
+      if (input && document.activeElement !== input) {
+        input.value = tw.youtubeUrl || youtubeWatchUrl(id) || id;
+      }
+    } else {
+      embed.innerHTML = "";
+      embed.hidden = true;
+      pending.hidden = false;
+      badge.textContent = "Not set";
+      if (input && document.activeElement !== input && !(input.value || "").trim()) {
+        /* leave empty */
+      }
+    }
+    const pendingPub = localStorage.getItem(PENDING_PUBLISH_KEY) === "1";
+    $("yt-publish-hint").hidden = !pendingPub;
+  }
+
+  function buildThisWeekPayloadFromCurrent(extra) {
+    const tw = resolveThisWeek();
+    const base = tw
+      ? {
+          pickId: tw.id,
+          filename: tw.filename,
+          folderType: tw.folderType,
+          hr: tw.hr,
+          relPath: tw.relPath,
+          sizeBytes: tw.sizeBytes,
+          mtime: tw.mtime,
+          rawTags: tw.rawTags || [],
+          pickedAt: tw.pickedAt,
+          why: tw.why,
+          matchCount: tw.matchCount,
+          youtubeId: tw.youtubeId || null,
+          youtubeUrl: tw.youtubeUrl || null,
+        }
+      : null;
+    if (!base) return null;
+    return { ...base, ...(extra || {}) };
+  }
+
+  function persistThisWeekPayload(payload) {
+    thisWeekFile = payload;
+    if (state.lastPick && (state.lastPick.id === payload.pickId || state.lastPick.id === payload.id)) {
+      state.lastPick = {
+        ...state.lastPick,
+        youtubeId: payload.youtubeId || null,
+        youtubeUrl: payload.youtubeUrl || null,
+      };
+      saveState();
+    }
+    localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+    downloadThisWeekJson(payload);
+    try {
+      localStorage.setItem(
+        "eddys-hell-this-week-broadcast-v1",
+        JSON.stringify({ ...payload, _ts: Date.now() })
+      );
+    } catch (_) { /* ok */ }
+  }
+
+  function saveYoutubeVideo() {
+    const tw = resolveThisWeek();
+    if (!tw) {
+      alert("Accept a pick as this week first, then paste the YouTube link.");
+      return;
+    }
+    const id = parseYoutubeId($("yt-url-input").value);
+    if (!id) {
+      alert("Could not parse a YouTube video id. Paste a full URL or an 11-character id.");
+      return;
+    }
+    const payload = buildThisWeekPayloadFromCurrent({
+      youtubeId: id,
+      youtubeUrl: youtubeWatchUrl(id),
+    });
+    persistThisWeekPayload(payload);
+    const toast = $("yt-toast");
+    toast.hidden = false;
+    toast.textContent = "YouTube link saved — downloaded this-week.json.";
+    $("yt-publish-hint").hidden = false;
+    setTimeout(() => {
+      toast.hidden = true;
+    }, 3500);
+    renderYoutubeAdminControls();
+    renderAdminCheckins();
+  }
+
+  function clearYoutubeVideo() {
+    const tw = resolveThisWeek();
+    if (!tw) {
+      alert("No this-week pick to update.");
+      return;
+    }
+    $("yt-url-input").value = "";
+    const payload = buildThisWeekPayloadFromCurrent({
+      youtubeId: null,
+      youtubeUrl: null,
+    });
+    persistThisWeekPayload(payload);
+    const toast = $("yt-toast");
+    toast.hidden = false;
+    toast.textContent = "Video cleared — downloaded this-week.json.";
+    $("yt-publish-hint").hidden = false;
+    setTimeout(() => {
+      toast.hidden = true;
+    }, 3500);
+    renderYoutubeAdminControls();
   }
 
   function downloadThisWeekJson(payload) {
@@ -488,6 +690,7 @@
     } else {
       $("member-why").hidden = true;
     }
+    renderYoutubeForMember(tw);
 
     const mine = window.EddysHellAuth.myCheckin(tw.id, authUser.email);
     if (mine) {
@@ -745,6 +948,7 @@
     $("accept-toast").hidden = true;
     const pending = localStorage.getItem(PENDING_PUBLISH_KEY) === "1";
     $("publish-hint").hidden = !pending;
+    renderYoutubeAdminControls();
   }
 
   function renderPickError(msg) {
@@ -843,6 +1047,8 @@
       pickedAt: now,
       why: currentResult.why,
       matchCount: currentResult.matches.length,
+      youtubeId: null,
+      youtubeUrl: null,
     };
     state.usedHistory = [
       ...(state.usedHistory || []),
@@ -862,6 +1068,8 @@
       pickedAt: now,
       why: currentResult.why,
       matchCount: currentResult.matches.length,
+      youtubeId: null,
+      youtubeUrl: null,
     };
     // In-memory for this browser; members on Pages need the committed file
     thisWeekFile = payload;
@@ -886,6 +1094,7 @@
       toast.hidden = true;
     }, 4000);
     renderAdminCheckins();
+    renderYoutubeAdminControls();
   }
 
   function restoreLastPickIfAny() {
@@ -1066,6 +1275,14 @@
     });
     $("btn-members-save").addEventListener("click", saveMembersList);
     $("btn-pt-save").addEventListener("click", savePTSummary);
+    $("btn-yt-save").addEventListener("click", saveYoutubeVideo);
+    $("btn-yt-clear").addEventListener("click", clearYoutubeVideo);
+    $("yt-url-input").addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        saveYoutubeVideo();
+      }
+    });
 
     await window.EddysHellAuth.init();
     syncMembersDraftFromAuth();
@@ -1083,6 +1300,7 @@
       catalog,
       getState: () => state,
       resolveThisWeek,
+      parseYoutubeId,
     };
   }
 

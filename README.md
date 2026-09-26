@@ -66,11 +66,20 @@ Load order: repo `data/members.json` first, then override from localStorage if i
 
 “I finished this workout” stores `{ email, displayName, pickId, at, notes }` in `localStorage` key `eddys-hell-checkins-v1` (keyed by pick id + email). Admin sees “Check-ins this week” for the current pick in **this browser only**. Structure is ready to sync to a backend later.
 
+
+## YouTube (this week’s video)
+
+`data/this-week.json` may include optional `youtubeId` and `youtubeUrl`.
+
+- **Members / admin This week**: if `youtubeId` is set, a responsive privacy-enhanced iframe embeds from `youtube-nocookie.com`. If missing, the UI shows **Video not published yet** while workout meta stays visible.
+- **Admin → This week’s pick → YouTube video**: paste a YouTube URL or 11-character id → **Save video** (writes localStorage + downloads `this-week.json`, same pattern as Accept). **Clear video** removes the link.
+- Mac helpers: `scripts/compress-workout.sh` (ffmpeg H.264/AAC ~720p) and `scripts/upload-youtube.md` (Studio unlisted upload; OAuth API later).
+
 ## Data files
 
 - `data/catalog.json` — workout catalog
 - `data/default-rule.json` / `data/state.json` — rule seed
-- `data/this-week.json` — published pick for members
+- `data/this-week.json` — published pick for members (optional `youtubeId` / `youtubeUrl`)
 - `data/admins.json` — admin email allowlist
 - `data/members.json` — member email allowlist (empty = admins only)
 - `data/pt.json` — editable PT summary email destination
