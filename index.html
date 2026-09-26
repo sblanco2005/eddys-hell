@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>Eddy's Hell · Thursday Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <span class="flame" aria-hidden="true">⚡</span>
+        <div>
+          <h1>Eddy’s Hell</h1>
+          <p class="sub">Thursday workout admin</p>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist">
+        <button type="button" class="tab active" data-view="rule" role="tab" aria-selected="true">Admin · Rule</button>
+        <button type="button" class="tab" data-view="pick" role="tab" aria-selected="false">This week’s pick</button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- RULE VIEW -->
+      <section id="view-rule" class="view active" aria-label="Admin rule">
+        <article class="card rule-card">
+          <header class="card-head">
+            <h2>Rule</h2>
+            <span class="badge" id="match-badge">— matches</span>
+          </header>
+
+          <div class="field">
+            <label>Types</label>
+            <div class="chips" id="type-chips" role="group" aria-label="Folder types"></div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="min-hr">Min HR</label>
+              <input type="number" id="min-hr" min="0" max="220" step="1" value="120" />
+            </div>
+            <div class="field toggle-field">
+              <label class="toggle">
+                <input type="checkbox" id="require-hr" checked />
+                <span class="toggle-ui"></span>
+                <span>Require HR</span>
+              </label>
+              <p class="hint">Off = allow missing HR</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Recency</label>
+            <div class="seg" role="radiogroup" aria-label="Recency">
+              <label><input type="radio" name="recency" value="recent" checked /><span>Prefer recent</span></label>
+              <label><input type="radio" name="recency" value="older" /><span>Prefer older</span></label>
+              <label><input type="radio" name="recency" value="any" /><span>Any</span></label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="toggle rotate-toggle">
+              <input type="checkbox" id="rotate" checked />
+              <span class="toggle-ui"></span>
+              <span>Rotate — avoid last</span>
+            </label>
+            <div class="rotate-row">
+              <input type="number" id="rotate-weeks" min="1" max="104" value="8" />
+              <span class="unit">weeks</span>
+            </div>
+            <div class="history-box" id="used-history">
+              <p class="hint">No used history yet.</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="tag-contains">Tag / filename contains <span class="opt">(optional)</span></label>
+            <input type="text" id="tag-contains" placeholder="e.g. BB, HIIT, DL" autocomplete="off" />
+          </div>
+
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-save">Save rule</button>
+            <button type="button" class="btn accent" id="btn-dryrun">Dry-run pick</button>
+          </div>
+          <p class="toast" id="save-toast" hidden>Rule saved.</p>
+        </article>
+      </section>
+
+      <!-- PICK VIEW -->
+      <section id="view-pick" class="view" aria-label="This week's pick" hidden>
+        <article class="card pick-card" id="pick-empty">
+          <div class="empty">
+            <p class="empty-title">No pick yet</p>
+            <p class="hint">Set a rule and hit <strong>Dry-run pick</strong> — or accept a prior pick stays if Thursday is skipped.</p>
+            <button type="button" class="btn ghost" id="btn-goto-rule">Edit rule</button>
+          </div>
+        </article>
+
+        <article class="card pick-card" id="pick-result" hidden>
+          <header class="card-head">
+            <h2>This week’s pick</h2>
+            <span class="badge accent" id="pick-type">—</span>
+          </header>
+          <h3 class="pick-name" id="pick-filename">—</h3>
+          <dl class="meta-grid">
+            <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
+            <div><dt>Tags</dt><dd id="pick-tags">—</dd></div>
+            <div><dt>Path</dt><dd class="mono" id="pick-path">—</dd></div>
+            <div><dt>Size</dt><dd id="pick-size">—</dd></div>
+            <div><dt>Modified</dt><dd id="pick-mtime">—</dd></div>
+            <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
+          </dl>
+          <div class="why" id="pick-why"></div>
+          <div class="actions">
+            <button type="button" class="btn secondary" id="btn-again">Pick again</button>
+            <button type="button" class="btn accent" id="btn-accept">Accept as this week</button>
+          </div>
+          <p class="toast" id="accept-toast" hidden>Accepted as this week’s pick.</p>
+        </article>
+
+        <article class="card pick-card error-card" id="pick-error" hidden>
+          <p class="empty-title">No matches</p>
+          <p class="hint" id="pick-error-msg">Loosen filters and try again.</p>
+          <button type="button" class="btn ghost" id="btn-error-rule">Edit rule</button>
+        </article>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span id="catalog-meta">Loading catalog…</span>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
