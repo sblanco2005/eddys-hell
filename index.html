@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
-  <title>Eddy's Hell · Thursday Admin</title>
+  <title>Eddy's Hell · Thursday</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,22 +13,94 @@
 <body>
   <div class="app">
     <header class="top">
-      <div class="brand">
-        <span class="flame" aria-hidden="true">⚡</span>
-        <div>
-          <h1>Eddy’s Hell</h1>
-          <p class="sub">Thursday workout admin</p>
+      <div class="brand-row">
+        <div class="brand">
+          <span class="flame" aria-hidden="true">⚡</span>
+          <div>
+            <h1>Eddy’s Hell</h1>
+            <p class="sub" id="brand-sub">Thursday workout</p>
+          </div>
+        </div>
+        <div class="user-slot" id="user-slot" hidden>
+          <img class="avatar" id="user-avatar" alt="" width="36" height="36" hidden />
+          <div class="user-meta">
+            <span class="user-name" id="user-name"></span>
+            <span class="user-role" id="user-role"></span>
+          </div>
+          <button type="button" class="btn ghost btn-sm" id="btn-signout">Sign out</button>
         </div>
       </div>
-      <nav class="tabs" role="tablist">
+      <nav class="tabs" id="admin-tabs" role="tablist" hidden>
         <button type="button" class="tab active" data-view="rule" role="tab" aria-selected="true">Admin · Rule</button>
         <button type="button" class="tab" data-view="pick" role="tab" aria-selected="false">This week’s pick</button>
       </nav>
     </header>
 
     <main>
-      <!-- RULE VIEW -->
-      <section id="view-rule" class="view active" aria-label="Admin rule">
+      <!-- LANDING / SIGN-IN -->
+      <section id="view-landing" class="view" aria-label="Sign in" hidden>
+        <article class="card landing-card">
+          <p class="landing-kicker">Thursday crew</p>
+          <h2 class="landing-title">Sign in to see this week’s workout</h2>
+          <p class="hint landing-hint" id="locked-title">Workout locked until you sign in.</p>
+
+          <div id="auth-not-configured" class="auth-banner" hidden>
+            <strong>Auth not configured</strong>
+            <p>Add your Firebase web config to <code>data/firebase-config.json</code> (see README). Google sign-in stays disabled until then.</p>
+          </div>
+
+          <div class="actions landing-actions">
+            <button type="button" class="btn accent" id="btn-google" hidden>Sign in with Google</button>
+          </div>
+
+          <div id="mock-signin" class="mock-box" hidden>
+            <p class="hint"><strong>Localhost mock</strong> — Firebase not set up yet. Pick a role to test:</p>
+            <div class="actions">
+              <button type="button" class="btn primary" id="btn-mock-admin">Continue as Admin</button>
+              <button type="button" class="btn secondary" id="btn-mock-member">Continue as Member</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- MEMBER: THIS WEEK + CHECK-IN -->
+      <section id="view-member" class="view" aria-label="This week's workout" hidden>
+        <article class="card pick-card" id="member-empty" hidden>
+          <div class="empty">
+            <p class="empty-title">No workout published yet</p>
+            <p class="hint">Santiago hasn’t set this week’s pick. Check back Thursday.</p>
+          </div>
+        </article>
+
+        <article class="card pick-card" id="member-pick" hidden>
+          <header class="card-head">
+            <h2>This week’s workout</h2>
+            <span class="badge accent" id="member-type">—</span>
+          </header>
+          <h3 class="pick-name" id="member-filename">—</h3>
+          <dl class="meta-grid member-meta">
+            <div><dt>HR</dt><dd id="member-hr">—</dd></div>
+            <div><dt>Type</dt><dd id="member-folder">—</dd></div>
+            <div><dt>Accepted</dt><dd id="member-when">—</dd></div>
+          </dl>
+          <p class="why member-why" id="member-why" hidden></p>
+
+          <div class="checkin-box" id="checkin-box">
+            <label class="field-label" for="checkin-notes">Notes <span class="opt">(optional)</span></label>
+            <input type="text" id="checkin-notes" placeholder="How’d it go?" autocomplete="off" maxlength="280" />
+            <div class="actions">
+              <button type="button" class="btn accent" id="btn-checkin">I finished this workout</button>
+            </div>
+            <p class="toast" id="checkin-toast" hidden>Checked in — nice work.</p>
+            <p class="checkin-done" id="checkin-done" hidden>
+              ✓ You’re marked done <span id="checkin-done-at"></span>
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <!-- RULE VIEW (admin) -->
+      <section id="view-rule" class="view" aria-label="Admin rule" hidden>
         <article class="card rule-card">
           <header class="card-head">
             <h2>Rule</h2>
@@ -92,7 +164,7 @@
         </article>
       </section>
 
-      <!-- PICK VIEW -->
+      <!-- PICK VIEW (admin) -->
       <section id="view-pick" class="view" aria-label="This week's pick" hidden>
         <article class="card pick-card" id="pick-empty">
           <div class="empty">
@@ -122,6 +194,9 @@
             <button type="button" class="btn accent" id="btn-accept">Accept as this week</button>
           </div>
           <p class="toast" id="accept-toast" hidden>Accepted as this week’s pick.</p>
+          <p class="hint publish-hint" id="publish-hint" hidden>
+            Downloaded <code>this-week.json</code> — drop it into <code>data/</code> and re-run <code>scripts/publish-pages.sh</code> so the group sees it on Pages.
+          </p>
         </article>
 
         <article class="card pick-card error-card" id="pick-error" hidden>
@@ -129,13 +204,24 @@
           <p class="hint" id="pick-error-msg">Loosen filters and try again.</p>
           <button type="button" class="btn ghost" id="btn-error-rule">Edit rule</button>
         </article>
+
+        <article class="card checkins-card" id="admin-checkins" hidden>
+          <header class="card-head">
+            <h2>Check-ins this week</h2>
+            <span class="badge" id="checkins-count">0</span>
+          </header>
+          <ul class="checkins-list" id="checkins-list">
+            <li class="hint">No check-ins yet (stored in this browser).</li>
+          </ul>
+        </article>
       </section>
     </main>
 
     <footer class="foot">
-      <span id="catalog-meta">Loading catalog…</span>
+      <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
+  <script src="auth.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,11 +1,12 @@
 /**
- * Eddy's Hell — Thursday workout admin
- * Storage key: eddys-hell-admin-v1
+ * Eddy's Hell — Thursday workout (admin + member)
+ * Storage: eddys-hell-admin-v1, eddys-hell-checkins-v1
  */
 (function () {
   "use strict";
 
   const STORAGE_KEY = "eddys-hell-admin-v1";
+  const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
   const EXCLUDE_TYPES = new Set(["OutsideRoot"]);
   const POOL_SIZE = 20;
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -23,8 +24,12 @@
     usedHistory: [],
     lastPick: null,
   };
-  /** @type {object|null} last dry-run result for accept/again */
+  /** @type {object|null} */
   let currentResult = null;
+  /** @type {object|null} published this-week from repo */
+  let thisWeekFile = null;
+  /** @type {object|null} auth user with role */
+  let authUser = null;
 
   // ——— Persistence ———
 
@@ -89,12 +94,6 @@
     return ids;
   }
 
-  /**
-   * @param {Array} files
-   * @param {object} rule
-   * @param {Array} usedHistory
-   * @returns {{ ok: true, pick: object, matches: Array, why: string } | { ok: false, error: string, matchCount: number }}
-   */
   function pick(files, rule, usedHistory) {
     const types = new Set(rule.folderTypes || []);
     const minHR = Number(rule.minHR);
@@ -216,7 +215,60 @@
     });
   }
 
-  // ——— UI ———
+  function formatWhen(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString("en-US", {
+      timeZone: "America/New_York",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }) + " ET";
+  }
+
+  // ——— This week resolution ———
+
+  /** Prefer repo this-week.json, then localStorage lastPick */
+  function resolveThisWeek() {
+    if (thisWeekFile && (thisWeekFile.pickId || thisWeekFile.id)) {
+      const id = thisWeekFile.pickId || thisWeekFile.id;
+      return {
+        id,
+        filename: thisWeekFile.filename,
+        folderType: thisWeekFile.folderType,
+        hr: thisWeekFile.hr,
+        relPath: thisWeekFile.relPath,
+        sizeBytes: thisWeekFile.sizeBytes,
+        mtime: thisWeekFile.mtime,
+        rawTags: thisWeekFile.rawTags || [],
+        pickedAt: thisWeekFile.pickedAt,
+        why: thisWeekFile.why,
+        matchCount: thisWeekFile.matchCount,
+        source: "file",
+      };
+    }
+    if (state.lastPick) {
+      return { ...state.lastPick, source: "local" };
+    }
+    return null;
+  }
+
+  function downloadThisWeekJson(payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2) + "\n"], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "this-week.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // ——— UI helpers ———
 
   function $(id) {
     return document.getElementById(id);
@@ -233,6 +285,172 @@
       if (!ordered.includes(t)) ordered.push(t);
     }
     return ordered;
+  }
+
+  function hideAllViews() {
+    for (const id of ["view-landing", "view-member", "view-rule", "view-pick"]) {
+      const el = $(id);
+      if (!el) continue;
+      el.classList.remove("active");
+      el.hidden = true;
+    }
+  }
+
+  function showView(name) {
+    hideAllViews();
+    const map = {
+      landing: "view-landing",
+      member: "view-member",
+      rule: "view-rule",
+      pick: "view-pick",
+    };
+    const id = map[name];
+    if (!id) return;
+    const el = $(id);
+    el.hidden = false;
+    el.classList.add("active");
+
+    if (name === "rule" || name === "pick") {
+      for (const tab of document.querySelectorAll(".tab")) {
+        const on = tab.dataset.view === name;
+        tab.classList.toggle("active", on);
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+      }
+    }
+  }
+
+  function renderUserSlot() {
+    const slot = $("user-slot");
+    if (!authUser) {
+      slot.hidden = true;
+      return;
+    }
+    slot.hidden = false;
+    $("user-name").textContent = authUser.displayName || authUser.email;
+    $("user-role").textContent =
+      authUser.role === "admin" ? "Admin" : "Member";
+    const av = $("user-avatar");
+    if (authUser.photoURL) {
+      av.src = authUser.photoURL;
+      av.hidden = false;
+    } else {
+      av.hidden = true;
+      av.removeAttribute("src");
+    }
+  }
+
+  function renderLanding() {
+    showView("landing");
+    $("admin-tabs").hidden = true;
+    $("brand-sub").textContent = "Thursday workout";
+
+    const tw = resolveThisWeek();
+    $("locked-title").textContent = tw
+      ? `This week: ${tw.filename || "workout"} (sign in to unlock)`
+      : "Workout locked until you sign in.";
+
+    const configured = window.EddysHellAuth.isConfigured();
+    const local = window.EddysHellAuth.isLocalhost();
+
+    $("auth-not-configured").hidden = configured;
+    $("btn-google").hidden = !configured;
+    $("mock-signin").hidden = !(!configured && local);
+  }
+
+  function renderMemberView() {
+    showView("member");
+    $("admin-tabs").hidden = true;
+    $("brand-sub").textContent = "This week’s workout";
+
+    const tw = resolveThisWeek();
+    if (!tw) {
+      $("member-empty").hidden = false;
+      $("member-pick").hidden = true;
+      return;
+    }
+    $("member-empty").hidden = true;
+    $("member-pick").hidden = false;
+    $("member-type").textContent = tw.folderType || "—";
+    $("member-filename").textContent = tw.filename || "—";
+    $("member-hr").textContent = tw.hr != null ? String(tw.hr) : "—";
+    $("member-folder").textContent = tw.folderType || "—";
+    $("member-when").textContent = tw.pickedAt
+      ? formatPickedAt(tw.pickedAt)
+      : "—";
+    if (tw.why) {
+      $("member-why").hidden = false;
+      $("member-why").textContent = tw.why;
+    } else {
+      $("member-why").hidden = true;
+    }
+
+    const mine = window.EddysHellAuth.myCheckin(tw.id, authUser.email);
+    if (mine) {
+      $("btn-checkin").hidden = true;
+      $("checkin-notes").disabled = true;
+      $("checkin-notes").value = mine.notes || "";
+      $("checkin-done").hidden = false;
+      $("checkin-done-at").textContent = mine.at
+        ? "· " + formatWhen(mine.at)
+        : "";
+      $("checkin-toast").hidden = true;
+    } else {
+      $("btn-checkin").hidden = false;
+      $("checkin-notes").disabled = false;
+      $("checkin-done").hidden = true;
+    }
+  }
+
+  function renderAdminShell(preferredView) {
+    $("admin-tabs").hidden = false;
+    $("brand-sub").textContent = "Thursday workout admin";
+    const view = preferredView || "rule";
+    showView(view);
+    if (view === "pick") {
+      if (currentResult) {
+        /* keep current dry-run */
+      } else if (state.lastPick) {
+        restoreLastPickIfAny();
+      } else {
+        const tw = resolveThisWeek();
+        if (tw) {
+          const f =
+            catalog.files.find((x) => x.id === tw.id) || {
+              id: tw.id,
+              filename: tw.filename,
+              folderType: tw.folderType,
+              hr: tw.hr,
+              relPath: tw.relPath,
+              sizeBytes: tw.sizeBytes,
+              mtime: tw.mtime,
+              rawTags: tw.rawTags || [],
+            };
+          currentResult = {
+            ok: true,
+            pick: f,
+            matches: Array(tw.matchCount || 1).fill(f),
+            why: tw.why || "Published this week",
+          };
+          renderPickResult(currentResult);
+        } else {
+          showPickPanels({ empty: true, result: false, error: false });
+        }
+      }
+      renderAdminCheckins();
+    }
+  }
+
+  function applyRoleUI() {
+    renderUserSlot();
+    if (!authUser) {
+      renderLanding();
+      return;
+    }
+    if (authUser.role === "admin") {
+      renderAdminShell("rule");
+      return;
+    }
+    renderMemberView();
   }
 
   function renderChips() {
@@ -317,18 +535,6 @@
     $("match-badge").textContent = `${n} match${n === 1 ? "" : "es"}`;
   }
 
-  function showView(name) {
-    for (const tab of document.querySelectorAll(".tab")) {
-      const on = tab.dataset.view === name;
-      tab.classList.toggle("active", on);
-      tab.setAttribute("aria-selected", on ? "true" : "false");
-    }
-    $("view-rule").classList.toggle("active", name === "rule");
-    $("view-rule").hidden = name !== "rule";
-    $("view-pick").classList.toggle("active", name === "pick");
-    $("view-pick").hidden = name !== "pick";
-  }
-
   function showPickPanels({ empty, result, error }) {
     $("pick-empty").hidden = !empty;
     $("pick-result").hidden = !result;
@@ -349,11 +555,51 @@
     $("pick-why").textContent = result.why;
     showPickPanels({ empty: false, result: true, error: false });
     $("accept-toast").hidden = true;
+    const pending = localStorage.getItem(PENDING_PUBLISH_KEY) === "1";
+    $("publish-hint").hidden = !pending;
   }
 
   function renderPickError(msg) {
     $("pick-error-msg").textContent = msg;
     showPickPanels({ empty: false, result: false, error: true });
+  }
+
+  function renderAdminCheckins() {
+    const box = $("admin-checkins");
+    const tw = resolveThisWeek();
+    if (!tw) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    const list = window.EddysHellAuth.checkinsForPick(tw.id);
+    $("checkins-count").textContent = String(list.length);
+    const ul = $("checkins-list");
+    ul.innerHTML = "";
+    if (!list.length) {
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "No check-ins yet (stored in this browser).";
+      ul.appendChild(li);
+      return;
+    }
+    for (const c of list) {
+      const li = document.createElement("li");
+      const notes = c.notes ? ` — ${c.notes}` : "";
+      li.innerHTML = `<strong>${escapeHtml(c.displayName || c.email)}</strong>
+        <span class="mute">${escapeHtml(c.email)}</span>
+        <span class="mute"> · ${escapeHtml(formatWhen(c.at))}</span>
+        <span>${escapeHtml(notes)}</span>`;
+      ul.appendChild(li);
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   function runDryRun() {
@@ -364,15 +610,16 @@
     showView("pick");
     if (!result.ok) {
       renderPickError(result.error);
+      renderAdminCheckins();
       return;
     }
     renderPickResult(result);
+    renderAdminCheckins();
   }
 
   function pickAgain() {
     const rule = readRuleFromForm();
     state.rule = rule;
-    // Temporarily treat current pick as blocked so "again" prefers another
     const tempHist = [...(state.usedHistory || [])];
     if (currentResult && currentResult.pick) {
       tempHist.push({
@@ -382,7 +629,6 @@
     }
     let result = pick(catalog.files, rule, tempHist);
     if (!result.ok) {
-      // Fall back to normal pool if only one match
       result = pick(catalog.files, rule, state.usedHistory);
     }
     currentResult = result.ok ? result : null;
@@ -403,6 +649,9 @@
       folderType: f.folderType,
       hr: f.hr,
       relPath: f.relPath,
+      sizeBytes: f.sizeBytes,
+      mtime: f.mtime,
+      rawTags: f.rawTags || [],
       pickedAt: now,
       why: currentResult.why,
       matchCount: currentResult.matches.length,
@@ -412,13 +661,43 @@
       { id: f.id, pickedAt: now },
     ];
     saveState();
+
+    const payload = {
+      pickId: f.id,
+      filename: f.filename,
+      folderType: f.folderType,
+      hr: f.hr,
+      relPath: f.relPath,
+      sizeBytes: f.sizeBytes,
+      mtime: f.mtime,
+      rawTags: f.rawTags || [],
+      pickedAt: now,
+      why: currentResult.why,
+      matchCount: currentResult.matches.length,
+    };
+    // In-memory for this browser; members on Pages need the committed file
+    thisWeekFile = payload;
+    localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+    downloadThisWeekJson(payload);
+
+    try {
+      localStorage.setItem(
+        "eddys-hell-this-week-broadcast-v1",
+        JSON.stringify({ ...payload, _ts: Date.now() })
+      );
+    } catch (_) { /* ok */ }
+
     renderHistory();
     updateMatchBadge();
     const toast = $("accept-toast");
     toast.hidden = false;
+    toast.textContent =
+      "Accepted — downloaded this-week.json. Re-publish to share with the group.";
+    $("publish-hint").hidden = false;
     setTimeout(() => {
       toast.hidden = true;
-    }, 2500);
+    }, 4000);
+    renderAdminCheckins();
   }
 
   function restoreLastPickIfAny() {
@@ -428,29 +707,36 @@
     }
     const f = catalog.files.find((x) => x.id === state.lastPick.id);
     if (!f) {
-      showPickPanels({ empty: true, result: false, error: false });
+      // Still show stored metadata
+      currentResult = {
+        ok: true,
+        pick: {
+          id: state.lastPick.id,
+          filename: state.lastPick.filename,
+          folderType: state.lastPick.folderType,
+          hr: state.lastPick.hr,
+          relPath: state.lastPick.relPath,
+          sizeBytes: state.lastPick.sizeBytes,
+          mtime: state.lastPick.mtime,
+          rawTags: state.lastPick.rawTags || [],
+        },
+        matches: Array(state.lastPick.matchCount || 1).fill(null),
+        why:
+          state.lastPick.why ||
+          `Stored last pick · accepted ${formatPickedAt(state.lastPick.pickedAt)}`,
+      };
+      renderPickResult(currentResult);
       return;
     }
     currentResult = {
       ok: true,
       pick: f,
-      matches: [f],
+      matches: Array(state.lastPick.matchCount || 1).fill(f),
       why:
         state.lastPick.why ||
         `Stored last pick · accepted ${formatPickedAt(state.lastPick.pickedAt)}`,
     };
-    // Prefer stored matchCount in display
-    const fake = {
-      ...currentResult,
-      matches: { length: state.lastPick.matchCount || 1 },
-    };
-    // render with real file but override count text after
-    renderPickResult({
-      pick: f,
-      matches: Array(state.lastPick.matchCount || 1).fill(f),
-      why: currentResult.why,
-    });
-    void fake;
+    renderPickResult(currentResult);
   }
 
   function wireFormLive() {
@@ -463,12 +749,45 @@
     }
   }
 
+  function wireAuthButtons() {
+    $("btn-google").addEventListener("click", async () => {
+      try {
+        await window.EddysHellAuth.signInWithGoogle();
+      } catch (err) {
+        alert("Sign-in failed: " + (err.message || err));
+      }
+    });
+    $("btn-mock-admin").addEventListener("click", () => {
+      window.EddysHellAuth.mockSignIn("admin");
+    });
+    $("btn-mock-member").addEventListener("click", () => {
+      window.EddysHellAuth.mockSignIn("member");
+    });
+    $("btn-signout").addEventListener("click", async () => {
+      await window.EddysHellAuth.signOut();
+    });
+    $("btn-checkin").addEventListener("click", () => {
+      const tw = resolveThisWeek();
+      if (!tw || !authUser) return;
+      window.EddysHellAuth.upsertCheckin({
+        email: authUser.email,
+        displayName: authUser.displayName,
+        pickId: tw.id,
+        notes: $("checkin-notes").value,
+      });
+      $("checkin-toast").hidden = false;
+      setTimeout(() => {
+        $("checkin-toast").hidden = true;
+      }, 2500);
+      renderMemberView();
+    });
+  }
+
   // ——— Boot ———
 
   async function boot() {
     loadState();
 
-    // Optional seed from data/state.json if localStorage empty and no prior rule save
     try {
       const had = localStorage.getItem(STORAGE_KEY);
       if (!had) {
@@ -482,19 +801,23 @@
       }
     } catch (_) { /* optional */ }
 
-    // Prefer packaged default-rule if present and still on defaults
     try {
       const dr = await fetch("data/default-rule.json");
       if (dr.ok) {
         const def = await dr.json();
-        // Only fill if rule somehow missing fields
         state.rule = { ...def, ...state.rule };
-        // If brand new (no storage), use default-rule as-is
         if (!localStorage.getItem(STORAGE_KEY)) {
           state.rule = { ...defaultRule(), ...def };
         }
       }
     } catch (_) { /* ok */ }
+
+    try {
+      const twRes = await fetch("data/this-week.json", { cache: "no-store" });
+      if (twRes.ok) thisWeekFile = await twRes.json();
+    } catch (_) {
+      thisWeekFile = null;
+    }
 
     const res = await fetch("data/catalog.json");
     if (!res.ok) throw new Error("Failed to load catalog.json");
@@ -506,15 +829,20 @@
 
     writeRuleToForm(state.rule);
     wireFormLive();
+    wireAuthButtons();
 
-    // Tabs
     for (const tab of document.querySelectorAll(".tab")) {
       tab.addEventListener("click", () => {
+        if (!authUser || authUser.role !== "admin") return;
         showView(tab.dataset.view);
-        if (tab.dataset.view === "pick" && !currentResult && state.lastPick) {
-          restoreLastPickIfAny();
-        } else if (tab.dataset.view === "pick" && !currentResult && !state.lastPick) {
-          showPickPanels({ empty: true, result: false, error: false });
+        if (tab.dataset.view === "pick") {
+          if (!currentResult && state.lastPick) restoreLastPickIfAny();
+          else if (!currentResult && !state.lastPick) {
+            const tw = resolveThisWeek();
+            if (tw) restoreLastPickIfAny();
+            else showPickPanels({ empty: true, result: false, error: false });
+          }
+          renderAdminCheckins();
         }
       });
     }
@@ -535,12 +863,24 @@
     $("btn-goto-rule").addEventListener("click", () => showView("rule"));
     $("btn-error-rule").addEventListener("click", () => showView("rule"));
 
-    // Expose for console / dry-run scripts
-    window.EddysHell = { pick, matchCount, defaultRule, catalog, getState: () => state };
+    await window.EddysHellAuth.init();
+    window.EddysHellAuth.onAuthChange((user) => {
+      authUser = user;
+      applyRoleUI();
+    });
+
+    window.EddysHell = {
+      pick,
+      matchCount,
+      defaultRule,
+      catalog,
+      getState: () => state,
+      resolveThisWeek,
+    };
   }
 
   boot().catch((err) => {
     console.error(err);
-    $("catalog-meta").textContent = "Failed to load catalog: " + err.message;
+    $("catalog-meta").textContent = "Failed to load: " + err.message;
   });
 })();

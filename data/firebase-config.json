@@ -1,0 +1,9 @@
+{
+  "_comment": "Paste your Firebase web app config here. Leave apiKey empty until configured. See README § Firebase setup.",
+  "apiKey": "",
+  "authDomain": "",
+  "projectId": "",
+  "storageBucket": "",
+  "messagingSenderId": "",
+  "appId": ""
+}
