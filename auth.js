@@ -138,7 +138,14 @@
           "Open " + preferredLiveUrl() + " instead (same app, matching auth domain), then sign in."
         );
       }
-      // On web.app / firebaseapp.com: privacy / popup — not "open Safari".
+      if (isFirebaseHosting()) {
+        // Redirect is first on hosting — do not tell users to "allow popups".
+        return (
+          "Sign-in could not start on this device. Hard-refresh the page, then try again. " +
+          "If it still fails, in Safari turn off \"Reduce Advanced Privacy Protections\" " +
+          "for eddy-s-hell.web.app and retry."
+        );
+      }
       return (
         "Sign-in could not start. Allow popups for this site, or in Safari turn off " +
         "\"Reduce Advanced Privacy Protections\" for this site / try again."
@@ -662,6 +669,7 @@
       getAuth,
       initializeAuth,
       browserLocalPersistence,
+      browserPopupRedirectResolver,
       setPersistence,
       GoogleAuthProvider,
       signInWithPopup,
@@ -689,6 +697,7 @@
       getAuth,
       initializeAuth,
       browserLocalPersistence,
+      browserPopupRedirectResolver,
       setPersistence,
       GoogleAuthProvider,
       signInWithPopup,
@@ -812,10 +821,13 @@
     const mod = await loadFirebaseModular();
     const app = mod.initializeApp(cfg);
 
-    // Explicit local persistence so redirect/popup sessions survive reloads.
+    // Explicit local persistence + popup/redirect resolver.
+    // initializeAuth WITHOUT browserPopupRedirectResolver throws
+    // auth/argument-error on signInWithRedirect / signInWithPopup.
     try {
       fbAuth = mod.initializeAuth(app, {
         persistence: mod.browserLocalPersistence,
+        popupRedirectResolver: mod.browserPopupRedirectResolver,
       });
     } catch (_) {
       fbAuth = mod.getAuth(app);
@@ -936,8 +948,38 @@
     if (prefersRedirectSignIn()) {
       clearAuthHintMessage();
       markRedirectPending();
-      await signInWithRedirectFn(fbAuth, provider);
-      return { method: "redirect" };
+      try {
+        await signInWithRedirectFn(fbAuth, provider);
+        return { method: "redirect" };
+      } catch (err) {
+        // Redirect never started — clear pending so we do not force a bad popup next.
+        try {
+          sessionStorage.removeItem(REDIRECT_PENDING_KEY);
+        } catch (_) {
+          /* ok */
+        }
+        const code = (err && err.code) || "";
+        const isArg =
+          code === "auth/argument-error" ||
+          /argument-error/i.test(String((err && err.message) || ""));
+        // Do NOT fall through to popup for argument-error on iOS hosting —
+        // that produced the misleading "Allow popups" alert. Surface a clear error.
+        if (isArg && isFirebaseHosting()) {
+          forcePopupOnce = false;
+          const e = new Error(friendlyAuthError(err));
+          e.code = "auth/argument-error";
+          e.cause = err;
+          throw e;
+        }
+        // Other redirect failures on hosting: one popup retry may help (e.g. storage).
+        if (isFirebaseHosting() && !isArg) {
+          forcePopupOnce = true;
+        }
+        const e = new Error(friendlyAuthError(err));
+        e.code = code || "auth/unknown";
+        e.cause = err;
+        throw e;
+      }
     }
 
     try {
