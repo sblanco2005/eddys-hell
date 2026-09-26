@@ -54,6 +54,20 @@
             <p id="auth-denied-msg">Ask Santiago to add your email.</p>
           </div>
 
+          <div id="auth-inapp" class="auth-banner auth-inapp" hidden>
+            <strong>Open in Safari</strong>
+            <p id="auth-inapp-msg">
+              Google sign-in does not work inside WhatsApp, Instagram, or Facebook.
+              Open this page in Safari, then sign in.
+            </p>
+            <label class="field-label" for="auth-inapp-url">Copy this link</label>
+            <div class="inapp-url-row">
+              <input type="text" id="auth-inapp-url" readonly value="" />
+              <button type="button" class="btn secondary btn-sm" id="btn-copy-url">Copy</button>
+            </div>
+            <p class="hint inapp-hint" id="auth-inapp-copied" hidden>Link copied — paste it into Safari.</p>
+          </div>
+
           <div class="actions landing-actions">
             <button type="button" class="btn accent" id="btn-google" hidden>Sign in with Google</button>
           </div>

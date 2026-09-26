@@ -37,6 +37,106 @@
     return /\.github\.io$/i.test(location.hostname);
   }
 
+  /**
+   * In-app browsers (WhatsApp, Instagram, FB, Messenger, Line, etc.) break
+   * Google popup/redirect auth — Firebase often throws auth/argument-error.
+   * Detect and steer users to Safari/Chrome instead of attempting sign-in.
+   */
+  function isInAppBrowser() {
+    const ua = navigator.userAgent || "";
+    // Explicit in-app tokens
+    if (
+      /WhatsApp/i.test(ua) ||
+      /Instagram/i.test(ua) ||
+      /FBAN|FBAV|FB_IAB|FBAN\//i.test(ua) ||
+      /Messenger/i.test(ua) ||
+      /Line\//i.test(ua) ||
+      /Twitter/i.test(ua) ||
+      /LinkedInApp/i.test(ua) ||
+      /Snapchat/i.test(ua) ||
+      /Pinterest/i.test(ua) ||
+      /TikTok/i.test(ua) ||
+      /BytedanceWebview|musical_ly/i.test(ua) ||
+      /MicroMessenger/i.test(ua) || // WeChat
+      /Discord/i.test(ua) ||
+      /Slack/i.test(ua) ||
+      /Telegram/i.test(ua)
+    ) {
+      return true;
+    }
+    // Android WebView heuristic (not Chrome/Firefox standalone)
+    if (/Android/i.test(ua) && /wv\)/i.test(ua)) return true;
+    // iOS: standalone Safari has "Safari" or Version/; many IABs omit Safari
+    // but keep Google Chrome iOS (CriOS) and Firefox iOS (FxiOS) as real browsers.
+    const isIOS =
+      /iPad|iPhone|iPod/i.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+      const isRealBrowser =
+        /Safari/i.test(ua) || /CriOS/i.test(ua) || /FxiOS/i.test(ua) || /EdgiOS/i.test(ua);
+      // Some IABs still include "Safari" in UA — the explicit tokens above catch those.
+      if (!isRealBrowser) return true;
+    }
+    return false;
+  }
+
+  function publicAppUrl() {
+    try {
+      const u = new URL(location.href);
+      // Drop ephemeral hash noise; keep path/query for deep links.
+      u.hash = "";
+      return u.toString().replace(/\/$/, "") || location.origin + location.pathname;
+    } catch (_) {
+      return location.href.split("#")[0];
+    }
+  }
+
+  function openInBrowserMessage() {
+    const isIOS =
+      /iPad|iPhone|iPod/i.test(navigator.userAgent || "") ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const browser = isIOS ? "Safari" : "your browser (Chrome)";
+    return (
+      "Google sign-in does not work inside WhatsApp / Instagram / Facebook. " +
+      "Tap ⋯ or Open in " +
+      browser +
+      ", then sign in there."
+    );
+  }
+
+  function friendlyAuthError(err) {
+    const code = (err && err.code) || "";
+    const msg = (err && err.message) || String(err || "");
+    if (
+      code === "auth/argument-error" ||
+      /auth\/argument-error/i.test(msg) ||
+      /argument-error/i.test(msg)
+    ) {
+      if (isInAppBrowser()) return openInBrowserMessage();
+      return (
+        "Sign-in could not start in this browser. Open this page in Safari " +
+        "(or Chrome), allow popups for this site, and try again."
+      );
+    }
+    if (code === "auth/popup-blocked" || code === "auth/popup-closed-by-user") {
+      return (
+        "Popup blocked or closed. Allow popups for this site and try again, " +
+        "or open the link in Safari."
+      );
+    }
+    if (code === "auth/unauthorized-domain") {
+      return "This site is not authorized for Google sign-in. Tell Santiago.";
+    }
+    if (code === "auth/network-request-failed") {
+      return "Network error during sign-in. Check your connection and try again.";
+    }
+    // Strip raw "Firebase: Error (...)" wrapper when we already have a clear code.
+    if (/^Firebase:\s*Error\s*\(/i.test(msg) && code) {
+      return "Sign-in failed (" + code + "). Try again in Safari.";
+    }
+    return msg || "Sign-in failed. Try again in Safari.";
+  }
+
   /** ?admin=1 bypass — localhost only, never on github.io */
   function adminBypassEnabled() {
     if (isGithubPages()) return false;
@@ -735,11 +835,21 @@
     if (!firebaseReady || !fbAuth) {
       throw new Error("Firebase Auth is not configured");
     }
+
+    // In-app browsers: do not attempt popup/redirect (broken → argument-error).
+    if (isInAppBrowser()) {
+      const e = new Error(openInBrowserMessage());
+      e.code = "auth/in-app-browser";
+      throw e;
+    }
+
+    // Valid GoogleAuthProvider only — no bad custom params (argument-error).
     const provider = new GoogleAuthProviderCtor();
+    // prompt is an official OAuth param; keep select_account for account picker.
     provider.setCustomParameters({ prompt: "select_account" });
 
     // Redirect only off GitHub Pages (see prefersRedirectSignIn). On Pages,
-    // redirect loses the session after Google succeeds.
+    // redirect loses the session after Google succeeds — keep popup-first.
     if (prefersRedirectSignIn()) {
       markRedirectPending();
       await signInWithRedirectFn(fbAuth, provider);
@@ -764,7 +874,10 @@
         await signInWithRedirectFn(fbAuth, provider);
         return { method: "redirect" };
       }
-      throw err;
+      const e = new Error(friendlyAuthError(err));
+      e.code = (err && err.code) || "auth/unknown";
+      e.cause = err;
+      throw e;
     }
   }
 
@@ -841,6 +954,10 @@
     isConfigured: () => firebaseReady,
     isLocalhost,
     isGithubPages,
+    isInAppBrowser,
+    publicAppUrl,
+    openInBrowserMessage,
+    friendlyAuthError,
     adminBypassEnabled,
     signInWithGoogle,
     isBenignPopupError,

@@ -526,16 +526,50 @@
       ? `This week: ${tw.filename || "workout"} (sign in to unlock)`
       : "Workout locked until you sign in.";
 
-    const configured = window.EddysHellAuth.isConfigured();
-    const local = window.EddysHellAuth.isLocalhost();
+    const Auth = window.EddysHellAuth;
+    const configured = Auth.isConfigured();
+    const local = Auth.isLocalhost();
+    const inApp = Auth.isInAppBrowser && Auth.isInAppBrowser();
 
     $("auth-not-configured").hidden = configured;
-    $("btn-google").hidden = !configured;
+
+    const inAppEl = $("auth-inapp");
+    if (inAppEl) {
+      if (inApp) {
+        inAppEl.hidden = false;
+        const isIOS =
+          /iPad|iPhone|iPod/i.test(navigator.userAgent || "") ||
+          (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        const browser = isIOS ? "Safari" : "Chrome";
+        const title = inAppEl.querySelector("strong");
+        if (title) title.textContent = "Open in " + browser;
+        const msg = $("auth-inapp-msg");
+        if (msg) {
+          msg.textContent =
+            (Auth.openInBrowserMessage && Auth.openInBrowserMessage()) ||
+            ("Google sign-in does not work inside WhatsApp, Instagram, or Facebook. Open this page in " +
+              browser +
+              ", then sign in.");
+        }
+        const urlInput = $("auth-inapp-url");
+        if (urlInput) {
+          urlInput.value =
+            (Auth.publicAppUrl && Auth.publicAppUrl()) || location.href.split("#")[0];
+        }
+        const copied = $("auth-inapp-copied");
+        if (copied) copied.hidden = true;
+      } else {
+        inAppEl.hidden = true;
+      }
+    }
+
+    // Hide Google button in in-app browsers — popup/redirect will fail.
+    $("btn-google").hidden = !configured || inApp;
     $("mock-signin").hidden = !(!configured && local);
 
-    const denied = window.EddysHellAuth.getBlockMessage();
+    const denied = Auth.getBlockMessage();
     const deniedEl = $("auth-denied");
-    if (denied) {
+    if (denied && !inApp) {
       deniedEl.hidden = false;
       $("auth-denied-msg").textContent = denied;
     } else {
@@ -1139,6 +1173,40 @@
   }
 
   function wireAuthButtons() {
+    const copyBtn = $("btn-copy-url");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        const urlInput = $("auth-inapp-url");
+        const url =
+          (urlInput && urlInput.value) ||
+          (window.EddysHellAuth.publicAppUrl &&
+            window.EddysHellAuth.publicAppUrl()) ||
+          location.href.split("#")[0];
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(url);
+          } else if (urlInput) {
+            urlInput.focus();
+            urlInput.select();
+            document.execCommand("copy");
+          }
+          const copied = $("auth-inapp-copied");
+          if (copied) {
+            copied.hidden = false;
+            setTimeout(() => {
+              copied.hidden = true;
+            }, 2500);
+          }
+        } catch (_) {
+          if (urlInput) {
+            urlInput.focus();
+            urlInput.select();
+          }
+          alert("Copy this link and paste it into Safari:\n" + url);
+        }
+      });
+    }
+
     $("btn-google").addEventListener("click", async () => {
       try {
         const result = await window.EddysHellAuth.signInWithGoogle();
@@ -1152,7 +1220,28 @@
         ) {
           return;
         }
-        alert("Sign-in failed: " + (err.message || err));
+        const Auth = window.EddysHellAuth;
+        let msg =
+          (Auth.friendlyAuthError && Auth.friendlyAuthError(err)) ||
+          err.message ||
+          String(err);
+        // In-app / argument-error: prefer the on-page banner over a raw alert.
+        if (
+          err.code === "auth/in-app-browser" ||
+          err.code === "auth/argument-error" ||
+          /argument-error/i.test(String(err.message || ""))
+        ) {
+          if (Auth.isInAppBrowser && Auth.isInAppBrowser()) {
+            renderLanding();
+            const inAppEl = $("auth-inapp");
+            if (inAppEl) {
+              inAppEl.hidden = false;
+              inAppEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+            return;
+          }
+        }
+        alert(msg);
       }
     });
     $("btn-mock-admin").addEventListener("click", () => {

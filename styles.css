@@ -788,3 +788,32 @@ input:focus {
   font-size: 0.85rem;
   opacity: 0.85;
 }
+
+.auth-inapp {
+  background: rgba(91, 156, 255, 0.12);
+  border-color: rgba(91, 156, 255, 0.4);
+  color: #c8ddff;
+}
+.auth-inapp strong { color: #8ec5ff; }
+.inapp-url-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 4px;
+}
+.inapp-url-row input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px 10px;
+}
+.inapp-hint {
+  margin: 8px 0 0;
+  color: var(--ok);
+  font-weight: 600;
+}
