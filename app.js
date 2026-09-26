@@ -715,35 +715,7 @@
     const view = preferredView || "rule";
     showView(view);
     if (view === "pick") {
-      if (currentResult) {
-        /* keep current dry-run */
-      } else if (state.lastPick) {
-        restoreLastPickIfAny();
-      } else {
-        const tw = resolveThisWeek();
-        if (tw) {
-          const f =
-            catalog.files.find((x) => x.id === tw.id) || {
-              id: tw.id,
-              filename: tw.filename,
-              folderType: tw.folderType,
-              hr: tw.hr,
-              relPath: tw.relPath,
-              sizeBytes: tw.sizeBytes,
-              mtime: tw.mtime,
-              rawTags: tw.rawTags || [],
-            };
-          currentResult = {
-            ok: true,
-            pick: f,
-            matches: Array(tw.matchCount || 1).fill(f),
-            why: tw.why || "Published this week",
-          };
-          renderPickResult(currentResult);
-        } else {
-          showPickPanels({ empty: true, result: false, error: false });
-        }
-      }
+      ensurePickViewFromPublished();
       renderAdminCheckins();
     }
   }
@@ -1097,8 +1069,66 @@
     renderYoutubeAdminControls();
   }
 
+  function ensurePickViewFromPublished() {
+    if (currentResult) {
+      /* keep current dry-run / in-memory pick */
+      renderPickResult(currentResult);
+      return;
+    }
+    if (state.lastPick) {
+      restoreLastPickIfAny();
+      return;
+    }
+    const tw = resolveThisWeek();
+    if (tw) {
+      const f =
+        catalog.files.find((x) => x.id === tw.id) || {
+          id: tw.id,
+          filename: tw.filename,
+          folderType: tw.folderType,
+          hr: tw.hr,
+          relPath: tw.relPath,
+          sizeBytes: tw.sizeBytes,
+          mtime: tw.mtime,
+          rawTags: tw.rawTags || [],
+        };
+      currentResult = {
+        ok: true,
+        pick: f,
+        matches: Array(tw.matchCount || 1).fill(f),
+        why: tw.why || "Published this week",
+      };
+      renderPickResult(currentResult);
+      return;
+    }
+    showPickPanels({ empty: true, result: false, error: false });
+  }
+
   function restoreLastPickIfAny() {
     if (!state.lastPick) {
+      // Fall through to published this-week.json when lastPick is missing
+      const tw = resolveThisWeek();
+      if (tw) {
+        const f =
+          catalog.files.find((x) => x.id === tw.id) || {
+            id: tw.id,
+            filename: tw.filename,
+            folderType: tw.folderType,
+            hr: tw.hr,
+            relPath: tw.relPath,
+            sizeBytes: tw.sizeBytes,
+            mtime: tw.mtime,
+            rawTags: tw.rawTags || [],
+          };
+        currentResult = {
+          ok: true,
+          pick: f,
+          matches: Array(tw.matchCount || 1).fill(f),
+          why: tw.why || "Published this week",
+        };
+        renderPickResult(currentResult);
+        return;
+      }
       showPickPanels({ empty: true, result: false, error: false });
       return;
     }
@@ -1239,12 +1269,7 @@
           renderPTUI();
         }
         if (tab.dataset.view === "pick") {
-          if (!currentResult && state.lastPick) restoreLastPickIfAny();
-          else if (!currentResult && !state.lastPick) {
-            const tw = resolveThisWeek();
-            if (tw) restoreLastPickIfAny();
-            else showPickPanels({ empty: true, result: false, error: false });
-          }
+          ensurePickViewFromPublished();
           renderAdminCheckins();
         }
       });
