@@ -20,7 +20,14 @@ if (!fs.existsSync(src)) {
 }
 
 const raw = fs.readFileSync(src, "utf8");
-JSON.parse(raw); // validate
+const parsed = JSON.parse(raw); // validate
+if (!parsed || !parsed.youtubeId) {
+  console.error(
+    "Refusing to write this-week.json without youtubeId.",
+    "Upload YouTube first — won't replace this week without a video."
+  );
+  process.exit(2);
+}
 
 const dests = [
   path.join(root, "data", "this-week.json"),

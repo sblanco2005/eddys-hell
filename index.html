@@ -4,13 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta name="eddys-hell-build" content="difficulty-20260927-1355" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20260927-1355-difficulty" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="dns-prefetch" href="https://www.gstatic.com" />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js" />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js" />
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+  <noscript><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" /></noscript>
 </head>
-<body>
+<body class="is-guest">
   <div class="app">
     <header class="top">
       <div class="brand-row">
@@ -104,7 +113,9 @@
           <header class="card-head">
             <h2>This week’s workout</h2>
             <span class="badge accent" id="member-type">—</span>
+            <span class="badge live-badge" id="member-live-badge" hidden>LIVE</span>
           </header>
+          <p class="hint member-staged-note" id="member-staged-note" hidden></p>
           <h3 class="pick-name" id="member-filename">—</h3>
           <dl class="meta-grid member-meta">
             <div><dt>HR</dt><dd id="member-hr">—</dd></div>
@@ -121,14 +132,19 @@
           <div class="checkin-box" id="checkin-box">
             <h3 class="checkin-title">Check in</h3>
             <p class="hint checkin-help" id="checkin-help">
-              After you finish the workout, tap <strong>Check in</strong> so the crew knows you did it.
+              After you finish, pick <strong>Easy / Okay / Hard</strong>, then tap <strong>Check in</strong> so the crew knows you did it.
             </p>
-            <label class="field-label" for="checkin-notes">Notes <span class="opt">(optional)</span></label>
-            <input type="text" id="checkin-notes" placeholder="How’d it go?" autocomplete="off" maxlength="280" />
+            <label class="field-label" id="checkin-difficulty-label">How was it? <span class="req">(pick one)</span></label>
+            <div class="seg difficulty-seg" role="radiogroup" aria-labelledby="checkin-difficulty-label" id="checkin-difficulty">
+              <label><input type="radio" name="checkin-difficulty" value="easy" /><span>Easy</span></label>
+              <label><input type="radio" name="checkin-difficulty" value="okay" /><span>Okay</span></label>
+              <label><input type="radio" name="checkin-difficulty" value="hard" /><span>Hard</span></label>
+            </div>
             <div class="actions">
-              <button type="button" class="btn accent" id="btn-checkin">Check in — I finished</button>
+              <button type="button" class="btn accent" id="btn-checkin" disabled>Check in — I finished</button>
             </div>
             <p class="toast" id="checkin-toast" hidden>Checked in — nice work.</p>
+            <p class="toast toast-warn" id="checkin-need-diff" hidden>Pick Easy, Okay, or Hard before checking in.</p>
             <p class="checkin-done" id="checkin-done" hidden>
               ✓ You’re checked in for this week <span id="checkin-done-at"></span>
             </p>
@@ -216,60 +232,90 @@
 
           <div class="actions">
             <button type="button" class="btn primary" id="btn-save">Save rule</button>
-            <button type="button" class="btn accent" id="btn-dryrun">Dry-run pick</button>
           </div>
           <p class="toast" id="save-toast" hidden>Rule saved.</p>
         </article>
 
-        <!-- Candidate pick preview (admin only — friends never see this) -->
-        <article class="card pick-card" id="pick-empty">
+        <!-- LIVE: currently live this-week only (read-only). No dry-run / reveal / stage. -->
+        <article class="card pick-card live-week-card" id="live-week-card">
           <header class="card-head">
             <h2>Candidate pick</h2>
-            <span class="badge">Next upload (admin)</span>
+            <span class="badge live-badge">LIVE</span>
           </header>
-          <div class="empty">
-            <p class="empty-title">No candidate yet</p>
-            <p class="hint">Hit <strong>Dry-run pick</strong> above to preview a file — friends only see it after you <strong>Publish this week</strong>.</p>
+          <div class="empty" id="live-week-empty" hidden>
+            <p class="empty-title">No live week yet</p>
+            <p class="hint">Friends see nothing until a pick is published with YouTube.</p>
+          </div>
+          <div id="live-week-body">
+            <p class="hint candidate-admin-hint">Currently live for friends (<code>config/thisWeek</code>). Read-only — staging never changes this.</p>
+            <h3 class="pick-name" id="live-week-filename">—</h3>
+            <dl class="meta-grid">
+              <div><dt>HR</dt><dd id="live-week-hr">—</dd></div>
+              <div><dt>Type</dt><dd id="live-week-type">—</dd></div>
+              <div><dt>YouTube</dt><dd id="live-week-yt">—</dd></div>
+              <div><dt>Path</dt><dd class="mono" id="live-week-path">—</dd></div>
+            </dl>
+            <p class="why" id="live-week-why" hidden></p>
           </div>
         </article>
 
-        <article class="card pick-card" id="pick-result" hidden>
+        <!-- NON-LIVE: always-visible Pick again + Reveal + Stage; staged summary; dry-run preview -->
+        <article class="card staged-card nonlive-card" id="nonlive-card">
           <header class="card-head">
-            <h2>Candidate pick</h2>
-            <span class="badge accent" id="pick-type">—</span>
+            <h2>Next week staged</h2>
+            <span class="badge">Not live</span>
           </header>
-          <p class="hint candidate-admin-hint">Next upload (admin) — not visible to friends until you Publish this week.</p>
-          <h3 class="pick-name" id="pick-filename">—</h3>
-          <dl class="meta-grid">
-            <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
-            <div><dt>Tags</dt><dd id="pick-tags">—</dd></div>
-            <div><dt>Path</dt><dd class="mono" id="pick-path">—</dd></div>
-            <div><dt>Size</dt><dd id="pick-size">—</dd></div>
-            <div><dt>Modified</dt><dd id="pick-mtime">—</dd></div>
-            <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
-          </dl>
-          <div class="why" id="pick-why"></div>
-          <div class="actions path-reveal-row" id="path-reveal-row" hidden>
-            <button type="button" class="btn secondary" id="btn-reveal-finder">Reveal in Finder</button>
+          <p class="hint">Pick again (= dry-run), reveal the Mac path, then <strong>Stage next week</strong>. Friends keep seeing <strong>Candidate pick (LIVE)</strong> until YouTube upload → promote. Dry-run never lives on the Rule or LIVE cards.</p>
+
+          <div class="actions nonlive-always-actions" id="nonlive-always-actions">
+            <button type="button" class="btn accent" id="btn-dryrun">Pick again</button>
+            <button type="button" class="btn secondary" id="btn-reveal-finder" hidden>Reveal in Finder</button>
+            <button type="button" class="btn accent" id="btn-accept" hidden>Stage next week</button>
+            <button type="button" class="btn accent" id="btn-keep" hidden>Publish this week</button>
+          </div>
+          <div class="path-reveal-row nonlive-path-row" id="path-reveal-row" hidden>
             <label class="reveal-path-label" for="reveal-path-display">Mac path (select &amp; copy)</label>
             <input type="text" class="mono reveal-path-display" id="reveal-path-display" readonly hidden value="" />
           </div>
-          <div class="actions" id="pick-actions">
-            <button type="button" class="btn secondary" id="btn-again">Pick again</button>
-            <button type="button" class="btn accent" id="btn-keep" hidden>Publish this week</button>
-            <button type="button" class="btn accent" id="btn-accept" hidden>Publish this week</button>
-          </div>
           <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
+          <p class="hint staged-next-hint" id="staged-next-hint" hidden></p>
           <p class="hint publish-pending" id="publish-pending" hidden></p>
-        </article>
 
-        <article class="card pick-card error-card" id="pick-error" hidden>
-          <header class="card-head">
-            <h2>Candidate pick</h2>
-            <span class="badge">Next upload (admin)</span>
-          </header>
-          <p class="empty-title">No matches</p>
-          <p class="hint" id="pick-error-msg">Loosen filters and try again.</p>
+          <div id="staged-next-card" hidden>
+            <h3 class="pick-name" id="staged-next-name">—</h3>
+            <p class="hint" id="staged-next-meta"></p>
+            <p class="hint">Already staged in cloud — live week unchanged.</p>
+          </div>
+
+          <div class="nonlive-preview" id="pick-empty">
+            <div class="empty">
+              <p class="empty-title">No staged / dry-run candidate yet</p>
+              <p class="hint">Hit <strong>Pick again</strong> to dry-run a file — <strong>Stage next week</strong> saves without changing what friends see. “No matches” stays here, never on Candidate pick (LIVE).</p>
+            </div>
+          </div>
+
+          <div class="nonlive-preview" id="pick-result" hidden>
+            <header class="card-head nonlive-preview-head">
+              <h3 class="pick-preview-title" id="pick-preview-title">Dry-run candidate</h3>
+              <span class="badge accent" id="pick-type">—</span>
+            </header>
+            <h3 class="pick-name" id="pick-filename">—</h3>
+            <dl class="meta-grid">
+              <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
+              <div><dt>Tags</dt><dd id="pick-tags">—</dd></div>
+              <div><dt>Path</dt><dd class="mono" id="pick-path">—</dd></div>
+              <div><dt>Size</dt><dd id="pick-size">—</dd></div>
+              <div><dt>Modified</dt><dd id="pick-mtime">—</dd></div>
+              <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
+            </dl>
+            <div class="why" id="pick-why"></div>
+            <div class="actions" id="pick-actions" hidden></div>
+          </div>
+
+          <div class="nonlive-preview error-card" id="pick-error" hidden>
+            <p class="empty-title">No matches</p>
+            <p class="hint" id="pick-error-msg">Loosen filters and try again. This is a dry-run result — not the live Candidate pick.</p>
+          </div>
         </article>
 
         <article class="card members-card" id="members-card">
@@ -290,7 +336,7 @@
           </div>
           <p class="toast" id="members-toast" hidden>Members saved.</p>
           <p class="hint publish-hint" id="members-publish-hint" hidden>
-            Publish pending — Grok Bot will sync to Pages.
+            Save writes to this browser until published
           </p>
         </article>
 
@@ -309,7 +355,7 @@
           </div>
           <p class="toast" id="pt-toast" hidden>PT summary address saved.</p>
           <p class="hint publish-hint" id="pt-publish-hint" hidden>
-            Publish pending — Grok Bot will sync to Pages.
+            Save writes to this browser until published
           </p>
         </article>
       </section>
@@ -334,7 +380,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=1790522295"></script>
-  <script src="app.js?v=1790522295"></script>
+  <script src="auth.js?v=20260927-1355-difficulty"></script>
+  <script src="app.js?v=20260927-1355-difficulty"></script>
 </body>
 </html>

@@ -47,15 +47,24 @@ Until those keys are filled, production Pages shows **“Auth not configured”*
 
 ## This week’s pick (sharing with the group)
 
-Static Pages can’t write the repo from the browser.
+**Live source of truth (beta):** Cloud Firestore docs `config/thisWeek` and `config/rule`.
+Members see `config/thisWeek` (YouTube embed). Admin **Save rule** writes `config/rule`.
 
-1. Admin hits **Accept as this week** → saves to `localStorage` and **downloads `this-week.json`**.
-2. Drop that file into `data/this-week.json` (or `node scripts/set-this-week.js ~/Downloads/this-week.json`).
-3. Rebuild dist + `scripts/publish-pages.sh` so members load the same pick from the repo.
+**Stage vs live:**
+- **Stage next week** (candidate with no `youtubeId`) → Firestore `config/nextWeek` + localStorage `eddys-hell-next-week-v1`. Toast: *Staged — live week stays until YouTube upload.* Does **not** write `config/thisWeek`.
+- **Live `config/thisWeek`** updates only when the pick already has `youtubeId` (re-publish same pick, or after upload via `EddysHell.promoteAfterYoutubeUpload(youtubeId)` / `Auth.promoteStagedToLive`). Never writes `youtubeId: null` over a live doc.
+- Hosting `data/this-week.json` via `set-this-week.js` still requires `youtubeId`.
 
-Members read `data/this-week.json` first, then fall back to their browser’s `localStorage` last pick.
+Load order (live): **Firestore thisWeek → repo JSON → localStorage**. Staged is separate (`config/nextWeek`).
 
-Seeded sample: dry-run pick `9f757b1922` (HR 140 Full).
+1. Admin dry-runs a candidate → **Stage next week** → `config/nextWeek` (live unchanged).
+2. Wednesday/bot: compress + YouTube upload → `promoteAfterYoutubeUpload(id)` → live `config/thisWeek` with `youtubeId`.
+3. **Save rule** → Firestore `config/rule`.
+4. Optional: sync Hosting JSON via Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap.
+
+Wednesday routine (Auto-pick OFF): upload the **staged** pick (`getStagedNextWeek()` / `config/nextWeek`); only then promote to live. Do not overwrite a live pick that still has video with a no-video candidate.
+
+Seeded bootstrap sample may change with deploys; trust Firestore on beta after Publish.
 
 ## Members (friend allowlist)
 
@@ -103,12 +112,12 @@ Until Firestore is enabled, check-ins still work on each friend’s device, but 
 
 - `data/catalog.json` — workout catalog
 - `data/default-rule.json` / `data/state.json` — rule seed
-- `data/this-week.json` — published pick for members (optional `youtubeId` / `youtubeUrl`)
+- `data/this-week.json` — Hosting bootstrap/fallback pick (live pick is Firestore `config/thisWeek`; optional `youtubeId` / `youtubeUrl`)
 - `data/admins.json` — admin email allowlist
 - `data/members.json` — member email allowlist (empty = admins only)
 - `data/pt.json` — editable PT summary email destination
 - `data/firebase-config.json` — Firebase web config (Auth configured; enable Firestore for check-in sync)
-- `firestore.rules` — paste into Firebase console for check-in security rules
+- `firestore.rules` — check-ins + admin-only write to `config/thisWeek` and `config/rule`
 
 ## Publish
 
@@ -125,4 +134,4 @@ touch dist/.nojekyll
 
 Rotate · Prefer recent · Full body · HR > 120 · last 8 weeks avoided · **Auto-pick ON**.
 
-`autoPick` lives on `data/default-rule.json` and `data/state.json` → `rule.autoPick` (also `localStorage` key `eddys-hell-admin-v1`). Wednesday routine should read it: **ON** = auto dry-run/set pick; **OFF** = keep this week’s pick, still upload if YouTube is missing. Admin Save rule also writes pending payload `eddys-hell-rule-pending-v1` for sync.
+`autoPick` lives on Firestore `config/rule` (preferred), then `data/default-rule.json` / `data/state.json` → `rule.autoPick` (also `localStorage` key `eddys-hell-admin-v2`). Wednesday routine should read it: **ON** = auto dry-run/set pick; **OFF** = keep this week’s pick from Firestore when present, still upload if YouTube is missing. Admin **Save rule** publishes to Firestore and clears the local pending key.

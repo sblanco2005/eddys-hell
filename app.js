@@ -9,6 +9,7 @@
   const STORAGE_KEY = "eddys-hell-admin-v2";
   const RULE_VERSION = 3;
   const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
+  const STAGED_NEXT_KEY = "eddys-hell-next-week-v1";
   /** Mac archive volume for Reveal in Finder (https cannot open Finder). Easy to change. */
   const ARCHIVE_ROOT = "/Volumes/EddysHell/";
   const MEMBERS_PENDING_KEY = "eddys-hell-members-pending-v1";
@@ -42,6 +43,8 @@
   let currentResult = null;
   /** @type {object|null} published this-week from repo */
   let thisWeekFile = null;
+  /** @type {object|null} staged next-week (not live) */
+  let nextWeekFile = null;
   /** Dry-run candidate not yet set as this week */
   let pickIsCandidate = false;
   /** @type {object|null} auth user with role */
@@ -252,7 +255,9 @@
    * thisWeekFile is overwritten by loadCloudConfig when cloud doc is present/newer.
    */
   function resolveThisWeek() {
-    if (thisWeekFile && (thisWeekFile.pickId || thisWeekFile.id)) {
+    // Prefer in-memory live file (Firestore hydrate or Hosting bootstrap).
+    // Never treat a no-video doc as live — that is staged (config/nextWeek).
+    if (thisWeekFile && (thisWeekFile.pickId || thisWeekFile.id) && thisWeekFile.youtubeId) {
       const id = thisWeekFile.pickId || thisWeekFile.id;
       return {
         id,
@@ -266,17 +271,18 @@
         pickedAt: thisWeekFile.pickedAt,
         why: thisWeekFile.why,
         matchCount: thisWeekFile.matchCount,
-        youtubeId: thisWeekFile.youtubeId || null,
+        youtubeId: thisWeekFile.youtubeId,
         youtubeUrl: thisWeekFile.youtubeUrl || null,
         archiveRoot: thisWeekFile.archiveRoot || ARCHIVE_ROOT,
         updatedAt: thisWeekFile.updatedAt || null,
         source: thisWeekFile._source || "file",
       };
     }
-    if (state.lastPick) {
+    // lastPick only counts as live when it already has youtubeId (promoted).
+    if (state.lastPick && state.lastPick.youtubeId) {
       return {
         ...state.lastPick,
-        youtubeId: state.lastPick.youtubeId || null,
+        youtubeId: state.lastPick.youtubeId,
         youtubeUrl: state.lastPick.youtubeUrl || null,
         source: "local",
       };
@@ -426,13 +432,65 @@
     return best;
   }
 
+  function samePublishedPick(a, b) {
+    if (!a || !b) return false;
+    const aId = a.pickId || a.id || "";
+    const bId = b.pickId || b.id || "";
+    if (aId && bId && aId === bId) return true;
+    if (a.relPath && b.relPath && String(a.relPath) === String(b.relPath)) return true;
+    if (a.filename && b.filename && String(a.filename) === String(b.filename)) return true;
+    return false;
+  }
+
   function applyCloudThisWeek(cloud) {
     if (!cloud || !(cloud.pickId || cloud.id)) return false;
+    // LIVE thisWeek must always carry youtubeId. A staged/no-video write that
+    // landed in config/thisWeek (bug or stale tab) must NEVER replace a good
+    // live week or clear the member/admin This week card.
+    if (!cloud.youtubeId) {
+      if (thisWeekFile && thisWeekFile.youtubeId) {
+        console.warn(
+          "Ignoring cloud thisWeek without youtubeId — keeping live video week",
+          cloud.pickId || cloud.id,
+          cloud.filename
+        );
+        return false;
+      }
+      console.warn(
+        "Ignoring cloud thisWeek without youtubeId (not live)",
+        cloud.pickId || cloud.id,
+        cloud.filename
+      );
+      return false;
+    }
     const cloudTs = tsOfThisWeek(cloud);
     const localTs = tsOfThisWeek(thisWeekFile);
     // Prefer cloud when present and >= repo/local published stamp
     if (!thisWeekFile || cloudTs >= localTs || !localTs) {
-      thisWeekFile = { ...cloud, _source: "cloud" };
+      const merged = { ...cloud, _source: "cloud" };
+      thisWeekFile = merged;
+      // Keep lastPick aligned with LIVE so Rule candidate restore cannot
+      // resurface a staged/no-video pick as if it were this week.
+      try {
+        state.lastPick = {
+          id: merged.pickId || merged.id,
+          filename: merged.filename,
+          folderType: merged.folderType,
+          hr: merged.hr,
+          relPath: merged.relPath,
+          sizeBytes: merged.sizeBytes,
+          mtime: merged.mtime,
+          rawTags: merged.rawTags || [],
+          pickedAt: merged.pickedAt,
+          why: merged.why,
+          matchCount: merged.matchCount,
+          youtubeId: merged.youtubeId,
+          youtubeUrl:
+            merged.youtubeUrl ||
+            ("https://www.youtube.com/watch?v=" + merged.youtubeId),
+        };
+        saveState();
+      } catch (_) { /* ok */ }
       return true;
     }
     return false;
@@ -468,6 +526,20 @@
       console.warn("loadThisWeekFromCloud:", err);
     }
     try {
+      if (Auth.loadNextWeekFromCloud) {
+        const cloudNw = await Auth.loadNextWeekFromCloud();
+        if (cloudNw && (cloudNw.pickId || cloudNw.id)) {
+          nextWeekFile = { ...cloudNw, _source: "cloud" };
+          try {
+            localStorage.setItem(STAGED_NEXT_KEY, JSON.stringify(cloudNw));
+          } catch (_) { /* ok */ }
+          updateStagedHint();
+        }
+      }
+    } catch (err) {
+      console.warn("loadNextWeekFromCloud:", err);
+    }
+    try {
       const cloudRule = await Auth.loadRuleFromCloud();
       if (cloudRule && applyCloudRule(cloudRule)) changed = true;
     } catch (err) {
@@ -485,6 +557,7 @@
         }
       }
     }
+    updateStagedHint();
   }
 
   function payloadFromThisWeek(tw) {
@@ -505,6 +578,191 @@
       youtubeUrl: tw.youtubeUrl || null,
       archiveRoot: tw.archiveRoot || ARCHIVE_ROOT,
     };
+  }
+
+
+  const YT_REQUIRED_TOAST =
+    "Upload YouTube first — won't replace this week without a video.";
+  const STAGED_TOAST =
+    "Staged — live week stays until YouTube upload.";
+
+  function showAcceptToast(msg, { ms = 5000, error = false } = {}) {
+    const toast = $("accept-toast");
+    if (toast) {
+      toast.hidden = false;
+      toast.textContent = msg;
+      setTimeout(() => {
+        toast.hidden = true;
+      }, ms);
+    }
+    if (error) {
+      setPublishStatus(msg, { error: true, sticky: true });
+    } else {
+      setPublishStatus(msg, { sticky: true });
+    }
+  }
+
+  function showYtRequiredToast() {
+    showAcceptToast(YT_REQUIRED_TOAST, { error: true });
+  }
+
+  function showStagedToast() {
+    showAcceptToast(STAGED_TOAST, { ms: 6000 });
+  }
+
+  function isYoutubeRequiredError(err) {
+    return !!(
+      err &&
+      (err.code === "youtube-required" ||
+        (err.message &&
+          String(err.message).indexOf("Upload YouTube first") !== -1))
+    );
+  }
+
+  function persistStagedLocal(payload) {
+    nextWeekFile = payload ? { ...payload, _source: payload._source || "local" } : null;
+    try {
+      if (payload) {
+        localStorage.setItem(STAGED_NEXT_KEY, JSON.stringify(payload));
+      } else {
+        localStorage.removeItem(STAGED_NEXT_KEY);
+      }
+    } catch (_) { /* ok */ }
+  }
+
+  function loadStagedLocal() {
+    try {
+      const raw = localStorage.getItem(STAGED_NEXT_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && (parsed.pickId || parsed.id) ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function resolveStagedNext() {
+    if (nextWeekFile && (nextWeekFile.pickId || nextWeekFile.id)) {
+      const id = nextWeekFile.pickId || nextWeekFile.id;
+      return {
+        id,
+        pickId: id,
+        filename: nextWeekFile.filename,
+        folderType: nextWeekFile.folderType,
+        hr: nextWeekFile.hr,
+        relPath: nextWeekFile.relPath,
+        sizeBytes: nextWeekFile.sizeBytes,
+        mtime: nextWeekFile.mtime,
+        rawTags: nextWeekFile.rawTags || [],
+        pickedAt: nextWeekFile.pickedAt,
+        why: nextWeekFile.why,
+        matchCount: nextWeekFile.matchCount,
+        youtubeId: nextWeekFile.youtubeId || null,
+        youtubeUrl: nextWeekFile.youtubeUrl || null,
+        archiveRoot: nextWeekFile.archiveRoot || ARCHIVE_ROOT,
+        status: nextWeekFile.status || "staged",
+        source: nextWeekFile._source || "local",
+      };
+    }
+    return null;
+  }
+
+  function updateStagedHint() {
+    const el = $("staged-next-hint");
+    const card = $("staged-next-card");
+    const nameEl = $("staged-next-name");
+    const metaEl = $("staged-next-meta");
+    const staged = resolveStagedNext();
+    if (!staged) {
+      if (el) {
+        el.hidden = true;
+        el.textContent = "";
+      }
+      if (card) card.hidden = true;
+      if (nameEl) nameEl.textContent = "—";
+      if (metaEl) metaEl.textContent = "";
+      return;
+    }
+    const name = staged.filename || staged.pickId || "pick";
+    const bits = [];
+    if (staged.folderType) bits.push(staged.folderType);
+    if (staged.hr != null) bits.push("HR " + staged.hr);
+    bits.push("not live — friends still see This week");
+    if (el) {
+      el.hidden = false;
+      el.textContent =
+        "Staged next: " + name + " — live week unchanged until YouTube upload.";
+    }
+    if (card) card.hidden = false;
+    if (nameEl) nameEl.textContent = name;
+    if (metaEl) metaEl.textContent = bits.join(" · ");
+  }
+
+  /** Live Candidate pick card — read-only thisWeek with youtubeId. No dry-run/reveal. */
+  function renderLiveWeekCard() {
+    const empty = $("live-week-empty");
+    const body = $("live-week-body");
+    const tw = resolveThisWeek();
+    if (!tw) {
+      if (empty) empty.hidden = false;
+      if (body) body.hidden = true;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    if (body) body.hidden = false;
+    const set = (id, val) => {
+      const el = $(id);
+      if (el) el.textContent = val;
+    };
+    set("live-week-filename", tw.filename || "—");
+    set("live-week-hr", tw.hr != null ? String(tw.hr) : "—");
+    set("live-week-type", tw.folderType || "—");
+    set(
+      "live-week-yt",
+      tw.youtubeId
+        ? tw.youtubeId
+        : "—"
+    );
+    set("live-week-path", tw.relPath || "—");
+    const why = $("live-week-why");
+    if (why) {
+      if (tw.why) {
+        why.hidden = false;
+        why.textContent = tw.why;
+      } else {
+        why.hidden = true;
+        why.textContent = "";
+      }
+    }
+  }
+
+  /** One Non-live button: Dry-run pick / Pick again are the same control. */
+  function updateDryRunButtonLabel() {
+    const btn = $("btn-dryrun");
+    if (!btn) return;
+    const hasCandidate = !!(currentResult && pickIsCandidate && currentResult.pick);
+    const hasStaged = !!resolveStagedNext();
+    btn.textContent = hasCandidate || hasStaged ? "Pick again" : "Dry-run pick";
+  }
+
+  function runDryRunOrAgain() {
+    if (currentResult && pickIsCandidate && currentResult.pick) {
+      pickAgain();
+    } else {
+      runDryRun();
+    }
+    updateDryRunButtonLabel();
+  }
+
+  async function stagePayloadToCloud(payload) {
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.stageNextWeek) {
+      throw new Error("Auth stageNextWeek API missing");
+    }
+    const saved = await Auth.stageNextWeek(payload);
+    persistStagedLocal({ ...saved, _source: "cloud" });
+    updateStagedHint();
+    return saved;
   }
 
   async function publishPayloadToCloud(payload) {
@@ -529,9 +787,10 @@
   function getRevealRelPath() {
     const fromPick =
       (currentResult && currentResult.pick && currentResult.pick.relPath) ||
-      (state.lastPick && state.lastPick.relPath) ||
       "";
     if (fromPick) return String(fromPick);
+    const staged = resolveStagedNext();
+    if (staged && staged.relPath) return String(staged.relPath);
     const pathEl = $("pick-path");
     const t = pathEl && pathEl.textContent ? pathEl.textContent.trim() : "";
     if (t && t !== "—") return t;
@@ -542,10 +801,8 @@
     const btnReveal = $("btn-reveal-finder");
     const row = $("path-reveal-row");
     const pathDisplay = $("reveal-path-display");
-    const pickResult = $("pick-result");
-    const showing = !!(pickResult && !pickResult.hidden);
     const rel = getRevealRelPath();
-    const show = !!(showing && rel);
+    const show = !!rel;
     if (btnReveal) {
       btnReveal.hidden = !show;
       btnReveal.textContent = "Reveal in Finder";
@@ -568,17 +825,32 @@
   function updatePickActions() {
     const btnAccept = $("btn-accept");
     const btnKeep = $("btn-keep");
-    if (btnAccept && btnKeep) {
+    // Non-live section only: Stage / same-pick Publish. Live card is read-only.
+    if (btnAccept) {
       if (pickIsCandidate) {
         btnAccept.hidden = false;
-        btnKeep.hidden = true;
+        const f = currentResult && currentResult.pick;
+        const prev = resolveThisWeek();
+        const sameAsPrev =
+          f &&
+          prev &&
+          (prev.id === f.id ||
+            (prev.relPath && f.relPath && prev.relPath === f.relPath) ||
+            (prev.filename && f.filename && prev.filename === f.filename));
+        const hasYt = !!(sameAsPrev && prev && prev.youtubeId);
+        btnAccept.textContent = hasYt ? "Publish this week" : "Stage next week";
+        if (btnKeep) btnKeep.hidden = true;
       } else {
         btnAccept.hidden = true;
-        btnKeep.hidden = !resolveThisWeek();
+        // Re-publish lives on This week's pick tab / YouTube promote — not on Non-live empty.
+        if (btnKeep) btnKeep.hidden = true;
       }
     }
     updateRevealFinderButton();
     updatePublishPendingHint();
+    updateStagedHint();
+    updateDryRunButtonLabel();
+    renderLiveWeekCard();
   }
 
   function absoluteMacPath(relPath) {
@@ -781,6 +1053,7 @@
     const id = map[name];
     if (!id) return;
     const el = $(id);
+    if (!el) return;
     el.hidden = false;
     el.classList.add("active");
 
@@ -795,8 +1068,35 @@
     }
   }
 
+  /** Body auth classes + hidden attrs — guest chrome must never leak over landing. */
+  function syncAuthBodyClass() {
+    const body = document.body;
+    if (!body) return;
+    const signedIn = !!authUser;
+    const isAdmin = !!(authUser && authUser.role === "admin");
+    body.classList.toggle("is-guest", !signedIn);
+    body.classList.toggle("is-signed-in", signedIn);
+    body.classList.toggle("is-admin", isAdmin);
+  }
+
+  function forceGuestChrome() {
+    syncAuthBodyClass();
+    const tabs = $("admin-tabs");
+    const slot = $("user-slot");
+    if (tabs) tabs.hidden = true;
+    if (slot) slot.hidden = true;
+    // Admin views must not stay reachable alongside the sign-in card
+    for (const id of ["view-rule", "view-pick"]) {
+      const el = $(id);
+      if (!el) continue;
+      el.hidden = true;
+      el.classList.remove("active");
+    }
+  }
+
   function renderUserSlot() {
     const slot = $("user-slot");
+    if (!slot) return;
     if (!authUser) {
       slot.hidden = true;
       return;
@@ -817,7 +1117,8 @@
 
   function renderLanding() {
     showView("landing");
-    $("admin-tabs").hidden = true;
+    // Belt-and-suspenders: body.is-guest + [hidden] — never leave admin chrome over landing
+    forceGuestChrome();
     $("brand-sub").textContent = "Thursday workout";
 
     const tw = resolveThisWeek();
@@ -919,6 +1220,25 @@
     }
 
     const tw = resolveThisWeek();
+    const liveBadge = $("member-live-badge");
+    if (liveBadge) {
+      liveBadge.hidden = !asAdmin;
+      liveBadge.textContent = "LIVE";
+    }
+    const stagedNote = $("member-staged-note");
+    if (stagedNote) {
+      const staged = resolveStagedNext();
+      if (asAdmin && staged) {
+        stagedNote.hidden = false;
+        stagedNote.textContent =
+          "Next week staged on Rule tab: " +
+          (staged.filename || staged.pickId) +
+          " (not shown here until YouTube promote).";
+      } else {
+        stagedNote.hidden = true;
+        stagedNote.textContent = "";
+      }
+    }
     if (!tw) {
       $("member-empty").hidden = false;
       $("member-pick").hidden = true;
@@ -966,29 +1286,67 @@
     return "Saved on this device.";
   }
 
+
+  const DIFFICULTY_LABELS = { easy: "Easy", okay: "Okay", hard: "Hard" };
+
+  function selectedCheckinDifficulty() {
+    const el = document.querySelector('input[name="checkin-difficulty"]:checked');
+    return el ? el.value : "";
+  }
+
+  function setCheckinDifficultyUI(value, { locked } = {}) {
+    const seg = $("checkin-difficulty");
+    const radios = document.querySelectorAll('input[name="checkin-difficulty"]');
+    for (const r of radios) {
+      r.checked = Boolean(value) && r.value === value;
+      r.disabled = Boolean(locked);
+    }
+    if (seg) seg.dataset.locked = locked ? "1" : "0";
+  }
+
+  function syncCheckinButtonEnabled() {
+    const btn = $("btn-checkin");
+    if (!btn || btn.hidden) return;
+    const has = Boolean(selectedCheckinDifficulty());
+    btn.disabled = !has;
+    btn.classList.toggle("checking", false);
+  }
+
+  function difficultyBadgeHtml(diff) {
+    const key = String(diff || "").toLowerCase();
+    const label = DIFFICULTY_LABELS[key];
+    if (!label) return "";
+    return ` <span class="difficulty-badge ${escapeHtml(key)}">${escapeHtml(label)}</span>`;
+  }
+
   function renderMemberCheckin(tw) {
     if (!tw || !authUser) return;
     const mine = window.EddysHellAuth.myCheckin(tw.id, authUser.email);
     const btn = $("btn-checkin");
     const syncHint = $("checkin-sync-hint");
     const help = $("checkin-help");
+    const needDiff = $("checkin-need-diff");
+    if (needDiff) needDiff.hidden = true;
     if (mine) {
       btn.hidden = true;
-      btn.disabled = false;
+      btn.disabled = true;
       btn.textContent = "Check in — I finished";
-      $("checkin-notes").disabled = true;
-      $("checkin-notes").value = mine.notes || "";
+      btn.classList.remove("checking");
+      setCheckinDifficultyUI(mine.difficulty || "", { locked: true });
       $("checkin-done").hidden = false;
-      $("checkin-done-at").textContent = mine.at
-        ? "· " + formatWhen(mine.at)
-        : "";
+      const when = mine.at ? "· " + formatWhen(mine.at) : "";
+      const diffLabel = DIFFICULTY_LABELS[String(mine.difficulty || "").toLowerCase()];
+      $("checkin-done-at").textContent = diffLabel
+        ? `· ${diffLabel} ${when}`.trim()
+        : when;
       $("checkin-toast").hidden = true;
       if (help) help.hidden = true;
     } else {
       btn.hidden = false;
-      btn.disabled = false;
       btn.textContent = "Check in — I finished";
-      $("checkin-notes").disabled = false;
+      btn.classList.remove("checking");
+      setCheckinDifficultyUI(selectedCheckinDifficulty(), { locked: false });
+      syncCheckinButtonEnabled();
       $("checkin-done").hidden = true;
       if (help) help.hidden = false;
     }
@@ -1008,9 +1366,7 @@
       return;
     }
     showView("rule");
-    // Show last / published pick on the candidate card when available so
-    // Reveal in Finder is reachable without another dry-run. Dry-run still
-    // replaces this with a fresh candidate (pickIsCandidate).
+    // Live card = thisWeek; Non-live empty until Dry-run (or keep current candidate).
     ensurePickViewFromPublished();
   }
 
@@ -1091,9 +1447,82 @@
     $("pt-publish-hint").hidden = !pending;
   }
 
+  /**
+   * Paint Sign-in landing BEFORE Auth.init finishes.
+   * Root cause of blank beta: all .view start hidden; boot awaited Firebase
+   * module load + authStateReady before onAuthChange → applyRoleUI. Slow/hung
+   * auth left header-only forever. Guests must always see Sign in + week hint.
+   */
+  function paintGuestShellEarly() {
+    try {
+      showView("landing");
+      forceGuestChrome();
+      const sub = $("brand-sub");
+      if (sub) sub.textContent = "Thursday workout";
+      const Auth = window.EddysHellAuth;
+      const onBeta = Auth && Auth.isBetaHost && Auth.isBetaHost();
+      const betaBadge = $("beta-badge");
+      if (betaBadge) {
+        betaBadge.hidden = !onBeta;
+        if (onBeta) {
+          document.title = "Eddy's Hell · BETA";
+          if (sub && !/beta/i.test(sub.textContent || "")) {
+            sub.textContent = "Thursday workout · beta";
+          }
+        }
+      }
+      const tw = resolveThisWeek();
+      const locked = $("locked-title");
+      if (locked) {
+        locked.textContent = tw
+          ? `This week: ${tw.filename || "workout"} (sign in to unlock)`
+          : "Workout locked until you sign in.";
+      }
+      // Optimistic Sign in — do not flash "Auth not configured" while Firebase loads.
+      const notCfg = $("auth-not-configured");
+      if (notCfg) notCfg.hidden = true;
+      const inApp = Auth && Auth.isInAppBrowser && Auth.isInAppBrowser();
+      const btn = $("btn-google");
+      if (btn) {
+        btn.hidden = !!inApp;
+        btn.disabled = false;
+        btn.textContent = "Sign in with Google";
+      }
+      const mock = $("mock-signin");
+      if (mock) mock.hidden = true;
+      const inAppEl = $("auth-inapp");
+      if (inAppEl) inAppEl.hidden = !inApp;
+    } catch (err) {
+      console.error("paintGuestShellEarly:", err);
+      try {
+        showView("landing");
+      } catch (_) { /* last resort */ }
+    }
+  }
+
+  function safeApplyRoleUI() {
+    try {
+      applyRoleUI();
+    } catch (err) {
+      console.error("applyRoleUI failed — falling back to Sign in:", err);
+      authUser = null;
+      try {
+        paintGuestShellEarly();
+        // Prefer full landing if Auth APIs are up
+        if (window.EddysHellAuth && window.EddysHellAuth.isConfigured) {
+          renderLanding();
+        }
+      } catch (err2) {
+        console.error(err2);
+      }
+    }
+  }
+
   function applyRoleUI() {
+    syncAuthBodyClass();
     renderUserSlot();
     if (!authUser) {
+      // renderLanding → forceGuestChrome (body.is-guest + hidden attrs)
       renderLanding();
       return;
     }
@@ -1103,8 +1532,14 @@
       renderMembersUI();
       renderPTUI();
       renderAdminShell("rule");
+      // Assert landing is not left visible alongside admin chrome
+      const landing = $("view-landing");
+      if (landing) landing.hidden = true;
       return;
     }
+    // Members: tabs stay hidden via body:not(.is-admin)
+    const tabs = $("admin-tabs");
+    if (tabs) tabs.hidden = true;
     renderMemberView();
   }
 
@@ -1199,16 +1634,18 @@
     $("pick-empty").hidden = !empty;
     $("pick-result").hidden = !result;
     $("pick-error").hidden = !error;
-    if (!result) {
-      const row = $("path-reveal-row");
-      const btnReveal = $("btn-reveal-finder");
-      if (row) row.hidden = true;
-      if (btnReveal) btnReveal.hidden = true;
-    }
+    // Reveal row is driven by getRevealRelPath() (staged or dry-run), not pick-result alone.
+    updateRevealFinderButton();
   }
 
   function renderPickResult(result) {
     const f = result.pick;
+    const titleEl = $("pick-preview-title");
+    if (titleEl) {
+      titleEl.textContent = result._fromStaged
+        ? "Staged candidate"
+        : "Dry-run candidate";
+    }
     $("pick-type").textContent = f.folderType || "—";
     $("pick-filename").textContent = f.filename || "—";
     $("pick-hr").textContent = f.hr != null ? String(f.hr) : "missing";
@@ -1217,12 +1654,15 @@
     $("pick-path").textContent = f.relPath || "—";
     $("pick-size").textContent = formatBytes(f.sizeBytes);
     $("pick-mtime").textContent = formatMtime(f.mtime);
-    $("pick-count").textContent = String(result.matches.length);
+    $("pick-count").textContent = String(
+      (result.matches && result.matches.length) || result.matchCount || 1
+    );
     $("pick-why").textContent = result.why;
     showPickPanels({ empty: false, result: true, error: false });
     $("accept-toast").hidden = true;
     updatePickActions();
     updateRevealFinderButton();
+    updateDryRunButtonLabel();
     renderYoutubeAdminControls();
   }
 
@@ -1273,8 +1713,8 @@
     }
     for (const c of list) {
       const li = document.createElement("li");
-      const notes = c.notes ? ` — ${c.notes}` : "";
-      li.innerHTML = `<strong>${escapeHtml(c.displayName || c.email)}</strong>
+      const notes = !c.difficulty && c.notes ? ` — ${c.notes}` : "";
+      li.innerHTML = `<strong>${escapeHtml(c.displayName || c.email)}</strong>${difficultyBadgeHtml(c.difficulty)}
         <span class="mute">${escapeHtml(c.email)}</span>
         <span class="mute"> · ${escapeHtml(formatWhen(c.at))}</span>
         <span>${escapeHtml(notes)}</span>`;
@@ -1350,12 +1790,86 @@
     if (!currentResult || !currentResult.pick) return;
     const f = currentResult.pick;
     const now = new Date().toISOString();
-    // Keep existing YouTube id only if re-accepting the same published pick
+    // Keep existing YouTube id if re-accepting the same published pick/file
     const prev = resolveThisWeek();
+    const sameAsPrev =
+      prev &&
+      (prev.id === f.id ||
+        (prev.relPath && f.relPath && prev.relPath === f.relPath) ||
+        (prev.filename && f.filename && prev.filename === f.filename));
     const keepYt =
-      prev && prev.id === f.id
-        ? { youtubeId: prev.youtubeId || null, youtubeUrl: prev.youtubeUrl || null }
+      sameAsPrev && prev.youtubeId
+        ? {
+            youtubeId: prev.youtubeId,
+            youtubeUrl:
+              prev.youtubeUrl ||
+              ("https://www.youtube.com/watch?v=" + prev.youtubeId),
+          }
         : { youtubeId: null, youtubeUrl: null };
+
+    const payload = {
+      pickId: f.id,
+      filename: f.filename,
+      folderType: f.folderType,
+      hr: f.hr,
+      relPath: f.relPath,
+      sizeBytes: f.sizeBytes,
+      mtime: f.mtime,
+      rawTags: f.rawTags || [],
+      pickedAt: now,
+      why: currentResult.why,
+      matchCount: currentResult.matches.length,
+      youtubeId: keepYt.youtubeId,
+      youtubeUrl: keepYt.youtubeUrl,
+      archiveRoot: ARCHIVE_ROOT,
+    };
+
+    // No youtubeId → STAGE only (config/nextWeek). Never touch live thisWeek.
+    if (!keepYt.youtubeId) {
+      const btnAccept = $("btn-accept");
+      if (btnAccept) {
+        btnAccept.disabled = true;
+        btnAccept.textContent = "Staging…";
+      }
+      try {
+        await stagePayloadToCloud(payload);
+        // Record for rotation, but do NOT overwrite lastPick / thisWeekFile
+        // (those feed resolveThisWeek fallbacks and would look like a live change).
+        state.usedHistory = [
+          ...(state.usedHistory || []),
+          { id: f.id, pickedAt: now },
+        ];
+        saveState();
+        pickIsCandidate = true;
+        showStagedToast();
+      } catch (err) {
+        console.warn("stageNextWeek failed:", err);
+        showAcceptToast(
+          "Stage failed: " + ((err && err.message) || String(err)),
+          { error: true, ms: 6000 }
+        );
+      } finally {
+        if (btnAccept) {
+          btnAccept.disabled = false;
+          btnAccept.textContent = "Stage next week";
+        }
+      }
+      renderHistory();
+      updateMatchBadge();
+      updatePickActions();
+      updateStagedHint();
+      // Re-paint live This week card so staging never looks like it replaced live.
+      const twLive = resolveThisWeek();
+      renderSharedCheckins(twLive);
+      renderYoutubeAdminControls();
+      const memberView = $("view-member");
+      if (memberView && !memberView.hidden && authUser) {
+        renderMemberView({ asAdmin: authUser.role === "admin" });
+      }
+      return;
+    }
+
+    // Has youtubeId → publish LIVE thisWeek (same-pick re-publish or already-uploaded).
     state.lastPick = {
       id: f.id,
       filename: f.filename,
@@ -1377,22 +1891,6 @@
     ];
     saveState();
 
-    const payload = {
-      pickId: f.id,
-      filename: f.filename,
-      folderType: f.folderType,
-      hr: f.hr,
-      relPath: f.relPath,
-      sizeBytes: f.sizeBytes,
-      mtime: f.mtime,
-      rawTags: f.rawTags || [],
-      pickedAt: now,
-      why: currentResult.why,
-      matchCount: currentResult.matches.length,
-      youtubeId: keepYt.youtubeId,
-      youtubeUrl: keepYt.youtubeUrl,
-      archiveRoot: ARCHIVE_ROOT,
-    };
     thisWeekFile = { ...payload, _source: "local" };
     pickIsCandidate = false;
 
@@ -1404,20 +1902,49 @@
     const toast = $("accept-toast");
     try {
       await publishPayloadToCloud(payload);
-      toast.hidden = false;
-      toast.textContent = "Published — friends on beta will see this.";
+      if (toast) {
+        toast.hidden = false;
+        toast.textContent = "Published — friends on beta will see this.";
+      }
       setPublishStatus("");
+      persistStagedLocal(null);
     } catch (err) {
       console.warn("publishThisWeek failed:", err);
-      try {
-        localStorage.setItem(PENDING_PUBLISH_KEY, "1");
-      } catch (_) { /* ok */ }
-      toast.hidden = false;
-      toast.textContent = "Saved locally — cloud publish failed.";
-      setPublishStatus(
-        "Publish failed: " + ((err && err.message) || String(err)),
-        { error: true, sticky: true }
-      );
+      if (isYoutubeRequiredError(err)) {
+        thisWeekFile = prev
+          ? {
+              pickId: prev.id || prev.pickId,
+              id: prev.id || prev.pickId,
+              filename: prev.filename,
+              folderType: prev.folderType,
+              hr: prev.hr,
+              relPath: prev.relPath,
+              sizeBytes: prev.sizeBytes,
+              mtime: prev.mtime,
+              rawTags: prev.rawTags || [],
+              pickedAt: prev.pickedAt,
+              why: prev.why,
+              matchCount: prev.matchCount,
+              youtubeId: prev.youtubeId || null,
+              youtubeUrl: prev.youtubeUrl || null,
+              archiveRoot: prev.archiveRoot || ARCHIVE_ROOT,
+              _source: prev.source || "local",
+            }
+          : thisWeekFile;
+        showYtRequiredToast();
+      } else {
+        try {
+          localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+        } catch (_) { /* ok */ }
+        if (toast) {
+          toast.hidden = false;
+          toast.textContent = "Saved locally — cloud publish failed.";
+        }
+        setPublishStatus(
+          "Publish failed: " + ((err && err.message) || String(err)),
+          { error: true, sticky: true }
+        );
+      }
     } finally {
       if (btnAccept) {
         btnAccept.disabled = false;
@@ -1429,7 +1956,7 @@
     updateMatchBadge();
     updatePickActions();
     setTimeout(() => {
-      toast.hidden = true;
+      if (toast) toast.hidden = true;
     }, 4000);
     renderSharedCheckins(resolveThisWeek());
     renderYoutubeAdminControls();
@@ -1440,6 +1967,12 @@
     pickIsCandidate = false;
     const tw = resolveThisWeek();
     if (!tw) {
+      ensurePickViewFromPublished();
+      updatePickActions();
+      return;
+    }
+    if (!tw.youtubeId) {
+      showYtRequiredToast();
       ensurePickViewFromPublished();
       updatePickActions();
       return;
@@ -1478,15 +2011,19 @@
       setPublishStatus("");
     } catch (err) {
       console.warn("re-publish this week failed:", err);
-      try {
-        localStorage.setItem(PENDING_PUBLISH_KEY, "1");
-      } catch (_) { /* ok */ }
-      toast.hidden = false;
-      toast.textContent = "Saved locally — cloud publish failed.";
-      setPublishStatus(
-        "Publish failed: " + ((err && err.message) || String(err)),
-        { error: true, sticky: true }
-      );
+      if (isYoutubeRequiredError(err)) {
+        showYtRequiredToast();
+      } else {
+        try {
+          localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+        } catch (_) { /* ok */ }
+        toast.hidden = false;
+        toast.textContent = "Saved locally — cloud publish failed.";
+        setPublishStatus(
+          "Publish failed: " + ((err && err.message) || String(err)),
+          { error: true, sticky: true }
+        );
+      }
     } finally {
       if (btnKeep) {
         btnKeep.disabled = false;
@@ -1502,40 +2039,49 @@
   }
 
   function ensurePickViewFromPublished() {
+    // Live Candidate pick = thisWeek with youtubeId only (read-only). Never dry-run / No matches.
+    renderLiveWeekCard();
     if (currentResult && pickIsCandidate) {
-      /* keep current dry-run candidate */
       renderPickResult(currentResult);
+      updateDryRunButtonLabel();
+      updateStagedHint();
       return;
     }
-    pickIsCandidate = false;
-    if (state.lastPick) {
-      restoreLastPickIfAny();
-      return;
-    }
-    const tw = resolveThisWeek();
-    if (tw) {
+    // Hydrate Non-live from staged nextWeek so Pick again / Reveal / Stage stay visible.
+    const staged = resolveStagedNext();
+    if (staged) {
+      const id = staged.pickId || staged.id;
       const f =
-        catalog.files.find((x) => x.id === tw.id) || {
-          id: tw.id,
-          filename: tw.filename,
-          folderType: tw.folderType,
-          hr: tw.hr,
-          relPath: tw.relPath,
-          sizeBytes: tw.sizeBytes,
-          mtime: tw.mtime,
-          rawTags: tw.rawTags || [],
+        (catalog && catalog.files && catalog.files.find((x) => x.id === id)) || {
+          id,
+          filename: staged.filename,
+          folderType: staged.folderType,
+          hr: staged.hr,
+          relPath: staged.relPath,
+          sizeBytes: staged.sizeBytes,
+          mtime: staged.mtime,
+          rawTags: staged.rawTags || [],
         };
       currentResult = {
         ok: true,
         pick: f,
-        matches: Array(tw.matchCount || 1).fill(f),
-        why: tw.why || "Published this week",
+        matches: Array(staged.matchCount || 1).fill(f),
+        why: staged.why || "Staged next week (not live)",
+        _fromStaged: true,
       };
+      pickIsCandidate = true;
       renderPickResult(currentResult);
+      updateDryRunButtonLabel();
+      updateStagedHint();
       return;
     }
+    // Do NOT paint live thisWeek into Non-live (Candidate pick LIVE owns that).
+    pickIsCandidate = false;
+    currentResult = null;
     showPickPanels({ empty: true, result: false, error: false });
     updatePickActions();
+    updateDryRunButtonLabel();
+    updateStagedHint();
   }
 
   function restoreLastPickIfAny() {
@@ -1690,24 +2236,55 @@
       window.EddysHellAuth.mockSignIn("member");
     });
     $("btn-signout").addEventListener("click", async () => {
-      await window.EddysHellAuth.signOut();
+      // Optimistic guest chrome — do not wait for Firebase round-trip
+      authUser = null;
+      applyRoleUI();
+      try {
+        await window.EddysHellAuth.signOut();
+      } catch (err) {
+        console.warn("signOut:", err);
+        authUser = window.EddysHellAuth.getUser();
+        applyRoleUI();
+      }
     });
+    const diffRadios = document.querySelectorAll('input[name="checkin-difficulty"]');
+    for (const r of diffRadios) {
+      r.addEventListener("change", () => {
+        const need = $("checkin-need-diff");
+        if (need) need.hidden = true;
+        syncCheckinButtonEnabled();
+      });
+    }
     $("btn-checkin").addEventListener("click", async () => {
       const tw = resolveThisWeek();
       if (!tw || !authUser) return;
+      const difficulty = selectedCheckinDifficulty();
+      if (!difficulty) {
+        const need = $("checkin-need-diff");
+        if (need) {
+          need.hidden = false;
+          setTimeout(() => {
+            need.hidden = true;
+          }, 2800);
+        }
+        syncCheckinButtonEnabled();
+        return;
+      }
       const confirmed = window.confirm(
         "Mark yourself as checked in for this week?"
       );
       if (!confirmed) return;
       const btn = $("btn-checkin");
       btn.disabled = true;
+      btn.classList.add("checking");
       btn.textContent = "Checking in…";
       try {
         await window.EddysHellAuth.upsertCheckin({
           email: authUser.email,
           displayName: authUser.displayName,
           pickId: tw.id,
-          notes: $("checkin-notes").value,
+          difficulty,
+          notes: "",
         });
         $("checkin-toast").hidden = false;
         setTimeout(() => {
@@ -1717,8 +2294,9 @@
         paintSharedCheckinsList(tw);
       } catch (err) {
         alert("Check-in failed: " + (err.message || err));
-        btn.disabled = false;
+        btn.classList.remove("checking");
         btn.textContent = "Check in — I finished";
+        syncCheckinButtonEnabled();
       }
     });
   }
@@ -1766,19 +2344,22 @@
       state.rule = { ...defaultRule(), ...repoDefault, ...state.rule };
     }
 
-    try {
-      const twRes = await fetch("data/this-week.json", { cache: "no-store" });
-      if (twRes.ok) {
-        thisWeekFile = await twRes.json();
-        if (thisWeekFile) thisWeekFile._source = "file";
-      }
-    } catch (_) {
-      thisWeekFile = null;
-    }
-
-    const res = await fetch("data/catalog.json");
-    if (!res.ok) throw new Error("Failed to load catalog.json");
-    catalog = await res.json();
+    // Parallel Hosting JSON — don't serialize this-week + catalog on phone networks
+    const twFetch = fetch("data/this-week.json", { cache: "no-store" })
+      .then(async (twRes) => {
+        if (twRes.ok) {
+          thisWeekFile = await twRes.json();
+          if (thisWeekFile) thisWeekFile._source = "file";
+        }
+      })
+      .catch(() => {
+        thisWeekFile = null;
+      });
+    const catalogFetch = fetch("data/catalog.json").then(async (res) => {
+      if (!res.ok) throw new Error("Failed to load catalog.json");
+      catalog = await res.json();
+    });
+    await Promise.all([twFetch, catalogFetch]);
 
     const meta = catalog.meta || {};
     $("catalog-meta").textContent =
@@ -1873,10 +2454,10 @@
       }, 3500);
     });
 
-    $("btn-dryrun").addEventListener("click", runDryRun);
-    $("btn-again").addEventListener("click", pickAgain);
+    $("btn-dryrun").addEventListener("click", runDryRunOrAgain);
     $("btn-accept").addEventListener("click", acceptPick);
-    $("btn-keep").addEventListener("click", keepThisWeek);
+    const btnKeep = $("btn-keep");
+    if (btnKeep) btnKeep.addEventListener("click", keepThisWeek);
     const btnReveal = $("btn-reveal-finder");
     if (btnReveal) btnReveal.addEventListener("click", revealInFinder);
     const gotoRule = $("btn-goto-rule");
@@ -1894,12 +2475,42 @@
     $("btn-members-save").addEventListener("click", saveMembersList);
     $("btn-pt-save").addEventListener("click", savePTSummary);
 
-    await window.EddysHellAuth.init();
+    // Paint Sign in immediately — never leave all views hidden while Firebase loads.
+    paintGuestShellEarly();
+
+    const AUTH_INIT_MS = 12000;
+    try {
+      await Promise.race([
+        window.EddysHellAuth.init(),
+        new Promise((_, reject) => {
+          setTimeout(() => {
+            const err = new Error("Auth init timed out — showing Sign in");
+            err.code = "auth-init-timeout";
+            reject(err);
+          }, AUTH_INIT_MS);
+        }),
+      ]);
+    } catch (err) {
+      console.warn("Auth.init:", err);
+      // Keep guest shell visible; user can still tap Sign in once modules load.
+      paintGuestShellEarly();
+    }
     syncMembersDraftFromAuth();
     renderMembersUI();
     renderPTUI();
     // Firestore is live SoT for this-week + rule (Hosting JSON = bootstrap)
-    await loadCloudConfig();
+    try {
+      await loadCloudConfig();
+    } catch (err) {
+      console.warn("loadCloudConfig:", err);
+    }
+    // Restore staged next-week from localStorage (does not affect live thisWeek).
+    const localStaged = loadStagedLocal();
+    if (localStaged) {
+      nextWeekFile = { ...localStaged, _source: "local" };
+      updateStagedHint();
+    }
+
     if (window.EddysHellAuth.watchThisWeek) {
       window.EddysHellAuth.watchThisWeek((cloud) => {
         if (applyCloudThisWeek(cloud)) {
@@ -1918,7 +2529,7 @@
     }
     window.EddysHellAuth.onAuthChange((user) => {
       authUser = user;
-      applyRoleUI();
+      safeApplyRoleUI();
       if (user) {
         loadCloudConfig().catch((err) => console.warn(err));
       }
@@ -1940,11 +2551,39 @@
       defaultRule,
       catalog,
       getState: () => state,
-      /** Wednesday routine: true = auto dry-run/accept; false = keep this week (still upload if YT missing) */
+      /** Wednesday routine: true = auto dry-run/accept; false = keep this week.
+       *  Live thisWeek publish still requires youtubeId (see canPublishThisWeek).
+       *  Candidates without video → stageNextWeek / Stage next week button. */
       isAutoPickEnabled: () => {
         const r = (state && state.rule) || {};
         return r.autoPick !== false;
       },
+      /** Bot/admin: true only when the pick already has youtubeId — required to publish live thisWeek. */
+      canPublishThisWeek: (tw) => {
+        const pick = tw || resolveThisWeek();
+        return !!(pick && pick.youtubeId);
+      },
+      /** Staged next-week candidate (not live). */
+      getStagedNextWeek: () => resolveStagedNext(),
+      /**
+       * Wednesday/bot after compress+YouTube upload: promote staged → live thisWeek
+       * with youtubeId. Leaves live alone if no staged doc or no id.
+       */
+      promoteAfterYoutubeUpload: async (youtubeId, youtubeUrl) => {
+        const Auth = window.EddysHellAuth;
+        if (!Auth || !Auth.promoteStagedToLive) {
+          throw new Error("Auth promoteStagedToLive API missing");
+        }
+        const live = await Auth.promoteStagedToLive(youtubeId, youtubeUrl);
+        thisWeekFile = { ...live, _source: "cloud" };
+        persistStagedLocal(null);
+        ensurePickViewFromPublished();
+        renderYoutubeAdminControls();
+        updatePickActions();
+        return live;
+      },
+      YT_REQUIRED_TOAST,
+      STAGED_TOAST,
       resolveThisWeek,
       parseYoutubeId,
       ARCHIVE_ROOT,
@@ -1953,6 +2592,14 @@
 
   boot().catch((err) => {
     console.error(err);
-    $("catalog-meta").textContent = "Failed to load: " + err.message;
+    const meta = $("catalog-meta");
+    if (meta) meta.textContent = "Failed to load: " + (err && err.message ? err.message : String(err));
+    try {
+      paintGuestShellEarly();
+    } catch (_) {
+      try {
+        showView("landing");
+      } catch (__){ /* ignore */ }
+    }
   });
 })();

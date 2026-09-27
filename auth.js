@@ -452,14 +452,16 @@
     return "local";
   }
 
-  function upsertCheckinLocal({ email, displayName, pickId, notes, at }) {
+  function upsertCheckinLocal({ email, displayName, pickId, difficulty, notes, at }) {
     const list = loadCheckins();
     const e = normalizeEmail(email);
+    const diff = String(difficulty || "").toLowerCase();
     const row = {
       email: e,
       displayName: displayName || e,
       pickId,
       at: at || new Date().toISOString(),
+      difficulty: ["easy", "okay", "hard"].includes(diff) ? diff : "",
       notes: (notes || "").trim(),
     };
     mergeCheckinRow(list, row);
@@ -467,22 +469,24 @@
     return row;
   }
 
-  async function upsertCheckin({ email, displayName, pickId, notes }) {
-    const row = upsertCheckinLocal({ email, displayName, pickId, notes });
+  async function upsertCheckin({ email, displayName, pickId, difficulty, notes }) {
+    const row = upsertCheckinLocal({ email, displayName, pickId, difficulty, notes });
     notifyCheckins();
 
     if (firestoreReady && fbDb && firestoreSetDoc && firestoreDoc) {
       try {
         const id = checkinDocId(pickId, row.email);
+        const payload = {
+          email: row.email,
+          displayName: row.displayName,
+          pickId: row.pickId,
+          at: row.at,
+          notes: row.notes || "",
+        };
+        if (row.difficulty) payload.difficulty = row.difficulty;
         await firestoreSetDoc(
           firestoreDoc(fbDb, "checkins", id),
-          {
-            email: row.email,
-            displayName: row.displayName,
-            pickId: row.pickId,
-            at: row.at,
-            notes: row.notes,
-          },
+          payload,
           { merge: true }
         );
         firestoreStatus = "cloud";
@@ -604,12 +608,56 @@
     }
   }
 
+  function sameThisWeekPick(a, b) {
+    if (!a || !b) return false;
+    const aId = a.pickId || a.id || "";
+    const bId = b.pickId || b.id || "";
+    if (aId && bId && aId === bId) return true;
+    if (a.relPath && b.relPath && String(a.relPath) === String(b.relPath)) return true;
+    if (a.filename && b.filename && String(a.filename) === String(b.filename)) return true;
+    return false;
+  }
+
   async function publishThisWeek(payload) {
     requireFirestoreWrite();
     const base = payload && typeof payload === "object" ? payload : {};
     const pickId = base.pickId || base.id;
     if (!pickId) {
       throw new Error("publishThisWeek: missing pickId");
+    }
+    let youtubeId = base.youtubeId || null;
+    let youtubeUrl = base.youtubeUrl || null;
+    // Preserve existing youtubeId when re-publishing the same pick/file without one.
+    // Writing null with merge:true previously wiped a live YouTube id.
+    if (!youtubeId) {
+      try {
+        const existing = await loadThisWeekFromCloud();
+        if (
+          existing &&
+          existing.youtubeId &&
+          sameThisWeekPick(existing, { pickId, filename: base.filename, relPath: base.relPath })
+        ) {
+          youtubeId = existing.youtubeId;
+          youtubeUrl =
+            youtubeUrl ||
+            existing.youtubeUrl ||
+            ("https://www.youtube.com/watch?v=" + existing.youtubeId);
+        }
+      } catch (err) {
+        console.warn("publishThisWeek youtube preserve read failed:", err);
+      }
+    }
+    // Hard rule: never replace live thisWeek without a YouTube video already attached.
+    // Staging without a video goes to config/nextWeek via stageNextWeek — not here.
+    if (!youtubeId) {
+      const err = new Error(
+        "Upload YouTube first — won't replace this week without a video."
+      );
+      err.code = "youtube-required";
+      throw err;
+    }
+    if (!youtubeUrl) {
+      youtubeUrl = "https://www.youtube.com/watch?v=" + youtubeId;
     }
     const docPayload = scrubUndefined({
       pickId,
@@ -624,8 +672,8 @@
       pickedAt: base.pickedAt || new Date().toISOString(),
       why: base.why || "",
       matchCount: base.matchCount ?? null,
-      youtubeId: base.youtubeId || null,
-      youtubeUrl: base.youtubeUrl || null,
+      youtubeId,
+      youtubeUrl,
       archiveRoot: base.archiveRoot || "/Volumes/EddysHell/",
       note: base.note || null,
       updatedAt: new Date().toISOString(),
@@ -655,6 +703,121 @@
       firestoreStatus = "error";
       return null;
     }
+  }
+
+  /**
+   * Stage the next workout candidate WITHOUT touching live config/thisWeek.
+   * Used when admin picks a file that has no youtubeId yet. Live week stays
+   * until YouTube upload succeeds and promoteStagedToLive runs.
+   */
+  async function stageNextWeek(payload) {
+    requireFirestoreWrite();
+    const base = payload && typeof payload === "object" ? payload : {};
+    const pickId = base.pickId || base.id;
+    if (!pickId) {
+      throw new Error("stageNextWeek: missing pickId");
+    }
+    const youtubeId = base.youtubeId || null;
+    let youtubeUrl = base.youtubeUrl || null;
+    if (youtubeId && !youtubeUrl) {
+      youtubeUrl = "https://www.youtube.com/watch?v=" + youtubeId;
+    }
+    const docPayload = scrubUndefined({
+      pickId,
+      id: pickId,
+      filename: base.filename || "",
+      folderType: base.folderType || null,
+      hr: typeof base.hr === "number" ? base.hr : base.hr ?? null,
+      relPath: base.relPath || "",
+      sizeBytes: base.sizeBytes ?? null,
+      mtime: base.mtime || null,
+      rawTags: Array.isArray(base.rawTags) ? base.rawTags : [],
+      pickedAt: base.pickedAt || new Date().toISOString(),
+      why: base.why || "",
+      matchCount: base.matchCount ?? null,
+      // Only include youtube fields when present — never write youtubeId:null here
+      // in a way that could be confused with live; staged may omit video.
+      ...(youtubeId ? { youtubeId, youtubeUrl } : {}),
+      archiveRoot: base.archiveRoot || "/Volumes/EddysHell/",
+      note: base.note || null,
+      status: "staged",
+      stagedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser ? normalizeEmail(currentUser.email) : null,
+    });
+    await firestoreSetDoc(
+      firestoreDoc(fbDb, "config", "nextWeek"),
+      docPayload,
+      { merge: false }
+    );
+    firestoreStatus = "cloud";
+    return docPayload;
+  }
+
+  async function loadNextWeekFromCloud() {
+    if (!firestoreReady || !fbDb || !firestoreGetDoc || !firestoreDoc) {
+      return null;
+    }
+    try {
+      const snap = await firestoreGetDoc(firestoreDoc(fbDb, "config", "nextWeek"));
+      if (!snap.exists) return null;
+      const data = snap.data();
+      firestoreStatus = "cloud";
+      if (!data || !(data.pickId || data.id)) return null;
+      if (data.status === "promoted" || data.status === "cleared") return null;
+      return data;
+    } catch (err) {
+      console.warn("Firestore nextWeek read failed:", err);
+      firestoreStatus = "error";
+      return null;
+    }
+  }
+
+  /**
+   * After compress+YouTube upload succeeds: write live config/thisWeek from the
+   * staged nextWeek pick + youtubeId. Never promotes without a video id.
+   */
+  async function promoteStagedToLive(youtubeId, youtubeUrl) {
+    const id = youtubeId || null;
+    if (!id) {
+      const err = new Error(
+        "Upload YouTube first — won't replace this week without a video."
+      );
+      err.code = "youtube-required";
+      throw err;
+    }
+    const staged = await loadNextWeekFromCloud();
+    if (!staged) {
+      throw new Error("No staged next week to promote — Stage next week first.");
+    }
+    const url =
+      youtubeUrl ||
+      staged.youtubeUrl ||
+      ("https://www.youtube.com/watch?v=" + id);
+    const live = await publishThisWeek({
+      ...staged,
+      youtubeId: id,
+      youtubeUrl: url,
+    });
+    // Mark staged doc promoted so it is no longer treated as pending.
+    try {
+      await firestoreSetDoc(
+        firestoreDoc(fbDb, "config", "nextWeek"),
+        scrubUndefined({
+          status: "promoted",
+          promotedAt: new Date().toISOString(),
+          promotedYoutubeId: id,
+          pickId: staged.pickId || staged.id,
+          filename: staged.filename || "",
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser ? normalizeEmail(currentUser.email) : null,
+        }),
+        { merge: true }
+      );
+    } catch (err) {
+      console.warn("nextWeek promote mark failed:", err);
+    }
+    return live;
   }
 
   /** @type {(() => void)|null} */
@@ -843,59 +1006,34 @@
   // ——— Firebase ———
 
   async function loadFirebaseModular() {
-    const { initializeApp } = await import(
-      "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"
-    );
-    const {
-      getAuth,
-      initializeAuth,
-      browserLocalPersistence,
-      browserPopupRedirectResolver,
-      setPersistence,
-      GoogleAuthProvider,
-      signInWithPopup,
-      signInWithRedirect,
-      getRedirectResult,
-      onAuthStateChanged,
-      signOut,
-    } = await import(
-      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"
-    );
-    const {
-      getFirestore,
-      doc,
-      setDoc,
-      getDoc,
-      collection,
-      query,
-      where,
-      getDocs,
-      onSnapshot,
-    } = await import(
-      "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
-    );
+    // Parallel ESM fetches — sequential awaits stacked ~3 round-trips on phone Safari.
+    const [appMod, authMod, fsMod] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"),
+    ]);
     return {
-      initializeApp,
-      getAuth,
-      initializeAuth,
-      browserLocalPersistence,
-      browserPopupRedirectResolver,
-      setPersistence,
-      GoogleAuthProvider,
-      signInWithPopup,
-      signInWithRedirect,
-      getRedirectResult,
-      onAuthStateChanged,
-      signOut,
-      getFirestore,
-      doc,
-      setDoc,
-      getDoc,
-      collection,
-      query,
-      where,
-      getDocs,
-      onSnapshot,
+      initializeApp: appMod.initializeApp,
+      getAuth: authMod.getAuth,
+      initializeAuth: authMod.initializeAuth,
+      browserLocalPersistence: authMod.browserLocalPersistence,
+      browserPopupRedirectResolver: authMod.browserPopupRedirectResolver,
+      setPersistence: authMod.setPersistence,
+      GoogleAuthProvider: authMod.GoogleAuthProvider,
+      signInWithPopup: authMod.signInWithPopup,
+      signInWithRedirect: authMod.signInWithRedirect,
+      getRedirectResult: authMod.getRedirectResult,
+      onAuthStateChanged: authMod.onAuthStateChanged,
+      signOut: authMod.signOut,
+      getFirestore: fsMod.getFirestore,
+      doc: fsMod.doc,
+      setDoc: fsMod.setDoc,
+      getDoc: fsMod.getDoc,
+      collection: fsMod.collection,
+      query: fsMod.query,
+      where: fsMod.where,
+      getDocs: fsMod.getDocs,
+      onSnapshot: fsMod.onSnapshot,
     };
   }
 
@@ -1154,10 +1292,15 @@
       return;
     }
     localStorage.removeItem(MOCK_SESSION_KEY);
-    if (firebaseReady && fbAuth && signOutFn) {
-      await signOutFn(fbAuth);
-    }
+    // Clear app session first so UI drops admin chrome immediately
     setUser(null);
+    if (firebaseReady && fbAuth && signOutFn) {
+      try {
+        await signOutFn(fbAuth);
+      } catch (err) {
+        console.warn("Firebase signOut:", err);
+      }
+    }
   }
 
   async function init() {
@@ -1244,6 +1387,9 @@
     publishThisWeek,
     loadThisWeekFromCloud,
     watchThisWeek,
+    stageNextWeek,
+    loadNextWeekFromCloud,
+    promoteStagedToLive,
     publishRule,
     loadRuleFromCloud,
     CHECKINS_KEY,

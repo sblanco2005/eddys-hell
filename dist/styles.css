@@ -100,6 +100,22 @@ body {
   border-radius: 12px;
 }
 
+/* [hidden] must beat display:grid/flex — UA [hidden] is not always !important */
+.tabs[hidden],
+.user-slot[hidden] {
+  display: none !important;
+}
+
+/* Body auth classes — hide chrome even if JS forgets [hidden] (guest leak belt) */
+body:not(.is-admin) #admin-tabs,
+body.is-guest #admin-tabs {
+  display: none !important;
+}
+body:not(.is-signed-in) #user-slot,
+body.is-guest #user-slot {
+  display: none !important;
+}
+
 .tab {
   appearance: none;
   border: none;
@@ -122,9 +138,14 @@ body {
 
 .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Views */
+/* Views — [hidden] wins over .active display */
 .view { display: none; }
-.view.active { display: block; }
+.view[hidden] {
+  display: none !important;
+}
+.view.active:not([hidden]) {
+  display: block;
+}
 
 .card {
   background: var(--bg-card);
@@ -635,13 +656,61 @@ input:focus {
   font-weight: 650;
 }
 .checkin-help { margin: 0 0 12px; }
+.difficulty-seg {
+  margin: 0 0 14px;
+}
+.difficulty-seg[data-locked="1"] label {
+  pointer-events: none;
+  opacity: 0.85;
+}
+.difficulty-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  background: var(--bg-chip);
+  color: var(--text-dim);
+}
+.difficulty-badge.easy {
+  border-color: rgba(72, 187, 120, 0.45);
+  color: #6ee7a0;
+  background: rgba(72, 187, 120, 0.12);
+}
+.difficulty-badge.okay {
+  border-color: rgba(246, 173, 85, 0.5);
+  color: #f6c177;
+  background: rgba(246, 173, 85, 0.12);
+}
+.difficulty-badge.hard {
+  border-color: rgba(255, 107, 74, 0.55);
+  color: #ffb3a3;
+  background: var(--accent-soft);
+}
+.toast-warn {
+  color: #f6c177;
+}
+.field-label .req {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--text-mute);
+}
 .checkin-sync {
   margin-top: 10px;
   font-size: 0.78rem;
 }
 #btn-checkin:disabled {
-  opacity: 0.65;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+#btn-checkin:disabled.checking {
   cursor: wait;
+  opacity: 0.65;
 }
 .field-label {
   display: block;
@@ -872,4 +941,67 @@ input:focus {
   white-space: pre-wrap;
   word-break: break-word;
   user-select: text;
+}
+
+
+/* Next week staged (admin Rule) — distinct from live This week */
+.staged-card {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.08), transparent 48%);
+}
+.staged-card .badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+.live-badge {
+  background: rgba(34, 197, 94, 0.2) !important;
+  color: #4ade80 !important;
+}
+.member-staged-note {
+  margin: 0 0 0.75rem;
+  color: var(--muted, #a3a3a3);
+}
+
+
+/* Live Candidate pick (Admin Rule) — read-only thisWeek */
+.live-week-card {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.08), transparent 48%);
+}
+.live-week-card code {
+  font-size: 0.85em;
+}
+.nonlive-card .nonlive-preview {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(245, 158, 11, 0.25);
+}
+.nonlive-card .nonlive-preview-head {
+  margin-bottom: 0.5rem;
+}
+.nonlive-card .pick-preview-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.nonlive-pick-actions {
+  margin-top: 0.75rem;
+}
+.nonlive-always-actions {
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.nonlive-always-actions .btn {
+  flex: 0 1 auto;
+}
+.nonlive-path-row {
+  margin-top: 0.5rem;
+}
+#staged-next-card {
+  margin: 0.75rem 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.3);
 }
