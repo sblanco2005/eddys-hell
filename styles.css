@@ -913,36 +913,3 @@ input:focus {
   margin: 0 0 0.75rem;
   color: var(--muted, #a3a3a3);
 }
-
-
-/* Live Candidate pick (Admin Rule) — read-only thisWeek */
-.live-week-card {
-  border-color: rgba(34, 197, 94, 0.4);
-  background: linear-gradient(180deg, rgba(34, 197, 94, 0.08), transparent 48%);
-}
-.live-week-card code {
-  font-size: 0.85em;
-}
-.nonlive-card .nonlive-preview {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid rgba(245, 158, 11, 0.25);
-}
-.nonlive-card .nonlive-preview-head {
-  margin-bottom: 0.5rem;
-}
-.nonlive-card .pick-preview-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-.nonlive-pick-actions {
-  margin-top: 0.75rem;
-}
-#staged-next-card {
-  margin: 0.75rem 0;
-  padding: 0.75rem 0.85rem;
-  border-radius: 10px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
