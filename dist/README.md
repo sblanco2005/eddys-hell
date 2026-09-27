@@ -47,15 +47,18 @@ Until those keys are filled, production Pages shows **“Auth not configured”*
 
 ## This week’s pick (sharing with the group)
 
-Static Pages can’t write the repo from the browser.
+**Live source of truth (beta):** Cloud Firestore docs `config/thisWeek` and `config/rule`.
+Admin **Publish this week** / **Save rule** write there so friends signed in on beta see the same pick/rule immediately. Hosting `data/this-week.json` + `data/default-rule.json` remain bootstrap/fallback only.
 
-1. Admin hits **Accept as this week** → saves to `localStorage` and **downloads `this-week.json`**.
-2. Drop that file into `data/this-week.json` (or `node scripts/set-this-week.js ~/Downloads/this-week.json`).
-3. Rebuild dist + `scripts/publish-pages.sh` so members load the same pick from the repo.
+Load order: **Firestore (if present) → repo JSON → localStorage**.
 
-Members read `data/this-week.json` first, then fall back to their browser’s `localStorage` last pick.
+1. Admin dry-runs a candidate → taps **Publish this week** → localStorage + Firestore `config/thisWeek`.
+2. **Save rule** → localStorage + Firestore `config/rule` (toast: “Rule published to beta.”).
+3. Optional: still sync Hosting JSON via Wednesday Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap.
 
-Seeded sample: dry-run pick `9f757b1922` (HR 140 Full).
+Wednesday routine (Auto-pick OFF): prefer Firestore `config/thisWeek` over Hosting JSON when deciding what to upload; do not overwrite a manually published pick.
+
+Seeded bootstrap sample may change with deploys; trust Firestore on beta after Publish.
 
 ## Members (friend allowlist)
 
@@ -103,12 +106,12 @@ Until Firestore is enabled, check-ins still work on each friend’s device, but 
 
 - `data/catalog.json` — workout catalog
 - `data/default-rule.json` / `data/state.json` — rule seed
-- `data/this-week.json` — published pick for members (optional `youtubeId` / `youtubeUrl`)
+- `data/this-week.json` — Hosting bootstrap/fallback pick (live pick is Firestore `config/thisWeek`; optional `youtubeId` / `youtubeUrl`)
 - `data/admins.json` — admin email allowlist
 - `data/members.json` — member email allowlist (empty = admins only)
 - `data/pt.json` — editable PT summary email destination
 - `data/firebase-config.json` — Firebase web config (Auth configured; enable Firestore for check-in sync)
-- `firestore.rules` — paste into Firebase console for check-in security rules
+- `firestore.rules` — check-ins + admin-only write to `config/thisWeek` and `config/rule`
 
 ## Publish
 
@@ -125,4 +128,4 @@ touch dist/.nojekyll
 
 Rotate · Prefer recent · Full body · HR > 120 · last 8 weeks avoided · **Auto-pick ON**.
 
-`autoPick` lives on `data/default-rule.json` and `data/state.json` → `rule.autoPick` (also `localStorage` key `eddys-hell-admin-v1`). Wednesday routine should read it: **ON** = auto dry-run/set pick; **OFF** = keep this week’s pick, still upload if YouTube is missing. Admin Save rule also writes pending payload `eddys-hell-rule-pending-v1` for sync.
+`autoPick` lives on Firestore `config/rule` (preferred), then `data/default-rule.json` / `data/state.json` → `rule.autoPick` (also `localStorage` key `eddys-hell-admin-v2`). Wednesday routine should read it: **ON** = auto dry-run/set pick; **OFF** = keep this week’s pick from Firestore when present, still upload if YouTube is missing. Admin **Save rule** publishes to Firestore and clears the local pending key.

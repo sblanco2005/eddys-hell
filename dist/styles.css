@@ -106,6 +106,16 @@ body {
   display: none !important;
 }
 
+/* Body auth classes — hide chrome even if JS forgets [hidden] (guest leak belt) */
+body:not(.is-admin) #admin-tabs,
+body.is-guest #admin-tabs {
+  display: none !important;
+}
+body:not(.is-signed-in) #user-slot,
+body.is-guest #user-slot {
+  display: none !important;
+}
+
 .tab {
   appearance: none;
   border: none;

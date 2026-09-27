@@ -795,6 +795,32 @@
     }
   }
 
+  /** Body auth classes + hidden attrs — guest chrome must never leak over landing. */
+  function syncAuthBodyClass() {
+    const body = document.body;
+    if (!body) return;
+    const signedIn = !!authUser;
+    const isAdmin = !!(authUser && authUser.role === "admin");
+    body.classList.toggle("is-guest", !signedIn);
+    body.classList.toggle("is-signed-in", signedIn);
+    body.classList.toggle("is-admin", isAdmin);
+  }
+
+  function forceGuestChrome() {
+    syncAuthBodyClass();
+    const tabs = $("admin-tabs");
+    const slot = $("user-slot");
+    if (tabs) tabs.hidden = true;
+    if (slot) slot.hidden = true;
+    // Admin views must not stay reachable alongside the sign-in card
+    for (const id of ["view-rule", "view-pick"]) {
+      const el = $(id);
+      if (!el) continue;
+      el.hidden = true;
+      el.classList.remove("active");
+    }
+  }
+
   function renderUserSlot() {
     const slot = $("user-slot");
     if (!authUser) {
@@ -817,9 +843,8 @@
 
   function renderLanding() {
     showView("landing");
-    // Belt-and-suspenders: class display:grid/flex must not leak guest chrome
-    $("admin-tabs").hidden = true;
-    $("user-slot").hidden = true;
+    // Belt-and-suspenders: body.is-guest + [hidden] — never leave admin chrome over landing
+    forceGuestChrome();
     $("brand-sub").textContent = "Thursday workout";
 
     const tw = resolveThisWeek();
@@ -1094,9 +1119,10 @@
   }
 
   function applyRoleUI() {
+    syncAuthBodyClass();
     renderUserSlot();
     if (!authUser) {
-      // renderLanding also forces admin-tabs + user-slot hidden
+      // renderLanding → forceGuestChrome (body.is-guest + hidden attrs)
       renderLanding();
       return;
     }
@@ -1111,6 +1137,9 @@
       if (landing) landing.hidden = true;
       return;
     }
+    // Members: tabs stay hidden via body:not(.is-admin)
+    const tabs = $("admin-tabs");
+    if (tabs) tabs.hidden = true;
     renderMemberView();
   }
 
@@ -1696,7 +1725,16 @@
       window.EddysHellAuth.mockSignIn("member");
     });
     $("btn-signout").addEventListener("click", async () => {
-      await window.EddysHellAuth.signOut();
+      // Optimistic guest chrome — do not wait for Firebase round-trip
+      authUser = null;
+      applyRoleUI();
+      try {
+        await window.EddysHellAuth.signOut();
+      } catch (err) {
+        console.warn("signOut:", err);
+        authUser = window.EddysHellAuth.getUser();
+        applyRoleUI();
+      }
     });
     $("btn-checkin").addEventListener("click", async () => {
       const tw = resolveThisWeek();
