@@ -1154,10 +1154,15 @@
       return;
     }
     localStorage.removeItem(MOCK_SESSION_KEY);
-    if (firebaseReady && fbAuth && signOutFn) {
-      await signOutFn(fbAuth);
-    }
+    // Clear app session first so UI drops admin chrome immediately
     setUser(null);
+    if (firebaseReady && fbAuth && signOutFn) {
+      try {
+        await signOutFn(fbAuth);
+      } catch (err) {
+        console.warn("Firebase signOut:", err);
+      }
+    }
   }
 
   async function init() {
