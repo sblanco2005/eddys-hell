@@ -50,3 +50,19 @@ A working **x86_64** `ffmpeg` 9.0.2 (Rosetta) is at `~/eddys-hell-app/bin/ffmpeg
 5. Paste that URL into Admin (same as Studio), or extend the script to write `youtubeId` / `youtubeUrl` into `data/this-week.json`.
 
 Do **not** upload without OAuth credentials ready. Manual Studio upload is enough for the embed integration.
+
+
+## After upload — promote staged → live (beta)
+
+Do **not** write `config/thisWeek` until you have a `youtubeId`.
+
+1. Admin stages candidate in the app (**Stage next week** → `config/nextWeek`).
+2. Compress + upload (Studio or `youtube_upload.py`) → get `youtubeId`.
+3. In the browser console (signed in as admin on beta), or from the Wednesday bot:
+
+```js
+await EddysHell.promoteAfterYoutubeUpload("YOUTUBE_ID_HERE");
+```
+
+That writes live `config/thisWeek` with the staged pick + youtubeId, and marks
+`config/nextWeek` as promoted. Live week is left alone until this step.

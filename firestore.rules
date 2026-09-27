@@ -31,6 +31,12 @@ service cloud.firestore {
       allow create, update: if isAdmin();
       allow delete: if false;
     }
+    // Staged next-week candidate (admin only). Not shown to members as live.
+    match /config/nextWeek {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
     match /config/rule {
       allow read: if signedIn();
       allow create, update: if isAdmin();

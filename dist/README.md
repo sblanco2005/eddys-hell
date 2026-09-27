@@ -48,17 +48,21 @@ Until those keys are filled, production Pages shows **“Auth not configured”*
 ## This week’s pick (sharing with the group)
 
 **Live source of truth (beta):** Cloud Firestore docs `config/thisWeek` and `config/rule`.
-Admin **Publish this week** / **Save rule** write there so friends signed in on beta see the same pick/rule immediately.
+Members see `config/thisWeek` (YouTube embed). Admin **Save rule** writes `config/rule`.
 
-**Publish this week requires YouTube:** `config/thisWeek` (and Hosting `data/this-week.json` via `set-this-week.js`) only update when the pick already has `youtubeId`. Otherwise the app refuses with toast *Upload YouTube first — won't replace this week without a video.* and leaves the live pick untouched. Same-pick re-publish still preserves an existing cloud youtubeId. Wednesday/bot: use `EddysHell.canPublishThisWeek()` before auto-accept. Hosting `data/this-week.json` + `data/default-rule.json` remain bootstrap/fallback only.
+**Stage vs live:**
+- **Stage next week** (candidate with no `youtubeId`) → Firestore `config/nextWeek` + localStorage `eddys-hell-next-week-v1`. Toast: *Staged — live week stays until YouTube upload.* Does **not** write `config/thisWeek`.
+- **Live `config/thisWeek`** updates only when the pick already has `youtubeId` (re-publish same pick, or after upload via `EddysHell.promoteAfterYoutubeUpload(youtubeId)` / `Auth.promoteStagedToLive`). Never writes `youtubeId: null` over a live doc.
+- Hosting `data/this-week.json` via `set-this-week.js` still requires `youtubeId`.
 
-Load order: **Firestore (if present) → repo JSON → localStorage**.
+Load order (live): **Firestore thisWeek → repo JSON → localStorage**. Staged is separate (`config/nextWeek`).
 
-1. Admin dry-runs a candidate → taps **Publish this week** → localStorage + Firestore `config/thisWeek`.
-2. **Save rule** → localStorage + Firestore `config/rule` (toast: “Rule published to beta.”).
-3. Optional: still sync Hosting JSON via Wednesday Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap.
+1. Admin dry-runs a candidate → **Stage next week** → `config/nextWeek` (live unchanged).
+2. Wednesday/bot: compress + YouTube upload → `promoteAfterYoutubeUpload(id)` → live `config/thisWeek` with `youtubeId`.
+3. **Save rule** → Firestore `config/rule`.
+4. Optional: sync Hosting JSON via Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap.
 
-Wednesday routine (Auto-pick OFF): prefer Firestore `config/thisWeek` over Hosting JSON when deciding what to upload; do not overwrite a manually published pick.
+Wednesday routine (Auto-pick OFF): upload the **staged** pick (`getStagedNextWeek()` / `config/nextWeek`); only then promote to live. Do not overwrite a live pick that still has video with a no-video candidate.
 
 Seeded bootstrap sample may change with deploys; trust Firestore on beta after Publish.
 

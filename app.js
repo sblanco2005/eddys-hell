@@ -9,6 +9,7 @@
   const STORAGE_KEY = "eddys-hell-admin-v2";
   const RULE_VERSION = 3;
   const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
+  const STAGED_NEXT_KEY = "eddys-hell-next-week-v1";
   /** Mac archive volume for Reveal in Finder (https cannot open Finder). Easy to change. */
   const ARCHIVE_ROOT = "/Volumes/EddysHell/";
   const MEMBERS_PENDING_KEY = "eddys-hell-members-pending-v1";
@@ -42,6 +43,8 @@
   let currentResult = null;
   /** @type {object|null} published this-week from repo */
   let thisWeekFile = null;
+  /** @type {object|null} staged next-week (not live) */
+  let nextWeekFile = null;
   /** Dry-run candidate not yet set as this week */
   let pickIsCandidate = false;
   /** @type {object|null} auth user with role */
@@ -492,6 +495,20 @@
       console.warn("loadThisWeekFromCloud:", err);
     }
     try {
+      if (Auth.loadNextWeekFromCloud) {
+        const cloudNw = await Auth.loadNextWeekFromCloud();
+        if (cloudNw && (cloudNw.pickId || cloudNw.id)) {
+          nextWeekFile = { ...cloudNw, _source: "cloud" };
+          try {
+            localStorage.setItem(STAGED_NEXT_KEY, JSON.stringify(cloudNw));
+          } catch (_) { /* ok */ }
+          updateStagedHint();
+        }
+      }
+    } catch (err) {
+      console.warn("loadNextWeekFromCloud:", err);
+    }
+    try {
       const cloudRule = await Auth.loadRuleFromCloud();
       if (cloudRule && applyCloudRule(cloudRule)) changed = true;
     } catch (err) {
@@ -509,6 +526,7 @@
         }
       }
     }
+    updateStagedHint();
   }
 
   function payloadFromThisWeek(tw) {
@@ -534,17 +552,31 @@
 
   const YT_REQUIRED_TOAST =
     "Upload YouTube first — won't replace this week without a video.";
+  const STAGED_TOAST =
+    "Staged — live week stays until YouTube upload.";
 
-  function showYtRequiredToast() {
+  function showAcceptToast(msg, { ms = 5000, error = false } = {}) {
     const toast = $("accept-toast");
     if (toast) {
       toast.hidden = false;
-      toast.textContent = YT_REQUIRED_TOAST;
+      toast.textContent = msg;
       setTimeout(() => {
         toast.hidden = true;
-      }, 5000);
+      }, ms);
     }
-    setPublishStatus(YT_REQUIRED_TOAST, { error: true, sticky: true });
+    if (error) {
+      setPublishStatus(msg, { error: true, sticky: true });
+    } else {
+      setPublishStatus(msg, { sticky: true });
+    }
+  }
+
+  function showYtRequiredToast() {
+    showAcceptToast(YT_REQUIRED_TOAST, { error: true });
+  }
+
+  function showStagedToast() {
+    showAcceptToast(STAGED_TOAST, { ms: 6000 });
   }
 
   function isYoutubeRequiredError(err) {
@@ -554,6 +586,82 @@
         (err.message &&
           String(err.message).indexOf("Upload YouTube first") !== -1))
     );
+  }
+
+  function persistStagedLocal(payload) {
+    nextWeekFile = payload ? { ...payload, _source: payload._source || "local" } : null;
+    try {
+      if (payload) {
+        localStorage.setItem(STAGED_NEXT_KEY, JSON.stringify(payload));
+      } else {
+        localStorage.removeItem(STAGED_NEXT_KEY);
+      }
+    } catch (_) { /* ok */ }
+  }
+
+  function loadStagedLocal() {
+    try {
+      const raw = localStorage.getItem(STAGED_NEXT_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && (parsed.pickId || parsed.id) ? parsed : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function resolveStagedNext() {
+    if (nextWeekFile && (nextWeekFile.pickId || nextWeekFile.id)) {
+      const id = nextWeekFile.pickId || nextWeekFile.id;
+      return {
+        id,
+        pickId: id,
+        filename: nextWeekFile.filename,
+        folderType: nextWeekFile.folderType,
+        hr: nextWeekFile.hr,
+        relPath: nextWeekFile.relPath,
+        sizeBytes: nextWeekFile.sizeBytes,
+        mtime: nextWeekFile.mtime,
+        rawTags: nextWeekFile.rawTags || [],
+        pickedAt: nextWeekFile.pickedAt,
+        why: nextWeekFile.why,
+        matchCount: nextWeekFile.matchCount,
+        youtubeId: nextWeekFile.youtubeId || null,
+        youtubeUrl: nextWeekFile.youtubeUrl || null,
+        archiveRoot: nextWeekFile.archiveRoot || ARCHIVE_ROOT,
+        status: nextWeekFile.status || "staged",
+        source: nextWeekFile._source || "local",
+      };
+    }
+    return null;
+  }
+
+  function updateStagedHint() {
+    const el = $("staged-next-hint");
+    if (!el) return;
+    const staged = resolveStagedNext();
+    if (!staged) {
+      el.hidden = true;
+      el.textContent = "";
+      return;
+    }
+    el.hidden = false;
+    const name = staged.filename || staged.pickId || "pick";
+    el.textContent =
+      "Staged next: " +
+      name +
+      " — live week unchanged until YouTube upload.";
+  }
+
+  async function stagePayloadToCloud(payload) {
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.stageNextWeek) {
+      throw new Error("Auth stageNextWeek API missing");
+    }
+    const saved = await Auth.stageNextWeek(payload);
+    persistStagedLocal({ ...saved, _source: "cloud" });
+    updateStagedHint();
+    return saved;
   }
 
   async function publishPayloadToCloud(payload) {
@@ -621,13 +729,26 @@
       if (pickIsCandidate) {
         btnAccept.hidden = false;
         btnKeep.hidden = true;
+        // Candidate without youtubeId → stage only (no live write).
+        const f = currentResult && currentResult.pick;
+        const prev = resolveThisWeek();
+        const sameAsPrev =
+          f &&
+          prev &&
+          (prev.id === f.id ||
+            (prev.relPath && f.relPath && prev.relPath === f.relPath) ||
+            (prev.filename && f.filename && prev.filename === f.filename));
+        const hasYt = !!(sameAsPrev && prev && prev.youtubeId);
+        btnAccept.textContent = hasYt ? "Publish this week" : "Stage next week";
       } else {
         btnAccept.hidden = true;
         btnKeep.hidden = !resolveThisWeek();
+        if (btnKeep) btnKeep.textContent = "Publish this week";
       }
     }
     updateRevealFinderButton();
     updatePublishPendingHint();
+    updateStagedHint();
   }
 
   function absoluteMacPath(relPath) {
@@ -1450,12 +1571,63 @@
               ("https://www.youtube.com/watch?v=" + prev.youtubeId),
           }
         : { youtubeId: null, youtubeUrl: null };
-    // Hard rule: never replace live thisWeek without youtubeId already on the pick.
+
+    const payload = {
+      pickId: f.id,
+      filename: f.filename,
+      folderType: f.folderType,
+      hr: f.hr,
+      relPath: f.relPath,
+      sizeBytes: f.sizeBytes,
+      mtime: f.mtime,
+      rawTags: f.rawTags || [],
+      pickedAt: now,
+      why: currentResult.why,
+      matchCount: currentResult.matches.length,
+      youtubeId: keepYt.youtubeId,
+      youtubeUrl: keepYt.youtubeUrl,
+      archiveRoot: ARCHIVE_ROOT,
+    };
+
+    // No youtubeId → STAGE only (config/nextWeek). Never touch live thisWeek.
     if (!keepYt.youtubeId) {
-      showYtRequiredToast();
+      const btnAccept = $("btn-accept");
+      if (btnAccept) {
+        btnAccept.disabled = true;
+        btnAccept.textContent = "Staging…";
+      }
+      try {
+        await stagePayloadToCloud(payload);
+        // Record for rotation, but do NOT overwrite lastPick / thisWeekFile
+        // (those feed resolveThisWeek fallbacks and would look like a live change).
+        state.usedHistory = [
+          ...(state.usedHistory || []),
+          { id: f.id, pickedAt: now },
+        ];
+        saveState();
+        pickIsCandidate = true;
+        showStagedToast();
+      } catch (err) {
+        console.warn("stageNextWeek failed:", err);
+        showAcceptToast(
+          "Stage failed: " + ((err && err.message) || String(err)),
+          { error: true, ms: 6000 }
+        );
+      } finally {
+        if (btnAccept) {
+          btnAccept.disabled = false;
+          btnAccept.textContent = "Stage next week";
+        }
+      }
+      renderHistory();
+      updateMatchBadge();
+      updatePickActions();
+      renderSharedCheckins(resolveThisWeek());
+      renderYoutubeAdminControls();
       return;
     }
 
+    // Has youtubeId → publish LIVE thisWeek (same-pick re-publish or already-uploaded).
     state.lastPick = {
       id: f.id,
       filename: f.filename,
@@ -1477,22 +1649,6 @@
     ];
     saveState();
 
-    const payload = {
-      pickId: f.id,
-      filename: f.filename,
-      folderType: f.folderType,
-      hr: f.hr,
-      relPath: f.relPath,
-      sizeBytes: f.sizeBytes,
-      mtime: f.mtime,
-      rawTags: f.rawTags || [],
-      pickedAt: now,
-      why: currentResult.why,
-      matchCount: currentResult.matches.length,
-      youtubeId: keepYt.youtubeId,
-      youtubeUrl: keepYt.youtubeUrl,
-      archiveRoot: ARCHIVE_ROOT,
-    };
     thisWeekFile = { ...payload, _source: "local" };
     pickIsCandidate = false;
 
@@ -1504,13 +1660,15 @@
     const toast = $("accept-toast");
     try {
       await publishPayloadToCloud(payload);
-      toast.hidden = false;
-      toast.textContent = "Published — friends on beta will see this.";
+      if (toast) {
+        toast.hidden = false;
+        toast.textContent = "Published — friends on beta will see this.";
+      }
       setPublishStatus("");
+      persistStagedLocal(null);
     } catch (err) {
       console.warn("publishThisWeek failed:", err);
       if (isYoutubeRequiredError(err)) {
-        // Roll back local thisWeek mutation — leave prior live pick untouched.
         thisWeekFile = prev
           ? {
               pickId: prev.id || prev.pickId,
@@ -1536,8 +1694,10 @@
         try {
           localStorage.setItem(PENDING_PUBLISH_KEY, "1");
         } catch (_) { /* ok */ }
-        toast.hidden = false;
-        toast.textContent = "Saved locally — cloud publish failed.";
+        if (toast) {
+          toast.hidden = false;
+          toast.textContent = "Saved locally — cloud publish failed.";
+        }
         setPublishStatus(
           "Publish failed: " + ((err && err.message) || String(err)),
           { error: true, sticky: true }
@@ -1554,7 +1714,7 @@
     updateMatchBadge();
     updatePickActions();
     setTimeout(() => {
-      toast.hidden = true;
+      if (toast) toast.hidden = true;
     }, 4000);
     renderSharedCheckins(resolveThisWeek());
     renderYoutubeAdminControls();
@@ -2047,6 +2207,13 @@
     renderPTUI();
     // Firestore is live SoT for this-week + rule (Hosting JSON = bootstrap)
     await loadCloudConfig();
+    // Restore staged next-week from localStorage (does not affect live thisWeek).
+    const localStaged = loadStagedLocal();
+    if (localStaged) {
+      nextWeekFile = { ...localStaged, _source: "local" };
+      updateStagedHint();
+    }
+
     if (window.EddysHellAuth.watchThisWeek) {
       window.EddysHellAuth.watchThisWeek((cloud) => {
         if (applyCloudThisWeek(cloud)) {
@@ -2088,17 +2255,38 @@
       catalog,
       getState: () => state,
       /** Wednesday routine: true = auto dry-run/accept; false = keep this week.
-       *  Publish paths still require youtubeId (see canPublishThisWeek). */
+       *  Live thisWeek publish still requires youtubeId (see canPublishThisWeek).
+       *  Candidates without video → stageNextWeek / Stage next week button. */
       isAutoPickEnabled: () => {
         const r = (state && state.rule) || {};
         return r.autoPick !== false;
       },
-      /** Bot/admin: true only when the pick already has youtubeId — required to publish thisWeek. */
+      /** Bot/admin: true only when the pick already has youtubeId — required to publish live thisWeek. */
       canPublishThisWeek: (tw) => {
         const pick = tw || resolveThisWeek();
         return !!(pick && pick.youtubeId);
       },
+      /** Staged next-week candidate (not live). */
+      getStagedNextWeek: () => resolveStagedNext(),
+      /**
+       * Wednesday/bot after compress+YouTube upload: promote staged → live thisWeek
+       * with youtubeId. Leaves live alone if no staged doc or no id.
+       */
+      promoteAfterYoutubeUpload: async (youtubeId, youtubeUrl) => {
+        const Auth = window.EddysHellAuth;
+        if (!Auth || !Auth.promoteStagedToLive) {
+          throw new Error("Auth promoteStagedToLive API missing");
+        }
+        const live = await Auth.promoteStagedToLive(youtubeId, youtubeUrl);
+        thisWeekFile = { ...live, _source: "cloud" };
+        persistStagedLocal(null);
+        ensurePickViewFromPublished();
+        renderYoutubeAdminControls();
+        updatePickActions();
+        return live;
+      },
       YT_REQUIRED_TOAST,
+      STAGED_TOAST,
       resolveThisWeek,
       parseYoutubeId,
       ARCHIVE_ROOT,

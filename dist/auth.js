@@ -644,6 +644,7 @@
       }
     }
     // Hard rule: never replace live thisWeek without a YouTube video already attached.
+    // Staging without a video goes to config/nextWeek via stageNextWeek — not here.
     if (!youtubeId) {
       const err = new Error(
         "Upload YouTube first — won't replace this week without a video."
@@ -698,6 +699,121 @@
       firestoreStatus = "error";
       return null;
     }
+  }
+
+  /**
+   * Stage the next workout candidate WITHOUT touching live config/thisWeek.
+   * Used when admin picks a file that has no youtubeId yet. Live week stays
+   * until YouTube upload succeeds and promoteStagedToLive runs.
+   */
+  async function stageNextWeek(payload) {
+    requireFirestoreWrite();
+    const base = payload && typeof payload === "object" ? payload : {};
+    const pickId = base.pickId || base.id;
+    if (!pickId) {
+      throw new Error("stageNextWeek: missing pickId");
+    }
+    const youtubeId = base.youtubeId || null;
+    let youtubeUrl = base.youtubeUrl || null;
+    if (youtubeId && !youtubeUrl) {
+      youtubeUrl = "https://www.youtube.com/watch?v=" + youtubeId;
+    }
+    const docPayload = scrubUndefined({
+      pickId,
+      id: pickId,
+      filename: base.filename || "",
+      folderType: base.folderType || null,
+      hr: typeof base.hr === "number" ? base.hr : base.hr ?? null,
+      relPath: base.relPath || "",
+      sizeBytes: base.sizeBytes ?? null,
+      mtime: base.mtime || null,
+      rawTags: Array.isArray(base.rawTags) ? base.rawTags : [],
+      pickedAt: base.pickedAt || new Date().toISOString(),
+      why: base.why || "",
+      matchCount: base.matchCount ?? null,
+      // Only include youtube fields when present — never write youtubeId:null here
+      // in a way that could be confused with live; staged may omit video.
+      ...(youtubeId ? { youtubeId, youtubeUrl } : {}),
+      archiveRoot: base.archiveRoot || "/Volumes/EddysHell/",
+      note: base.note || null,
+      status: "staged",
+      stagedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser ? normalizeEmail(currentUser.email) : null,
+    });
+    await firestoreSetDoc(
+      firestoreDoc(fbDb, "config", "nextWeek"),
+      docPayload,
+      { merge: false }
+    );
+    firestoreStatus = "cloud";
+    return docPayload;
+  }
+
+  async function loadNextWeekFromCloud() {
+    if (!firestoreReady || !fbDb || !firestoreGetDoc || !firestoreDoc) {
+      return null;
+    }
+    try {
+      const snap = await firestoreGetDoc(firestoreDoc(fbDb, "config", "nextWeek"));
+      if (!snap.exists) return null;
+      const data = snap.data();
+      firestoreStatus = "cloud";
+      if (!data || !(data.pickId || data.id)) return null;
+      if (data.status === "promoted" || data.status === "cleared") return null;
+      return data;
+    } catch (err) {
+      console.warn("Firestore nextWeek read failed:", err);
+      firestoreStatus = "error";
+      return null;
+    }
+  }
+
+  /**
+   * After compress+YouTube upload succeeds: write live config/thisWeek from the
+   * staged nextWeek pick + youtubeId. Never promotes without a video id.
+   */
+  async function promoteStagedToLive(youtubeId, youtubeUrl) {
+    const id = youtubeId || null;
+    if (!id) {
+      const err = new Error(
+        "Upload YouTube first — won't replace this week without a video."
+      );
+      err.code = "youtube-required";
+      throw err;
+    }
+    const staged = await loadNextWeekFromCloud();
+    if (!staged) {
+      throw new Error("No staged next week to promote — Stage next week first.");
+    }
+    const url =
+      youtubeUrl ||
+      staged.youtubeUrl ||
+      ("https://www.youtube.com/watch?v=" + id);
+    const live = await publishThisWeek({
+      ...staged,
+      youtubeId: id,
+      youtubeUrl: url,
+    });
+    // Mark staged doc promoted so it is no longer treated as pending.
+    try {
+      await firestoreSetDoc(
+        firestoreDoc(fbDb, "config", "nextWeek"),
+        scrubUndefined({
+          status: "promoted",
+          promotedAt: new Date().toISOString(),
+          promotedYoutubeId: id,
+          pickId: staged.pickId || staged.id,
+          filename: staged.filename || "",
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser ? normalizeEmail(currentUser.email) : null,
+        }),
+        { merge: true }
+      );
+    } catch (err) {
+      console.warn("nextWeek promote mark failed:", err);
+    }
+    return live;
   }
 
   /** @type {(() => void)|null} */
@@ -1267,6 +1383,9 @@
     publishThisWeek,
     loadThisWeekFromCloud,
     watchThisWeek,
+    stageNextWeek,
+    loadNextWeekFromCloud,
+    promoteStagedToLive,
     publishRule,
     loadRuleFromCloud,
     CHECKINS_KEY,

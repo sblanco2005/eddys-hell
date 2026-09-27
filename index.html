@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css?v=1790527694" />
+  <link rel="stylesheet" href="styles.css?v=1790528375" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -235,7 +235,7 @@
           </header>
           <div class="empty">
             <p class="empty-title">No candidate yet</p>
-            <p class="hint">Hit <strong>Dry-run pick</strong> above to preview a file — friends only see it after you <strong>Publish this week</strong>.</p>
+            <p class="hint">Hit <strong>Dry-run pick</strong> above to preview a file — <strong>Stage next week</strong> saves the candidate without changing what friends see. Live week updates only after YouTube upload.</p>
           </div>
         </article>
 
@@ -244,7 +244,7 @@
             <h2>Candidate pick</h2>
             <span class="badge accent" id="pick-type">—</span>
           </header>
-          <p class="hint candidate-admin-hint">Next upload (admin) — not visible to friends until you Publish this week.</p>
+          <p class="hint candidate-admin-hint">Next upload (admin) — Stage next week keeps live week unchanged until YouTube upload.</p>
           <h3 class="pick-name" id="pick-filename">—</h3>
           <dl class="meta-grid">
             <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
@@ -263,9 +263,10 @@
           <div class="actions" id="pick-actions">
             <button type="button" class="btn secondary" id="btn-again">Pick again</button>
             <button type="button" class="btn accent" id="btn-keep" hidden>Publish this week</button>
-            <button type="button" class="btn accent" id="btn-accept" hidden>Publish this week</button>
+            <button type="button" class="btn accent" id="btn-accept" hidden>Stage next week</button>
           </div>
           <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
+          <p class="hint staged-next-hint" id="staged-next-hint" hidden></p>
           <p class="hint publish-pending" id="publish-pending" hidden></p>
         </article>
 
@@ -340,7 +341,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=1790527694"></script>
-  <script src="app.js?v=1790527694"></script>
+  <script src="auth.js?v=1790528375"></script>
+  <script src="app.js?v=1790528375"></script>
 </body>
 </html>

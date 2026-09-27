@@ -159,3 +159,18 @@ Blocked: acceptPick / keepThisWeek / Auth.publishThisWeek / scripts/set-this-wee
 when youtubeId missing (same-pick preserve still fills id before the gate).
 Wednesday/bot: EddysHell.canPublishThisWeek(); auto-accept without YT is refused.
 Cache-bust ?v=1790527694. Stable untouched. Do NOT retag v1.0.0.
+
+## 2026-09-27 ~1:00 PM ET — beta only (Stage next week vs live)
+Santiago: live this-week was still overridden when picking another workout
+and hitting Publish without youtubeId. Correct model:
+  - Stage next week → Firestore config/nextWeek (+ local eddys-hell-next-week-v1)
+    Toast: "Staged — live week stays until YouTube upload."
+  - Live config/thisWeek ONLY after YouTube upload succeeds (promoteStagedToLive /
+    EddysHell.promoteAfterYoutubeUpload) with youtubeId set.
+  - Never write youtubeId:null over live; never replace live with a no-video pick.
+  - Button: "Stage next week" for candidates without video; "Publish this week"
+    only when youtubeId already on the pick (same-pick re-publish).
+Auth: stageNextWeek, loadNextWeekFromCloud, promoteStagedToLive.
+Rules: config/nextWeek admin write / signed-in read.
+Cache-bust ?v=1790528375. Deploy hosting:beta + firestore:rules.
+Stable untouched. Do NOT retag v1.0.0.
