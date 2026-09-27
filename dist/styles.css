@@ -939,6 +939,17 @@ input:focus {
 .nonlive-pick-actions {
   margin-top: 0.75rem;
 }
+.nonlive-always-actions {
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.nonlive-always-actions .btn {
+  flex: 0 1 auto;
+}
+.nonlive-path-row {
+  margin-top: 0.5rem;
+}
 #staged-next-card {
   margin: 0.75rem 0;
   padding: 0.75rem 0.85rem;
