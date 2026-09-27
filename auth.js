@@ -39,15 +39,29 @@
     return /\.github\.io$/i.test(location.hostname);
   }
 
-  /** Firebase Hosting origins where authDomain can match the page origin. */
+  /** True on the beta Hosting site (eddy-s-hell-beta.web.app). Never steer beta → stable. */
+  function isBetaHost() {
+    const h = location.hostname || "";
+    return /beta/i.test(h) || h === "eddy-s-hell-beta.web.app";
+  }
+
+  /** Firebase Hosting origins (stable + beta + any *.web.app / *.firebaseapp.com). */
   function isFirebaseHosting() {
     const h = location.hostname;
     return (
       h === "eddy-s-hell.web.app" ||
+      h === "eddy-s-hell-beta.web.app" ||
       h === "eddy-s-hell.firebaseapp.com" ||
+      h === "eddy-s-hell-beta.firebaseapp.com" ||
       /\.web\.app$/i.test(h) ||
       /\.firebaseapp\.com$/i.test(h)
     );
+  }
+
+  /** Hostname to mention in popup/privacy hints (current host on beta/stable). */
+  function hostingHintHost() {
+    if (isFirebaseHosting()) return location.hostname;
+    return "eddy-s-hell.web.app";
   }
 
   /**
@@ -118,6 +132,8 @@
   }
 
   function preferredLiveUrl() {
+    // Beta is first-class — never auto-steer beta users to stable.
+    if (isBetaHost()) return "https://eddy-s-hell-beta.web.app/";
     return "https://eddy-s-hell.web.app/";
   }
 
@@ -138,7 +154,7 @@
       }
       if (isFirebaseHosting()) {
         return (
-          "Sign-in could not start. Allow popups for eddy-s-hell.web.app, or in Safari " +
+          "Sign-in could not start. Allow popups for " + hostingHintHost() + ", or in Safari " +
           "turn off \"Reduce Advanced Privacy Protections\" for this site, then try again."
         );
       }
@@ -151,7 +167,7 @@
       if (isFirebaseHosting()) {
         return (
           "Popup blocked or closed. Allow popups for this site, or reduce privacy " +
-          "protections for eddy-s-hell.web.app, then try again."
+          "protections for " + hostingHintHost() + ", then try again."
         );
       }
       return (
@@ -738,9 +754,10 @@
 
   /**
    * Auth strategy:
-   * - eddy-s-hell.web.app / *.firebaseapp.com: signInWithPopup FIRST (what works for
-   *   Santiago), then fall back to signInWithRedirect if popup blocked/cancelled.
-   * - github.io: steer users to web.app; popup ok if they insist. Never redirect
+   * - eddy-s-hell.web.app / eddy-s-hell-beta.web.app / *.firebaseapp.com:
+   *   signInWithPopup FIRST, then fall back to signInWithRedirect if popup blocked.
+   *   Beta is first-class — do NOT steer beta users to stable.
+   * - github.io: steer users to stable web.app; popup ok if they insist. Never redirect
    *   (cross-origin authDomain — getRedirectResult cannot restore the session).
    * initializeAuth MUST include popupRedirectResolver or Firebase throws
    * auth/argument-error on both popup and redirect.
@@ -1030,6 +1047,7 @@
     isLocalhost,
     isGithubPages,
     isFirebaseHosting,
+    isBetaHost,
     isInAppBrowser,
     publicAppUrl,
     openInBrowserMessage,

@@ -165,6 +165,18 @@ body {
   color: #ff8a72;
 }
 
+.badge.beta-badge {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  background: rgba(255, 196, 0, 0.15);
+  color: #e6b800;
+  border: 1px solid rgba(230, 184, 0, 0.35);
+}
+
 /* Fields */
 .field {
   margin-bottom: 16px;

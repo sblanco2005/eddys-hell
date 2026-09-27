@@ -536,7 +536,22 @@
     const mirrorBanner = $("host-mirror-banner");
     if (mirrorBanner) {
       const onPages = Auth.isGithubPages && Auth.isGithubPages();
-      mirrorBanner.hidden = !onPages;
+      // Never show "prefer stable" banner on beta — beta is first-class.
+      const onBeta = Auth.isBetaHost && Auth.isBetaHost();
+      mirrorBanner.hidden = !onPages || onBeta;
+    }
+
+    const betaBadge = $("beta-badge");
+    if (betaBadge) {
+      const onBeta = Auth.isBetaHost && Auth.isBetaHost();
+      betaBadge.hidden = !onBeta;
+      if (onBeta) {
+        document.title = "Eddy's Hell · BETA";
+        const sub = $("brand-sub");
+        if (sub && !/beta/i.test(sub.textContent || "")) {
+          sub.textContent = "Thursday workout · beta";
+        }
+      }
     }
 
     const inAppEl = $("auth-inapp");
