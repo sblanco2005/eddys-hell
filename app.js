@@ -741,7 +741,8 @@
     const btn = $("btn-dryrun");
     if (!btn) return;
     const hasCandidate = !!(currentResult && pickIsCandidate && currentResult.pick);
-    btn.textContent = hasCandidate ? "Pick again" : "Dry-run pick";
+    const hasStaged = !!resolveStagedNext();
+    btn.textContent = hasCandidate || hasStaged ? "Pick again" : "Dry-run pick";
   }
 
   function runDryRunOrAgain() {
@@ -786,9 +787,10 @@
   function getRevealRelPath() {
     const fromPick =
       (currentResult && currentResult.pick && currentResult.pick.relPath) ||
-      (state.lastPick && state.lastPick.relPath) ||
       "";
     if (fromPick) return String(fromPick);
+    const staged = resolveStagedNext();
+    if (staged && staged.relPath) return String(staged.relPath);
     const pathEl = $("pick-path");
     const t = pathEl && pathEl.textContent ? pathEl.textContent.trim() : "";
     if (t && t !== "—") return t;
@@ -799,10 +801,8 @@
     const btnReveal = $("btn-reveal-finder");
     const row = $("path-reveal-row");
     const pathDisplay = $("reveal-path-display");
-    const pickResult = $("pick-result");
-    const showing = !!(pickResult && !pickResult.hidden);
     const rel = getRevealRelPath();
-    const show = !!(showing && rel);
+    const show = !!rel;
     if (btnReveal) {
       btnReveal.hidden = !show;
       btnReveal.textContent = "Reveal in Finder";
@@ -1596,16 +1596,18 @@
     $("pick-empty").hidden = !empty;
     $("pick-result").hidden = !result;
     $("pick-error").hidden = !error;
-    if (!result) {
-      const row = $("path-reveal-row");
-      const btnReveal = $("btn-reveal-finder");
-      if (row) row.hidden = true;
-      if (btnReveal) btnReveal.hidden = true;
-    }
+    // Reveal row is driven by getRevealRelPath() (staged or dry-run), not pick-result alone.
+    updateRevealFinderButton();
   }
 
   function renderPickResult(result) {
     const f = result.pick;
+    const titleEl = $("pick-preview-title");
+    if (titleEl) {
+      titleEl.textContent = result._fromStaged
+        ? "Staged candidate"
+        : "Dry-run candidate";
+    }
     $("pick-type").textContent = f.folderType || "—";
     $("pick-filename").textContent = f.filename || "—";
     $("pick-hr").textContent = f.hr != null ? String(f.hr) : "missing";
@@ -1614,12 +1616,15 @@
     $("pick-path").textContent = f.relPath || "—";
     $("pick-size").textContent = formatBytes(f.sizeBytes);
     $("pick-mtime").textContent = formatMtime(f.mtime);
-    $("pick-count").textContent = String(result.matches.length);
+    $("pick-count").textContent = String(
+      (result.matches && result.matches.length) || result.matchCount || 1
+    );
     $("pick-why").textContent = result.why;
     showPickPanels({ empty: false, result: true, error: false });
     $("accept-toast").hidden = true;
     updatePickActions();
     updateRevealFinderButton();
+    updateDryRunButtonLabel();
     renderYoutubeAdminControls();
   }
 
@@ -1996,18 +2001,49 @@
   }
 
   function ensurePickViewFromPublished() {
-    // Live Candidate pick card always reflects resolveThisWeek() (youtubeId required).
+    // Live Candidate pick = thisWeek with youtubeId only (read-only). Never dry-run / No matches.
     renderLiveWeekCard();
     if (currentResult && pickIsCandidate) {
-      /* keep current dry-run candidate in Non-live section */
       renderPickResult(currentResult);
+      updateDryRunButtonLabel();
+      updateStagedHint();
       return;
     }
-    // Do NOT paint live thisWeek into Non-live pick-result (Reveal/Stage live there only).
+    // Hydrate Non-live from staged nextWeek so Pick again / Reveal / Stage stay visible.
+    const staged = resolveStagedNext();
+    if (staged) {
+      const id = staged.pickId || staged.id;
+      const f =
+        (catalog && catalog.files && catalog.files.find((x) => x.id === id)) || {
+          id,
+          filename: staged.filename,
+          folderType: staged.folderType,
+          hr: staged.hr,
+          relPath: staged.relPath,
+          sizeBytes: staged.sizeBytes,
+          mtime: staged.mtime,
+          rawTags: staged.rawTags || [],
+        };
+      currentResult = {
+        ok: true,
+        pick: f,
+        matches: Array(staged.matchCount || 1).fill(f),
+        why: staged.why || "Staged next week (not live)",
+        _fromStaged: true,
+      };
+      pickIsCandidate = true;
+      renderPickResult(currentResult);
+      updateDryRunButtonLabel();
+      updateStagedHint();
+      return;
+    }
+    // Do NOT paint live thisWeek into Non-live (Candidate pick LIVE owns that).
     pickIsCandidate = false;
     currentResult = null;
     showPickPanels({ empty: true, result: false, error: false });
     updatePickActions();
+    updateDryRunButtonLabel();
+    updateStagedHint();
   }
 
   function restoreLastPickIfAny() {
