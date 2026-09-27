@@ -1,0 +1,13 @@
+{
+  "rule": {
+    "folderTypes": ["Full"],
+    "minHR": 120,
+    "requireHR": true,
+    "recency": "recent",
+    "rotate": true,
+    "rotateWeeks": 8,
+    "tagContains": ""
+  },
+  "usedHistory": [],
+  "lastPick": null
+}

@@ -1,0 +1,8 @@
+{
+  "_comment": "Member allowlist. Empty emails = only admins can use the app. Add friends' emails here, then re-run scripts/publish-pages.sh so other devices get the list. Admins in admins.json are always allowed.",
+  "emails": [
+    "ariannablanco2025@gmail.com",
+    "jaymeplattner27@gmail.com"
+  ],
+  "updatedAt": "2026-09-26T21:12:57Z"
+}

@@ -1,0 +1,16 @@
+{
+  "pickId": "9f757b1922",
+  "filename": "HR 140 2022-06-06 at 4.31.48 PM.mov",
+  "folderType": "Full",
+  "hr": 140,
+  "relPath": "Full/2022/Q2 2022 Full Body/HR 140 2022-06-06 at 4.31.48 PM.mov",
+  "sizeBytes": 4910505316,
+  "mtime": "2022-06-06T17:24:35-04:00",
+  "rawTags": [],
+  "pickedAt": "2026-09-26T14:50:13.440Z",
+  "why": "Type: Full \u00b7 HR 140 > 120 \u00b7 prefer recent (top pool) \u00b7 rotate: excluded last 8w \u00b7 20 candidates",
+  "matchCount": 20,
+  "note": "youtubeId is set by the publish pipeline. Admin Set-as-this-week updates browser state only until scripts/publish-pages.sh syncs data/this-week.json.",
+  "youtubeId": "EAFLtVigQHY",
+  "youtubeUrl": "https://www.youtube.com/watch?v=EAFLtVigQHY"
+}

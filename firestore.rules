@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    function emailLower() {
+      return request.auth.token.email.lower();
+    }
+    // Check-ins: any signed-in allowlisted user can read; writers must match their own email.
+    // App-level allowlist still gates who can sign in.
+    match /checkins/{docId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.email is string
+        && request.resource.data.email == emailLower()
+        && request.resource.data.pickId is string
+        && request.resource.data.keys().hasAll(['email', 'displayName', 'pickId', 'at']);
+      allow delete: if false;
+    }
+  }
+}

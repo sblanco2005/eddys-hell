@@ -1,0 +1,2339 @@
+{
+  "meta": {
+    "scannedAt": "2026-09-26T10:27:16-04:00",
+    "root": "/Volumes/SantiTB/Eddy's Hell",
+    "fileCount": 139,
+    "totalBytes": 805704309465,
+    "extensionsIncluded": [
+      ".mov",
+      ".mp4",
+      ".m4v"
+    ],
+    "looseRootFilesIncluded": 2,
+    "accessIssues": []
+  },
+  "files": [
+    {
+      "id": "a886392c76",
+      "filename": "Screen Recording 2021-07-13 at 1.42.57 PM 3.38.30 PM.mov",
+      "relPath": "CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-07-13 at 1.42.57 PM 3.38.30 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-07-13 at 1.42.57 PM 3.38.30 PM.mov",
+      "sizeBytes": 4667809333,
+      "mtime": "2021-07-13T14:47:10-04:00",
+      "folderType": "Circuit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-07-13"
+    },
+    {
+      "id": "9534385e27",
+      "filename": "Screen Recording 2021-07-27 at 1.37.41 PM.mov",
+      "relPath": "CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-07-27 at 1.37.41 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-07-27 at 1.37.41 PM.mov",
+      "sizeBytes": 6014313540,
+      "mtime": "2021-07-27T15:00:32-04:00",
+      "folderType": "Circuit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-07-27"
+    },
+    {
+      "id": "3fab54577e",
+      "filename": "Screen Recording 2021-08-03 at 1.37.53 PM.mov",
+      "relPath": "CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-08-03 at 1.37.53 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-08-03 at 1.37.53 PM.mov",
+      "sizeBytes": 5243824844,
+      "mtime": "2021-08-03T14:49:47-04:00",
+      "folderType": "Circuit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-08-03"
+    },
+    {
+      "id": "f8d614a387",
+      "filename": "Screen Recording 2021-08-17 at 1.35.48 PM.mov",
+      "relPath": "CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-08-17 at 1.35.48 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-08-17 at 1.35.48 PM.mov",
+      "sizeBytes": 5646292474,
+      "mtime": "2021-08-17T14:36:37-04:00",
+      "folderType": "Circuit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-08-17"
+    },
+    {
+      "id": "193ac47ffa",
+      "filename": "Screen Recording 2021-08-24 at 1.35.02 PM.mov",
+      "relPath": "CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-08-24 at 1.35.02 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-08-24 at 1.35.02 PM.mov",
+      "sizeBytes": 5646036547,
+      "mtime": "2021-08-24T14:36:02-04:00",
+      "folderType": "Circuit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-08-24"
+    },
+    {
+      "id": "047c8021d2",
+      "filename": "Screen Recording 2021-08-31 at 1.33.47 PM.mov",
+      "relPath": "CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-08-31 at 1.33.47 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-08-31 at 1.33.47 PM.mov",
+      "sizeBytes": 5817151322,
+      "mtime": "2021-08-31T14:36:22-04:00",
+      "folderType": "Circuit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-08-31"
+    },
+    {
+      "id": "d2c1d93bb0",
+      "filename": "Screen Recording 2021-11-25 at 10.06.39 AM.mov",
+      "relPath": "CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-11-25 at 10.06.39 AM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2021/Q2 2021 Circuit/Screen Recording 2021-11-25 at 10.06.39 AM.mov",
+      "sizeBytes": 5317687808,
+      "mtime": "2021-11-25T11:03:55-05:00",
+      "folderType": "Circuit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-11-25"
+    },
+    {
+      "id": "c903434afe",
+      "filename": "HR 143 2022-06-08 at 4.22.06 PM.mov",
+      "relPath": "CIrcuit/2022/Q2 2022 50:10/HR 143 2022-06-08 at 4.22.06 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2022/Q2 2022 50:10/HR 143 2022-06-08 at 4.22.06 PM.mov",
+      "sizeBytes": 6580207222,
+      "mtime": "2022-06-08T17:32:48-04:00",
+      "folderType": "Circuit",
+      "hr": 143,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-06-08"
+    },
+    {
+      "id": "be2b276d06",
+      "filename": "HR 151  2022-05-04 at 4.20.14 PM.mov",
+      "relPath": "CIrcuit/2022/Q2 2022 50:10/HR 151  2022-05-04 at 4.20.14 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2022/Q2 2022 50:10/HR 151  2022-05-04 at 4.20.14 PM.mov",
+      "sizeBytes": 6190567595,
+      "mtime": "2022-05-04T17:26:45-04:00",
+      "folderType": "Circuit",
+      "hr": 151,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-05-04"
+    },
+    {
+      "id": "dc2542511f",
+      "filename": "HR 152 Screen Recording 2022-06-01 at 4.23.43 PM.mov",
+      "relPath": "CIrcuit/2022/Q2 2022 50:10/HR 152 Screen Recording 2022-06-01 at 4.23.43 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2022/Q2 2022 50:10/HR 152 Screen Recording 2022-06-01 at 4.23.43 PM.mov",
+      "sizeBytes": 6025414858,
+      "mtime": "2022-06-01T17:28:27-04:00",
+      "folderType": "Circuit",
+      "hr": 152,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-06-01"
+    },
+    {
+      "id": "6f9e5bfb86",
+      "filename": "HR 153 2022-05-18 at 4.21.47 PM.mov",
+      "relPath": "CIrcuit/2022/Q2 2022 50:10/HR 153 2022-05-18 at 4.21.47 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2022/Q2 2022 50:10/HR 153 2022-05-18 at 4.21.47 PM.mov",
+      "sizeBytes": 6275810333,
+      "mtime": "2022-05-18T17:29:13-04:00",
+      "folderType": "Circuit",
+      "hr": 153,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-05-18"
+    },
+    {
+      "id": "7cedf80a24",
+      "filename": "HR 156 -2022-05-11 at 4.20.57 PM.mov",
+      "relPath": "CIrcuit/2022/Q2 2022 50:10/HR 156 -2022-05-11 at 4.20.57 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2022/Q2 2022 50:10/HR 156 -2022-05-11 at 4.20.57 PM.mov",
+      "sizeBytes": 6202316614,
+      "mtime": "2022-05-11T17:27:36-04:00",
+      "folderType": "Circuit",
+      "hr": 156,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-05-11"
+    },
+    {
+      "id": "97d8c4a19c",
+      "filename": "HR 158 -Injured -022-04-14 at 4.21.09 PM.mov",
+      "relPath": "CIrcuit/2022/Q2 2022 50:10/HR 158 -Injured -022-04-14 at 4.21.09 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2022/Q2 2022 50:10/HR 158 -Injured -022-04-14 at 4.21.09 PM.mov",
+      "sizeBytes": 5927611177,
+      "mtime": "2022-04-14T17:24:54-04:00",
+      "folderType": "Circuit",
+      "hr": 158,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "-Injured"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "15801c1fd2",
+      "filename": "HR 159 -Injured- 2022-04-27 at 4.20.03 PM.mov",
+      "relPath": "CIrcuit/2022/Q2 2022 50:10/HR 159 -Injured- 2022-04-27 at 4.20.03 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/CIrcuit/2022/Q2 2022 50:10/HR 159 -Injured- 2022-04-27 at 4.20.03 PM.mov",
+      "sizeBytes": 6155934322,
+      "mtime": "2022-04-27T17:26:37-04:00",
+      "folderType": "Circuit",
+      "hr": 159,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "-Injured-"
+      ],
+      "dateInName": "2022-04-27"
+    },
+    {
+      "id": "9086cb19c6",
+      "filename": "CrossFit  2024-04-16.mov",
+      "relPath": "Crossfit/CrossFit  2024-04-16.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Crossfit/CrossFit  2024-04-16.mov",
+      "sizeBytes": 5688420447,
+      "mtime": "2024-04-17T18:15:15-04:00",
+      "folderType": "CrossFit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": "CrossFit",
+      "rawTags": [
+        "CrossFit"
+      ],
+      "dateInName": "2024-04-16",
+      "typeHints": [
+        "CrossFit"
+      ]
+    },
+    {
+      "id": "0c742850ce",
+      "filename": "CrossFit 151 .mov",
+      "relPath": "Crossfit/CrossFit 151 .mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Crossfit/CrossFit 151 .mov",
+      "sizeBytes": 9836531984,
+      "mtime": "2024-09-12T17:12:46-04:00",
+      "folderType": "CrossFit",
+      "hr": 151,
+      "sessionNum": null,
+      "typeHint": "CrossFit",
+      "rawTags": [
+        "CrossFit"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "CrossFit"
+      ]
+    },
+    {
+      "id": "c3bd218f0d",
+      "filename": "CrossFit 2024-05-23 .mov",
+      "relPath": "Crossfit/CrossFit 2024-05-23 .mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Crossfit/CrossFit 2024-05-23 .mov",
+      "sizeBytes": 5571724557,
+      "mtime": "2024-05-30T06:15:00-04:00",
+      "folderType": "CrossFit",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": "CrossFit",
+      "rawTags": [
+        "CrossFit"
+      ],
+      "dateInName": "2024-05-23",
+      "typeHints": [
+        "CrossFit"
+      ]
+    },
+    {
+      "id": "41cfd5042c",
+      "filename": "Crossfit 139 Abs Slams.mov",
+      "relPath": "Crossfit/Crossfit 139 Abs Slams.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Crossfit/Crossfit 139 Abs Slams.mov",
+      "sizeBytes": 8074662034,
+      "mtime": "2024-09-19T17:12:10-04:00",
+      "folderType": "CrossFit",
+      "hr": 139,
+      "sessionNum": null,
+      "typeHint": "CrossFit",
+      "rawTags": [
+        "Crossfit",
+        "Abs",
+        "Slams"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "CrossFit"
+      ]
+    },
+    {
+      "id": "4bc39f6524",
+      "filename": "HR 137 2022-05-23 at 4.36.43 PM.mov",
+      "relPath": "Full/2022/Q2 2022 Full Body/HR 137 2022-05-23 at 4.36.43 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q2 2022 Full Body/HR 137 2022-05-23 at 4.36.43 PM.mov",
+      "sizeBytes": 4605692155,
+      "mtime": "2022-05-23T17:26:12-04:00",
+      "folderType": "Full",
+      "hr": 137,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-05-23"
+    },
+    {
+      "id": "e2a9c9a4c2",
+      "filename": "HR 138  2022-05-09 at 4.19.17 PM.mov",
+      "relPath": "Full/2022/Q2 2022 Full Body/HR 138  2022-05-09 at 4.19.17 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q2 2022 Full Body/HR 138  2022-05-09 at 4.19.17 PM.mov",
+      "sizeBytes": 5006722865,
+      "mtime": "2022-05-09T17:13:16-04:00",
+      "folderType": "Full",
+      "hr": 138,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-05-09"
+    },
+    {
+      "id": "9f757b1922",
+      "filename": "HR 140 2022-06-06 at 4.31.48 PM.mov",
+      "relPath": "Full/2022/Q2 2022 Full Body/HR 140 2022-06-06 at 4.31.48 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q2 2022 Full Body/HR 140 2022-06-06 at 4.31.48 PM.mov",
+      "sizeBytes": 4910505316,
+      "mtime": "2022-06-06T17:24:35-04:00",
+      "folderType": "Full",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-06-06"
+    },
+    {
+      "id": "94a5a55b6a",
+      "filename": "HR 141  2022-04-25 at 4.28.17 PM.mov",
+      "relPath": "Full/2022/Q2 2022 Full Body/HR 141  2022-04-25 at 4.28.17 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q2 2022 Full Body/HR 141  2022-04-25 at 4.28.17 PM.mov",
+      "sizeBytes": 5569951595,
+      "mtime": "2022-04-25T17:28:07-04:00",
+      "folderType": "Full",
+      "hr": 141,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-04-25"
+    },
+    {
+      "id": "eca0c116fb",
+      "filename": "HR 144  2022-05-02 at 4.22.12 PM.mov",
+      "relPath": "Full/2022/Q2 2022 Full Body/HR 144  2022-05-02 at 4.22.12 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q2 2022 Full Body/HR 144  2022-05-02 at 4.22.12 PM.mov",
+      "sizeBytes": 6231462250,
+      "mtime": "2022-05-02T17:29:09-04:00",
+      "folderType": "Full",
+      "hr": 144,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-05-02"
+    },
+    {
+      "id": "9bce4ed09e",
+      "filename": "141 Upper also PM.mov",
+      "relPath": "Full/2022/Q4 2022 FullBody/141 Upper also PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q4 2022 FullBody/141 Upper also PM.mov",
+      "sizeBytes": 6284616566,
+      "mtime": "2022-10-20T16:56:17-04:00",
+      "folderType": "Full",
+      "hr": 141,
+      "sessionNum": null,
+      "typeHint": "Upper",
+      "rawTags": [
+        "Upper",
+        "also"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Upper"
+      ]
+    },
+    {
+      "id": "3059ddbcfb",
+      "filename": "Full Body Last Class (burn pushups).mov",
+      "relPath": "Full/2022/Q4 2022 FullBody/Full Body Last Class (burn pushups).mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q4 2022 FullBody/Full Body Last Class (burn pushups).mov",
+      "sizeBytes": 6493245354,
+      "mtime": "2022-12-16T17:03:23-05:00",
+      "folderType": "Full",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": "Full Body",
+      "rawTags": [
+        "Full",
+        "Body",
+        "Last",
+        "Class",
+        "burn",
+        "pushups"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Full Body"
+      ]
+    },
+    {
+      "id": "e9438ec971",
+      "filename": "HR 135 BB Chest.mov",
+      "relPath": "Full/2022/Q4 2022 FullBody/HR 135 BB Chest.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q4 2022 FullBody/HR 135 BB Chest.mov",
+      "sizeBytes": 6268046672,
+      "mtime": "2022-10-27T16:58:12-04:00",
+      "folderType": "Full",
+      "hr": 135,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "BB",
+        "Chest"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "676e5e3da0",
+      "filename": "HR 135 BB Pullups DL HT PM.mov",
+      "relPath": "Full/2022/Q4 2022 FullBody/HR 135 BB Pullups DL HT PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q4 2022 FullBody/HR 135 BB Pullups DL HT PM.mov",
+      "sizeBytes": 5066325555,
+      "mtime": "2022-11-10T16:56:53-05:00",
+      "folderType": "Full",
+      "hr": 135,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "BB",
+        "Pullups",
+        "DL",
+        "HT"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "d24c7dd796",
+      "filename": "HR 138 HT PM.mov",
+      "relPath": "Full/2022/Q4 2022 FullBody/HR 138 HT PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q4 2022 FullBody/HR 138 HT PM.mov",
+      "sizeBytes": 4469942410,
+      "mtime": "2022-11-03T16:48:19-04:00",
+      "folderType": "Full",
+      "hr": 138,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "HT"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "88fd9760a8",
+      "filename": "HR 142 PM.mov",
+      "relPath": "Full/2022/Q4 2022 FullBody/HR 142 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q4 2022 FullBody/HR 142 PM.mov",
+      "sizeBytes": 6530449489,
+      "mtime": "2022-10-13T17:01:03-04:00",
+      "folderType": "Full",
+      "hr": 142,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "9db214705a",
+      "filename": "HR 146 45m PM.mov",
+      "relPath": "Full/2022/Q4 2022 FullBody/HR 146 45m PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q4 2022 FullBody/HR 146 45m PM.mov",
+      "sizeBytes": 6309801129,
+      "mtime": "2022-09-29T16:58:26-04:00",
+      "folderType": "Full",
+      "hr": 146,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "45m"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "3bb67d7487",
+      "filename": "Screen Recording 2022-12-01 at 4.16.14 PM.mov",
+      "relPath": "Full/2022/Q4 2022 FullBody/Screen Recording 2022-12-01 at 4.16.14 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2022/Q4 2022 FullBody/Screen Recording 2022-12-01 at 4.16.14 PM.mov",
+      "sizeBytes": 3973908693,
+      "mtime": "2022-12-01T16:59:37-05:00",
+      "folderType": "Full",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-12-01"
+    },
+    {
+      "id": "5ff31e3d5c",
+      "filename": "HR 127 FSqts, BB, SDlift.mov",
+      "relPath": "Full/2023/Q2 2023/HR 127 FSqts, BB, SDlift.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q2 2023/HR 127 FSqts, BB, SDlift.mov",
+      "sizeBytes": 7272259807,
+      "mtime": "2023-06-06T17:53:58-04:00",
+      "folderType": "Full",
+      "hr": 127,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "FSqts",
+        "BB",
+        "SDlift"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "fdd4e49a8b",
+      "filename": "HR 137  DL DB PM.mov",
+      "relPath": "Full/2023/Q2 2023/HR 137  DL DB PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q2 2023/HR 137  DL DB PM.mov",
+      "sizeBytes": 7128463028,
+      "mtime": "2023-06-13T17:52:27-04:00",
+      "folderType": "Full",
+      "hr": 137,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "DL",
+        "DB"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "9a430882cf",
+      "filename": "HR 140 DL ROWS PM.mov",
+      "relPath": "Full/2023/Q2 2023/HR 140 DL ROWS PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q2 2023/HR 140 DL ROWS PM.mov",
+      "sizeBytes": 7075403093,
+      "mtime": "2023-05-04T17:50:37-04:00",
+      "folderType": "Full",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "DL",
+        "ROWS"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "a5b489143a",
+      "filename": "HR 140 SDL BB PM.mov",
+      "relPath": "Full/2023/Q2 2023/HR 140 SDL BB PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q2 2023/HR 140 SDL BB PM.mov",
+      "sizeBytes": 6086568203,
+      "mtime": "2023-06-22T16:38:00-04:00",
+      "folderType": "Full",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "SDL",
+        "BB"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "87f3c238b3",
+      "filename": "HR 140 SQUATS BB Pullups.mov",
+      "relPath": "Full/2023/Q2 2023/HR 140 SQUATS BB Pullups.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q2 2023/HR 140 SQUATS BB Pullups.mov",
+      "sizeBytes": 6676073569,
+      "mtime": "2023-05-11T17:46:51-04:00",
+      "folderType": "Full",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "SQUATS",
+        "BB",
+        "Pullups"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "8ff1c87fa1",
+      "filename": "HR 142 DL.mov",
+      "relPath": "Full/2023/Q2 2023/HR 142 DL.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q2 2023/HR 142 DL.mov",
+      "sizeBytes": 7467270557,
+      "mtime": "2023-06-01T17:56:34-04:00",
+      "folderType": "Full",
+      "hr": 142,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "DL"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "6a197dc61c",
+      "filename": "HR 145 Arnold DL Pullups.mov",
+      "relPath": "Full/2023/Q2 2023/HR 145 Arnold DL Pullups.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q2 2023/HR 145 Arnold DL Pullups.mov",
+      "sizeBytes": 6664352064,
+      "mtime": "2023-05-18T17:48:56-04:00",
+      "folderType": "Full",
+      "hr": 145,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Arnold",
+        "DL",
+        "Pullups"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "de6e7451c5",
+      "filename": "#2 Pull 138 DL,TricepsBurn.mov",
+      "relPath": "Full/2023/Q3 2023/Pull/#2 Pull 138 DL,TricepsBurn.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Pull/#2 Pull 138 DL,TricepsBurn.mov",
+      "sizeBytes": 6427950489,
+      "mtime": "2023-09-28T17:27:43-04:00",
+      "folderType": "Pull",
+      "hr": 138,
+      "sessionNum": "#2",
+      "typeHint": "Pull",
+      "rawTags": [
+        "Pull",
+        "DL",
+        "TricepsBurn"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Pull"
+      ]
+    },
+    {
+      "id": "7578b65879",
+      "filename": "#2 Pull 155 DL, HT,DBR Hell .mov",
+      "relPath": "Full/2023/Q3 2023/Pull/#2 Pull 155 DL, HT,DBR Hell .mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Pull/#2 Pull 155 DL, HT,DBR Hell .mov",
+      "sizeBytes": 7232833125,
+      "mtime": "2023-09-07T17:38:28-04:00",
+      "folderType": "Pull",
+      "hr": 155,
+      "sessionNum": "#2",
+      "typeHint": "Pull",
+      "rawTags": [
+        "Pull",
+        "DL",
+        "HT",
+        "DBR",
+        "Hell"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Pull"
+      ]
+    },
+    {
+      "id": "5bb282212a",
+      "filename": "#2 Pull HR 132 DL, HT, BANDS mov.mov",
+      "relPath": "Full/2023/Q3 2023/Pull/#2 Pull HR 132 DL, HT, BANDS mov.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Pull/#2 Pull HR 132 DL, HT, BANDS mov.mov",
+      "sizeBytes": 6622023235,
+      "mtime": "2023-09-14T17:33:24-04:00",
+      "folderType": "Pull",
+      "hr": 132,
+      "sessionNum": "#2",
+      "typeHint": "Pull",
+      "rawTags": [
+        "Pull",
+        "DL",
+        "HT",
+        "BANDS",
+        "mov"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Pull"
+      ]
+    },
+    {
+      "id": "adac83a96b",
+      "filename": "#2 Pull HR 138.mov",
+      "relPath": "Full/2023/Q3 2023/Pull/#2 Pull HR 138.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Pull/#2 Pull HR 138.mov",
+      "sizeBytes": 6624805536,
+      "mtime": "2023-09-21T17:32:24-04:00",
+      "folderType": "Pull",
+      "hr": 138,
+      "sessionNum": "#2",
+      "typeHint": "Pull",
+      "rawTags": [
+        "Pull"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Pull"
+      ]
+    },
+    {
+      "id": "a177ac0c1b",
+      "filename": "#1 130 Push  Fsq-Bsq Triceps BB.mov",
+      "relPath": "Full/2023/Q3 2023/Push/#1 130 Push  Fsq-Bsq Triceps BB.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Push/#1 130 Push  Fsq-Bsq Triceps BB.mov",
+      "sizeBytes": 4524263008,
+      "mtime": "2023-10-10T17:23:38-04:00",
+      "folderType": "Push",
+      "hr": 130,
+      "sessionNum": "#1",
+      "typeHint": "Push",
+      "rawTags": [
+        "Push",
+        "Fsq-Bsq",
+        "Triceps",
+        "BB"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Push"
+      ]
+    },
+    {
+      "id": "7c0799680a",
+      "filename": "#1 HR 132 BB, DB , Lunges, JumpBox.mov",
+      "relPath": "Full/2023/Q3 2023/Push/#1 HR 132 BB, DB , Lunges, JumpBox.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Push/#1 HR 132 BB, DB , Lunges, JumpBox.mov",
+      "sizeBytes": 6831289624,
+      "mtime": "2023-09-19T17:32:42-04:00",
+      "folderType": "Push",
+      "hr": 132,
+      "sessionNum": "#1",
+      "typeHint": null,
+      "rawTags": [
+        "BB",
+        "DB",
+        "Lunges",
+        "JumpBox"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "5ed9297f68",
+      "filename": "#1 Push 119 Triceps BB, SplitSqtsPM.mov",
+      "relPath": "Full/2023/Q3 2023/Push/#1 Push 119 Triceps BB, SplitSqtsPM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Push/#1 Push 119 Triceps BB, SplitSqtsPM.mov",
+      "sizeBytes": 5725632485,
+      "mtime": "2023-10-24T17:22:10-04:00",
+      "folderType": "Push",
+      "hr": 119,
+      "sessionNum": "#1",
+      "typeHint": "Push",
+      "rawTags": [
+        "Push",
+        "Triceps",
+        "BB",
+        "SplitSqtsPM"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Push"
+      ]
+    },
+    {
+      "id": "d4c56566fc",
+      "filename": "#1 Push DB, Sqts, BB.mov",
+      "relPath": "Full/2023/Q3 2023/Push/#1 Push DB, Sqts, BB.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Push/#1 Push DB, Sqts, BB.mov",
+      "sizeBytes": 6511002314,
+      "mtime": "2023-11-28T17:30:32-05:00",
+      "folderType": "Push",
+      "hr": null,
+      "sessionNum": "#1",
+      "typeHint": "Push",
+      "rawTags": [
+        "Push",
+        "DB",
+        "Sqts",
+        "BB"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Push"
+      ]
+    },
+    {
+      "id": "d4da248beb",
+      "filename": "#1 Push HR 128 BB SQ SLDL.mov",
+      "relPath": "Full/2023/Q3 2023/Push/#1 Push HR 128 BB SQ SLDL.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Push/#1 Push HR 128 BB SQ SLDL.mov",
+      "sizeBytes": 6383349264,
+      "mtime": "2023-09-12T16:50:40-04:00",
+      "folderType": "Push",
+      "hr": 128,
+      "sessionNum": "#1",
+      "typeHint": "Push",
+      "rawTags": [
+        "Push",
+        "BB",
+        "SQ",
+        "SLDL"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Push"
+      ]
+    },
+    {
+      "id": "17ba13c64a",
+      "filename": "#1 Push HR 134 Push Triceps Squats Burn DB.mov",
+      "relPath": "Full/2023/Q3 2023/Push/#1 Push HR 134 Push Triceps Squats Burn DB.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Push/#1 Push HR 134 Push Triceps Squats Burn DB.mov",
+      "sizeBytes": 5978056324,
+      "mtime": "2023-09-26T17:26:17-04:00",
+      "folderType": "Push",
+      "hr": 134,
+      "sessionNum": "#1",
+      "typeHint": "Push",
+      "rawTags": [
+        "Push",
+        "Triceps",
+        "Squats",
+        "Burn",
+        "DB"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Push"
+      ]
+    },
+    {
+      "id": "1d72171534",
+      "filename": "#1 Push HR 147 B2B Full DB, BB, SQ,LU.mov",
+      "relPath": "Full/2023/Q3 2023/Push/#1 Push HR 147 B2B Full DB, BB, SQ,LU.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2023/Q3 2023/Push/#1 Push HR 147 B2B Full DB, BB, SQ,LU.mov",
+      "sizeBytes": 6251659276,
+      "mtime": "2023-09-05T17:29:22-04:00",
+      "folderType": "Push",
+      "hr": 147,
+      "sessionNum": "#1",
+      "typeHint": "Push",
+      "rawTags": [
+        "Push",
+        "B2B",
+        "Full",
+        "DB",
+        "BB",
+        "SQ",
+        "LU"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Push"
+      ]
+    },
+    {
+      "id": "7c4a19f09b",
+      "filename": "140 BB,Fsqts.mov",
+      "relPath": "Full/2024/140 BB,Fsqts.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2024/140 BB,Fsqts.mov",
+      "sizeBytes": 10962234123,
+      "mtime": "2024-09-17T17:15:50-04:00",
+      "folderType": "Full",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "BB",
+        "Fsqts"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "3b0f8a5ba0",
+      "filename": "HR 145, Sqts, DB, Pusulps.mov",
+      "relPath": "Full/2024/HR 145, Sqts, DB, Pusulps.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Full/2024/HR 145, Sqts, DB, Pusulps.mov",
+      "sizeBytes": 10744064450,
+      "mtime": "2024-09-10T17:15:54-04:00",
+      "folderType": "Full",
+      "hr": 145,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Sqts",
+        "DB",
+        "Pusulps"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "4e82ee8afd",
+      "filename": "HR 134 Endurance HIIT 2022-05-19 at 4.21.59 PM.mov",
+      "relPath": "HIIT/2022/Q2 2022 HIIT/HR 134 Endurance HIIT 2022-05-19 at 4.21.59 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q2 2022 HIIT/HR 134 Endurance HIIT 2022-05-19 at 4.21.59 PM.mov",
+      "sizeBytes": 5101236947,
+      "mtime": "2022-05-19T17:16:47-04:00",
+      "folderType": "HIIT",
+      "hr": 134,
+      "sessionNum": null,
+      "typeHint": "Endurance",
+      "rawTags": [
+        "Endurance",
+        "HIIT"
+      ],
+      "dateInName": "2022-05-19",
+      "typeHints": [
+        "Endurance",
+        "HIIT"
+      ]
+    },
+    {
+      "id": "31198959c9",
+      "filename": "HR 147 2022-05-14 at 9.33.40 AM.mov",
+      "relPath": "HIIT/2022/Q2 2022 HIIT/HR 147 2022-05-14 at 9.33.40 AM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q2 2022 HIIT/HR 147 2022-05-14 at 9.33.40 AM.mov",
+      "sizeBytes": 5988811004,
+      "mtime": "2022-05-14T10:38:00-04:00",
+      "folderType": "HIIT",
+      "hr": 147,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-05-14"
+    },
+    {
+      "id": "a0d7863faa",
+      "filename": "HR 152  2022-06-11 at 9.05.29 AM.mov",
+      "relPath": "HIIT/2022/Q2 2022 HIIT/HR 152  2022-06-11 at 9.05.29 AM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q2 2022 HIIT/HR 152  2022-06-11 at 9.05.29 AM.mov",
+      "sizeBytes": 4508291890,
+      "mtime": "2022-06-11T09:53:59-04:00",
+      "folderType": "HIIT",
+      "hr": 152,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-06-11"
+    },
+    {
+      "id": "77010ecb57",
+      "filename": "HR 155 2022-05-07 at 9.36.51 AM.mov",
+      "relPath": "HIIT/2022/Q2 2022 HIIT/HR 155 2022-05-07 at 9.36.51 AM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q2 2022 HIIT/HR 155 2022-05-07 at 9.36.51 AM.mov",
+      "sizeBytes": 6029814536,
+      "mtime": "2022-05-07T10:41:47-04:00",
+      "folderType": "HIIT",
+      "hr": 155,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-05-07"
+    },
+    {
+      "id": "b037ce0790",
+      "filename": " HR 146 30min workout .mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT / HR 146 30min workout .mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT / HR 146 30min workout .mov",
+      "sizeBytes": 4546545627,
+      "mtime": "2022-10-14T16:38:35-04:00",
+      "folderType": "HIIT",
+      "hr": 146,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "30min",
+        "workout"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "a90b0eef52",
+      "filename": "Ball Slam Intense 33 mPM.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /Ball Slam Intense 33 mPM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /Ball Slam Intense 33 mPM.mov",
+      "sizeBytes": 4375428410,
+      "mtime": "2022-12-06T16:50:54-05:00",
+      "folderType": "HIIT",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Ball",
+        "Slam",
+        "Intense",
+        "mPM"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "35b9026641",
+      "filename": "HIIT one KB 30m.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /HIIT one KB 30m.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /HIIT one KB 30m.mov",
+      "sizeBytes": 4497889325,
+      "mtime": "2022-11-08T16:39:48-05:00",
+      "folderType": "HIIT",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": "HIIT",
+      "rawTags": [
+        "HIIT",
+        "one",
+        "KB",
+        "30m"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "HIIT"
+      ]
+    },
+    {
+      "id": "573c1be51e",
+      "filename": "HR 142 BB HIIT PM.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /HR 142 BB HIIT PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /HR 142 BB HIIT PM.mov",
+      "sizeBytes": 4840362232,
+      "mtime": "2022-11-01T16:43:12-04:00",
+      "folderType": "HIIT",
+      "hr": 142,
+      "sessionNum": null,
+      "typeHint": "HIIT",
+      "rawTags": [
+        "BB",
+        "HIIT"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "HIIT"
+      ]
+    },
+    {
+      "id": "53ab66a02c",
+      "filename": "HR 147 30m PM.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /HR 147 30m PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /HR 147 30m PM.mov",
+      "sizeBytes": 4035286851,
+      "mtime": "2022-11-04T16:33:53-04:00",
+      "folderType": "HIIT",
+      "hr": 147,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "30m"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "f7049acdc7",
+      "filename": "HR 149 DB.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /HR 149 DB.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /HR 149 DB.mov",
+      "sizeBytes": 4679493198,
+      "mtime": "2022-11-15T16:40:36-05:00",
+      "folderType": "HIIT",
+      "hr": 149,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "DB"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "1cbc656650",
+      "filename": "HR 150 HIIT SLAM mov.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /HR 150 HIIT SLAM mov.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /HR 150 HIIT SLAM mov.mov",
+      "sizeBytes": 4662381359,
+      "mtime": "2022-10-07T16:40:38-04:00",
+      "folderType": "HIIT",
+      "hr": 150,
+      "sessionNum": null,
+      "typeHint": "HIIT",
+      "rawTags": [
+        "HIIT",
+        "SLAM",
+        "mov"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "HIIT"
+      ]
+    },
+    {
+      "id": "5a0bdb2078",
+      "filename": "HR 150 KB.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /HR 150 KB.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /HR 150 KB.mov",
+      "sizeBytes": 4929964636,
+      "mtime": "2022-10-25T16:42:41-04:00",
+      "folderType": "HIIT",
+      "hr": 150,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "KB"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "63f4fc126e",
+      "filename": "HR 150 Slamball PM.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /HR 150 Slamball PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /HR 150 Slamball PM.mov",
+      "sizeBytes": 4534412037,
+      "mtime": "2022-10-28T16:37:03-04:00",
+      "folderType": "HIIT",
+      "hr": 150,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Slamball"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "ee459a9f64",
+      "filename": "HR 160 Kettlebell.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /HR 160 Kettlebell.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /HR 160 Kettlebell.mov",
+      "sizeBytes": 4802741621,
+      "mtime": "2022-10-11T16:42:51-04:00",
+      "folderType": "HIIT",
+      "hr": 160,
+      "sessionNum": null,
+      "typeHint": "Kettlebell",
+      "rawTags": [
+        "Kettlebell"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Kettlebell"
+      ]
+    },
+    {
+      "id": "52dfef50b0",
+      "filename": "Redo.mov",
+      "relPath": "HIIT/2022/Q4 2022 HIIT /Redo.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2022/Q4 2022 HIIT /Redo.mov",
+      "sizeBytes": 4655996606,
+      "mtime": "2022-10-21T16:42:00-04:00",
+      "folderType": "HIIT",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Redo"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "acefd53b07",
+      "filename": "153 KB Hell PM.mov",
+      "relPath": "HIIT/2023/Q2 2023/153 KB Hell PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2023/Q2 2023/153 KB Hell PM.mov",
+      "sizeBytes": 5094789317,
+      "mtime": "2023-04-25T17:31:32-04:00",
+      "folderType": "HIIT",
+      "hr": 153,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "KB",
+        "Hell"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "ba1b4ec4e2",
+      "filename": "155 one KB hell PM.mov",
+      "relPath": "HIIT/2023/Q2 2023/155 one KB hell PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2023/Q2 2023/155 one KB hell PM.mov",
+      "sizeBytes": 5751961299,
+      "mtime": "2023-05-23T17:43:39-04:00",
+      "folderType": "HIIT",
+      "hr": 155,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "one",
+        "KB",
+        "hell"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "42bde257ca",
+      "filename": "HR 159 Slamball.mov",
+      "relPath": "HIIT/2023/Q2 2023/HR 159 Slamball.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2023/Q2 2023/HR 159 Slamball.mov",
+      "sizeBytes": 5231782591,
+      "mtime": "2023-03-14T17:31:50-04:00",
+      "folderType": "HIIT",
+      "hr": 159,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Slamball"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "cfdd4abd21",
+      "filename": "HR KB 140 PM.mov",
+      "relPath": "HIIT/2023/Q2 2023/HR KB 140 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2023/Q2 2023/HR KB 140 PM.mov",
+      "sizeBytes": 5379207100,
+      "mtime": "2023-05-16T17:33:35-04:00",
+      "folderType": "HIIT",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "KB"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "ac921068bd",
+      "filename": "Slamball HIIT.mov",
+      "relPath": "HIIT/2023/Q2 2023/Slamball HIIT.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2023/Q2 2023/Slamball HIIT.mov",
+      "sizeBytes": 6116937493,
+      "mtime": "2023-03-28T17:41:47-04:00",
+      "folderType": "HIIT",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": "HIIT",
+      "rawTags": [
+        "Slamball",
+        "HIIT"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "HIIT"
+      ]
+    },
+    {
+      "id": "2c14e67452",
+      "filename": "HR 145 BodyWeight.mov",
+      "relPath": "HIIT/2024/HR 145 BodyWeight.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2024/HR 145 BodyWeight.mov",
+      "sizeBytes": 5155340338,
+      "mtime": "2024-01-23T17:16:28-05:00",
+      "folderType": "HIIT",
+      "hr": 145,
+      "sessionNum": null,
+      "typeHint": "BodyWeight",
+      "rawTags": [
+        "BodyWeight"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "BodyWeight"
+      ]
+    },
+    {
+      "id": "e76a72e6b2",
+      "filename": "HR 149 BodyWeight  Hell .mov",
+      "relPath": "HIIT/2024/HR 149 BodyWeight  Hell .mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2024/HR 149 BodyWeight  Hell .mov",
+      "sizeBytes": 5625100495,
+      "mtime": "2024-01-16T17:22:03-05:00",
+      "folderType": "HIIT",
+      "hr": 149,
+      "sessionNum": null,
+      "typeHint": "BodyWeight",
+      "rawTags": [
+        "BodyWeight",
+        "Hell"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "BodyWeight"
+      ]
+    },
+    {
+      "id": "ac71caa77c",
+      "filename": "HR 161 Slamball.mov",
+      "relPath": "HIIT/2024/HR 161 Slamball.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/HIIT/2024/HR 161 Slamball.mov",
+      "sizeBytes": 5312962454,
+      "mtime": "2024-01-09T17:18:47-05:00",
+      "folderType": "HIIT",
+      "hr": 161,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Slamball"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "9f256ab412",
+      "filename": "Screen Recording 2021-09-23 at 4.38.51 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-09-23 at 4.38.51 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-09-23 at 4.38.51 PM.mov",
+      "sizeBytes": 4874593872,
+      "mtime": "2021-09-23T17:31:15-04:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-09-23"
+    },
+    {
+      "id": "a46d2d1c98",
+      "filename": "Screen Recording 2021-09-30 at 4.47.23 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-09-30 at 4.47.23 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-09-30 at 4.47.23 PM.mov",
+      "sizeBytes": 4856266633,
+      "mtime": "2021-09-30T17:39:44-04:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-09-30"
+    },
+    {
+      "id": "34a772099e",
+      "filename": "Screen Recording 2021-10-07 at 4.35.21 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-10-07 at 4.35.21 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-10-07 at 4.35.21 PM.mov",
+      "sizeBytes": 5343241135,
+      "mtime": "2021-10-07T17:33:07-04:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-10-07"
+    },
+    {
+      "id": "c102de4fa4",
+      "filename": "Screen Recording 2021-10-21 at 4.31.59 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-10-21 at 4.31.59 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-10-21 at 4.31.59 PM.mov",
+      "sizeBytes": 4400598822,
+      "mtime": "2021-10-21T17:19:23-04:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-10-21"
+    },
+    {
+      "id": "a24f5ef5a3",
+      "filename": "Screen Recording 2021-11-04 at 4.30.36 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-11-04 at 4.30.36 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-11-04 at 4.30.36 PM.mov",
+      "sizeBytes": 6419777198,
+      "mtime": "2021-11-04T17:39:25-04:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-11-04"
+    },
+    {
+      "id": "c9cad24741",
+      "filename": "Screen Recording 2021-11-11 at 4.10.39 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-11-11 at 4.10.39 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-11-11 at 4.10.39 PM.mov",
+      "sizeBytes": 4287722677,
+      "mtime": "2021-11-11T16:56:38-05:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-11-11"
+    },
+    {
+      "id": "1c7b80ec25",
+      "filename": "Screen Recording 2021-11-29 at 4.35.29 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-11-29 at 4.35.29 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-11-29 at 4.35.29 PM.mov",
+      "sizeBytes": 5262725165,
+      "mtime": "2021-11-29T17:32:04-05:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-11-29"
+    },
+    {
+      "id": "f72dbb546a",
+      "filename": "Screen Recording 2021-12-13 at 4.33.06 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-12-13 at 4.33.06 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-12-13 at 4.33.06 PM.mov",
+      "sizeBytes": 5441340950,
+      "mtime": "2021-12-13T17:33:45-05:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-12-13"
+    },
+    {
+      "id": "8ffe4f4cdd",
+      "filename": "Screen Recording 2021-12-27 at 4.19.30 PM.mov",
+      "relPath": "Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-12-27 at 4.19.30 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2021/Kettlebell Q4 2021/Screen Recording 2021-12-27 at 4.19.30 PM.mov",
+      "sizeBytes": 5271145961,
+      "mtime": "2021-12-27T17:16:35-05:00",
+      "folderType": "Kettlebell",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2021-12-27"
+    },
+    {
+      "id": "8748c775c7",
+      "filename": "HR 140 non-stop PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups  Q3 2022/HR 140 non-stop PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups  Q3 2022/HR 140 non-stop PM.mov",
+      "sizeBytes": 5730037261,
+      "mtime": "2022-09-23T16:52:16-04:00",
+      "folderType": "Kettlebell",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "non-stop"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "77759c8663",
+      "filename": "HR 144 2022-07-15 at 12.48.19 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups  Q3 2022/HR 144 2022-07-15 at 12.48.19 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups  Q3 2022/HR 144 2022-07-15 at 12.48.19 PM.mov",
+      "sizeBytes": 4099644098,
+      "mtime": "2022-07-15T13:32:23-04:00",
+      "folderType": "Kettlebell",
+      "hr": 144,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-07-15"
+    },
+    {
+      "id": "bab531ce13",
+      "filename": "HR 147 Screen Recording 2022-06-24 at 12.46.22 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups  Q3 2022/HR 147 Screen Recording 2022-06-24 at 12.46.22 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups  Q3 2022/HR 147 Screen Recording 2022-06-24 at 12.46.22 PM.mov",
+      "sizeBytes": 4255167558,
+      "mtime": "2022-06-24T13:32:07-04:00",
+      "folderType": "Kettlebell",
+      "hr": 147,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-06-24"
+    },
+    {
+      "id": "c6a2fe74b2",
+      "filename": "HR 147 at 1.47.50 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups  Q3 2022/HR 147 at 1.47.50 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups  Q3 2022/HR 147 at 1.47.50 PM.mov",
+      "sizeBytes": 4428482446,
+      "mtime": "2022-08-05T14:35:25-04:00",
+      "folderType": "Kettlebell",
+      "hr": 147,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "c43cccda4d",
+      "filename": "HR 149 1.30.00 .mov",
+      "relPath": "Kettlebell/2022/KB & Pullups  Q3 2022/HR 149 1.30.00 .mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups  Q3 2022/HR 149 1.30.00 .mov",
+      "sizeBytes": 5692162851,
+      "mtime": "2022-07-29T14:37:56-04:00",
+      "folderType": "Kettlebell",
+      "hr": 149,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "f7560ee759",
+      "filename": "HR 151 Injured Conditioning.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups  Q3 2022/HR 151 Injured Conditioning.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups  Q3 2022/HR 151 Injured Conditioning.mov",
+      "sizeBytes": 4759119089,
+      "mtime": "2022-07-22T13:38:43-04:00",
+      "folderType": "Kettlebell",
+      "hr": 151,
+      "sessionNum": null,
+      "typeHint": "Conditioning",
+      "rawTags": [
+        "Injured",
+        "Conditioning"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Conditioning"
+      ]
+    },
+    {
+      "id": "a430d84a12",
+      "filename": "HR 133 2022-01-03 at 4.21.49 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups Q1 2022/HR 133 2022-01-03 at 4.21.49 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups Q1 2022/HR 133 2022-01-03 at 4.21.49 PM.mov",
+      "sizeBytes": 5087608945,
+      "mtime": "2022-01-03T17:16:21-05:00",
+      "folderType": "Kettlebell",
+      "hr": 133,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-01-03"
+    },
+    {
+      "id": "7e360f21a6",
+      "filename": "HR 139 2022-03-14 at 4.30.45 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups Q1 2022/HR 139 2022-03-14 at 4.30.45 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups Q1 2022/HR 139 2022-03-14 at 4.30.45 PM.mov",
+      "sizeBytes": 5239819654,
+      "mtime": "2022-03-14T17:26:56-04:00",
+      "folderType": "Kettlebell",
+      "hr": 139,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-03-14"
+    },
+    {
+      "id": "bbb802b273",
+      "filename": "HR 140  2022-02-28 at 4.23.00 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups Q1 2022/HR 140  2022-02-28 at 4.23.00 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups Q1 2022/HR 140  2022-02-28 at 4.23.00 PM.mov",
+      "sizeBytes": 6190550971,
+      "mtime": "2022-02-28T17:29:24-05:00",
+      "folderType": "Kettlebell",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-02-28"
+    },
+    {
+      "id": "fa2bf4d64a",
+      "filename": "HR 141 2022-02-07 at 4.20.53 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups Q1 2022/HR 141 2022-02-07 at 4.20.53 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups Q1 2022/HR 141 2022-02-07 at 4.20.53 PM.mov",
+      "sizeBytes": 6154190184,
+      "mtime": "2022-02-07T17:26:52-05:00",
+      "folderType": "Kettlebell",
+      "hr": 141,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-02-07"
+    },
+    {
+      "id": "7d19ea4a20",
+      "filename": "HR 147 2022-01-17 at 4.18.55 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups Q1 2022/HR 147 2022-01-17 at 4.18.55 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups Q1 2022/HR 147 2022-01-17 at 4.18.55 PM.mov",
+      "sizeBytes": 5524857593,
+      "mtime": "2022-01-17T17:18:28-05:00",
+      "folderType": "Kettlebell",
+      "hr": 147,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-01-17"
+    },
+    {
+      "id": "346c450e6e",
+      "filename": "HR 148 2022-01-10 at 4.20.19 PM.mov",
+      "relPath": "Kettlebell/2022/KB & Pullups Q1 2022/HR 148 2022-01-10 at 4.20.19 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2022/KB & Pullups Q1 2022/HR 148 2022-01-10 at 4.20.19 PM.mov",
+      "sizeBytes": 5139256612,
+      "mtime": "2022-01-10T17:15:59-05:00",
+      "folderType": "Kettlebell",
+      "hr": 148,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-01-10"
+    },
+    {
+      "id": "04db2766bf",
+      "filename": "HR 141 Single & Double.mov",
+      "relPath": "Kettlebell/2023/Q1 KB & Pullups 2023/HR 141 Single & Double.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2023/Q1 KB & Pullups 2023/HR 141 Single & Double.mov",
+      "sizeBytes": 6021858893,
+      "mtime": "2023-01-08T08:38:57-05:00",
+      "folderType": "Kettlebell",
+      "hr": 141,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Single",
+        "&",
+        "Double"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "6a3377f61c",
+      "filename": "HR 150 Double Crunches .mov",
+      "relPath": "Kettlebell/2023/Q1 KB & Pullups 2023/HR 150 Double Crunches .mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2023/Q1 KB & Pullups 2023/HR 150 Double Crunches .mov",
+      "sizeBytes": 6032726848,
+      "mtime": "2023-03-05T08:40:50-05:00",
+      "folderType": "Kettlebell",
+      "hr": 150,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Double",
+        "Crunches"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "97e12e637e",
+      "filename": "HR 146 18kg double PM.mov",
+      "relPath": "Kettlebell/2023/Q3 KB & Pullups 2023 /HR 146 18kg double PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2023/Q3 KB & Pullups 2023 /HR 146 18kg double PM.mov",
+      "sizeBytes": 6044946457,
+      "mtime": "2023-06-27T16:46:13-04:00",
+      "folderType": "Kettlebell",
+      "hr": 146,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "18kg",
+        "double"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "755a5d7ee2",
+      "filename": "HR 146 2 of each Hell.mov",
+      "relPath": "Kettlebell/2023/Q3 KB & Pullups 2023 /HR 146 2 of each Hell.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2023/Q3 KB & Pullups 2023 /HR 146 2 of each Hell.mov",
+      "sizeBytes": 5612534462,
+      "mtime": "2023-08-29T16:37:07-04:00",
+      "folderType": "Kettlebell",
+      "hr": 146,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "of",
+        "each",
+        "Hell"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "d0267f7754",
+      "filename": "HR 150 Non-Stop mov.mov",
+      "relPath": "Kettlebell/2023/Q3 KB & Pullups 2023 /HR 150 Non-Stop mov.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Kettlebell/2023/Q3 KB & Pullups 2023 /HR 150 Non-Stop mov.mov",
+      "sizeBytes": 5542916773,
+      "mtime": "2023-08-15T16:34:46-04:00",
+      "folderType": "Kettlebell",
+      "hr": 150,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Non-Stop",
+        "mov"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "df87f71d36",
+      "filename": "HR 135 Screen Recording 2022-06-28 at 3.36.09 PM.mov",
+      "relPath": "Lower/2022/Q3 2022 LowerBody/HR 135 Screen Recording 2022-06-28 at 3.36.09 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2022/Q3 2022 LowerBody/HR 135 Screen Recording 2022-06-28 at 3.36.09 PM.mov",
+      "sizeBytes": 6505996134,
+      "mtime": "2022-06-28T16:46:02-04:00",
+      "folderType": "Lower",
+      "hr": 135,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-06-28"
+    },
+    {
+      "id": "d7569eed15",
+      "filename": "HR 146 Tempo at 3.35.14 PM.mov",
+      "relPath": "Lower/2022/Q3 2022 LowerBody/HR 146 Tempo at 3.35.14 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2022/Q3 2022 LowerBody/HR 146 Tempo at 3.35.14 PM.mov",
+      "sizeBytes": 6246507250,
+      "mtime": "2022-07-11T16:42:22-04:00",
+      "folderType": "Lower",
+      "hr": 146,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Tempo"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "81157d3b59",
+      "filename": "HR 148 2022-08-15 at 3.36.08 PM.mov",
+      "relPath": "Lower/2022/Q3 2022 LowerBody/HR 148 2022-08-15 at 3.36.08 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2022/Q3 2022 LowerBody/HR 148 2022-08-15 at 3.36.08 PM.mov",
+      "sizeBytes": 7413926706,
+      "mtime": "2022-08-15T17:03:22-04:00",
+      "folderType": "Lower",
+      "hr": 148,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-08-15"
+    },
+    {
+      "id": "4d9a8d703d",
+      "filename": "HR 148 PM.mov",
+      "relPath": "Lower/2022/Q3 2022 LowerBody/HR 148 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2022/Q3 2022 LowerBody/HR 148 PM.mov",
+      "sizeBytes": 4620321547,
+      "mtime": "2022-07-05T16:38:24-04:00",
+      "folderType": "Lower",
+      "hr": 148,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "7e2ac942cb",
+      "filename": "HR 150  PM.mov",
+      "relPath": "Lower/2022/Q3 2022 LowerBody/HR 150  PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2022/Q3 2022 LowerBody/HR 150  PM.mov",
+      "sizeBytes": 5970238483,
+      "mtime": "2022-07-18T16:51:17-04:00",
+      "folderType": "Lower",
+      "hr": 150,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "5c024f876c",
+      "filename": "HR 153 PM.mov",
+      "relPath": "Lower/2022/Q3 2022 LowerBody/HR 153 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2022/Q3 2022 LowerBody/HR 153 PM.mov",
+      "sizeBytes": 5533673804,
+      "mtime": "2022-08-02T16:46:04-04:00",
+      "folderType": "Lower",
+      "hr": 153,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "33da3d2678",
+      "filename": "130 Glutes B2B PM.mov",
+      "relPath": "Lower/2023/Q3 2023 B2B/130 Glutes B2B PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2023/Q3 2023 B2B/130 Glutes B2B PM.mov",
+      "sizeBytes": 6312827380,
+      "mtime": "2023-08-31T14:45:05-04:00",
+      "folderType": "Lower",
+      "hr": 130,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Glutes",
+        "B2B"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "9de3018ccc",
+      "filename": "HR 136 PM.mov",
+      "relPath": "Lower/2023/Q3 2023 B2B/HR 136 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2023/Q3 2023 B2B/HR 136 PM.mov",
+      "sizeBytes": 5577117688,
+      "mtime": "2023-06-29T16:38:16-04:00",
+      "folderType": "Lower",
+      "hr": 136,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "750ca444f6",
+      "filename": "HR 130 only 3 5 sets Hell.mov",
+      "relPath": "Lower/2024/HR 130 only 3 5 sets Hell.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2024/HR 130 only 3 5 sets Hell.mov",
+      "sizeBytes": 6038958955,
+      "mtime": "2024-01-14T08:39:12-05:00",
+      "folderType": "Lower",
+      "hr": 130,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "only",
+        "sets",
+        "Hell"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "78ddbb716b",
+      "filename": "HR 136 Sumo-Lunges-FrontSqt.mov",
+      "relPath": "Lower/2024/HR 136 Sumo-Lunges-FrontSqt.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Lower/2024/HR 136 Sumo-Lunges-FrontSqt.mov",
+      "sizeBytes": 11249626854,
+      "mtime": "2024-07-16T17:22:01-04:00",
+      "folderType": "Lower",
+      "hr": 136,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Sumo-Lunges-FrontSqt"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "a8bf0a3dae",
+      "filename": "HR 128 BB 2022-01-13 at 4.18.59 PM.mov",
+      "relPath": "Upper/2022/Q1 2022 Upper Body/HR 128 BB 2022-01-13 at 4.18.59 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q1 2022 Upper Body/HR 128 BB 2022-01-13 at 4.18.59 PM.mov",
+      "sizeBytes": 5179923994,
+      "mtime": "2022-01-13T17:14:39-05:00",
+      "folderType": "Upper",
+      "hr": 128,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "BB"
+      ],
+      "dateInName": "2022-01-13"
+    },
+    {
+      "id": "f245b207a6",
+      "filename": "HR 134 2022-01-20 at 4.21.01 PM.mov",
+      "relPath": "Upper/2022/Q1 2022 Upper Body/HR 134 2022-01-20 at 4.21.01 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q1 2022 Upper Body/HR 134 2022-01-20 at 4.21.01 PM.mov",
+      "sizeBytes": 5699840900,
+      "mtime": "2022-01-20T17:22:09-05:00",
+      "folderType": "Upper",
+      "hr": 134,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-01-20"
+    },
+    {
+      "id": "d5a6fe3b7e",
+      "filename": "HR 135 at 4.19.44 PM.mov",
+      "relPath": "Upper/2022/Q1 2022 Upper Body/HR 135 at 4.19.44 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q1 2022 Upper Body/HR 135 at 4.19.44 PM.mov",
+      "sizeBytes": 5242411275,
+      "mtime": "2022-01-06T17:16:16-05:00",
+      "folderType": "Upper",
+      "hr": 135,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "7e956e8b24",
+      "filename": "HR 120 Burn PM.mov",
+      "relPath": "Upper/2022/Q3 2022 upperBody/HR 120 Burn PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q3 2022 upperBody/HR 120 Burn PM.mov",
+      "sizeBytes": 5597776772,
+      "mtime": "2022-07-19T16:36:21-04:00",
+      "folderType": "Upper",
+      "hr": 120,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Burn"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "5289b8e88c",
+      "filename": "HR 130 Tri-Bic chest at 3.37.08 PM.mov",
+      "relPath": "Upper/2022/Q3 2022 upperBody/HR 130 Tri-Bic chest at 3.37.08 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q3 2022 upperBody/HR 130 Tri-Bic chest at 3.37.08 PM.mov",
+      "sizeBytes": 5513394780,
+      "mtime": "2022-09-07T16:36:25-04:00",
+      "folderType": "Upper",
+      "hr": 130,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Tri-Bic",
+        "chest"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "730a64db26",
+      "filename": "HR 133 PM.mov",
+      "relPath": "Upper/2022/Q3 2022 upperBody/HR 133 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q3 2022 upperBody/HR 133 PM.mov",
+      "sizeBytes": 5959065421,
+      "mtime": "2022-08-01T16:39:54-04:00",
+      "folderType": "Upper",
+      "hr": 133,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "206b2943e7",
+      "filename": "HR 135 Screen Recording 2022-06-27 at 3.36.29 PM.mov",
+      "relPath": "Upper/2022/Q3 2022 upperBody/HR 135 Screen Recording 2022-06-27 at 3.36.29 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q3 2022 upperBody/HR 135 Screen Recording 2022-06-27 at 3.36.29 PM.mov",
+      "sizeBytes": 5437961998,
+      "mtime": "2022-06-27T16:34:57-04:00",
+      "folderType": "Upper",
+      "hr": 135,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": "2022-06-27"
+    },
+    {
+      "id": "4a7303c175",
+      "filename": "HR 138 50Secs.mov",
+      "relPath": "Upper/2022/Q3 2022 upperBody/HR 138 50Secs.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q3 2022 upperBody/HR 138 50Secs.mov",
+      "sizeBytes": 4854371215,
+      "mtime": "2022-09-13T16:49:47-04:00",
+      "folderType": "Upper",
+      "hr": 138,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "50Secs"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "927be409c7",
+      "filename": "HR 140 12 reps burn 2022-09-01 at 3.36.01 PM.mov",
+      "relPath": "Upper/2022/Q3 2022 upperBody/HR 140 12 reps burn 2022-09-01 at 3.36.01 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q3 2022 upperBody/HR 140 12 reps burn 2022-09-01 at 3.36.01 PM.mov",
+      "sizeBytes": 5497051021,
+      "mtime": "2022-09-01T16:35:32-04:00",
+      "folderType": "Upper",
+      "hr": 140,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "reps",
+        "burn"
+      ],
+      "dateInName": "2022-09-01"
+    },
+    {
+      "id": "5682fa6b84",
+      "filename": "HR 141 PM.mov",
+      "relPath": "Upper/2022/Q3 2022 upperBody/HR 141 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q3 2022 upperBody/HR 141 PM.mov",
+      "sizeBytes": 5251752243,
+      "mtime": "2022-08-08T16:34:55-04:00",
+      "folderType": "Upper",
+      "hr": 141,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [],
+      "dateInName": null
+    },
+    {
+      "id": "a45c54f7df",
+      "filename": "HR 142 Negatives 2022-07-12 at 3.33.41 PM.mov",
+      "relPath": "Upper/2022/Q3 2022 upperBody/HR 142 Negatives 2022-07-12 at 3.33.41 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2022/Q3 2022 upperBody/HR 142 Negatives 2022-07-12 at 3.33.41 PM.mov",
+      "sizeBytes": 6466606290,
+      "mtime": "2022-07-12T16:43:10-04:00",
+      "folderType": "Upper",
+      "hr": 142,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Negatives"
+      ],
+      "dateInName": "2022-07-12"
+    },
+    {
+      "id": "9a002978f5",
+      "filename": "#1 HR 128 BB 50 SecsPM.mov",
+      "relPath": "Upper/2023/Q1 2023/#1 HR 128 BB 50 SecsPM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/#1 HR 128 BB 50 SecsPM.mov",
+      "sizeBytes": 5775871761,
+      "mtime": "2023-01-11T17:00:54-05:00",
+      "folderType": "Upper",
+      "hr": 128,
+      "sessionNum": "#1",
+      "typeHint": null,
+      "rawTags": [
+        "BB",
+        "SecsPM"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "272b5396f4",
+      "filename": "#1 Obliques DB Press 132 PM.mov",
+      "relPath": "Upper/2023/Q1 2023/#1 Obliques DB Press 132 PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/#1 Obliques DB Press 132 PM.mov",
+      "sizeBytes": 5091847716,
+      "mtime": "2022-12-21T16:46:39-05:00",
+      "folderType": "Upper",
+      "hr": 132,
+      "sessionNum": "#1",
+      "typeHint": null,
+      "rawTags": [
+        "Obliques",
+        "DB",
+        "Press"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "a3beaceb5f",
+      "filename": "#1 Volume HR 135.mov",
+      "relPath": "Upper/2023/Q1 2023/#1 Volume HR 135.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/#1 Volume HR 135.mov",
+      "sizeBytes": 5892810472,
+      "mtime": "2023-02-14T17:25:47-05:00",
+      "folderType": "Upper",
+      "hr": 135,
+      "sessionNum": "#1",
+      "typeHint": null,
+      "rawTags": [
+        "Volume"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "9250f25b60",
+      "filename": "#1 upper HR 118 Tri BB PM.mov",
+      "relPath": "Upper/2023/Q1 2023/#1 upper HR 118 Tri BB PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/#1 upper HR 118 Tri BB PM.mov",
+      "sizeBytes": 13383523556,
+      "mtime": "2023-01-04T16:59:03-05:00",
+      "folderType": "Upper",
+      "hr": 118,
+      "sessionNum": "#1",
+      "typeHint": "Upper",
+      "rawTags": [
+        "upper",
+        "Tri",
+        "BB"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Upper"
+      ]
+    },
+    {
+      "id": "5dce9add7d",
+      "filename": "#2 128 BB HI Burn Drops Pullups AM.mov",
+      "relPath": "Upper/2023/Q1 2023/#2 128 BB HI Burn Drops Pullups AM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/#2 128 BB HI Burn Drops Pullups AM.mov",
+      "sizeBytes": 5421035064,
+      "mtime": "2022-12-31T09:06:19-05:00",
+      "folderType": "Upper",
+      "hr": 128,
+      "sessionNum": "#2",
+      "typeHint": null,
+      "rawTags": [
+        "BB",
+        "HI",
+        "Burn",
+        "Drops",
+        "Pullups"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "a83bd3b99c",
+      "filename": "#2 BB HI HR 125PM.mov",
+      "relPath": "Upper/2023/Q1 2023/#2 BB HI HR 125PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/#2 BB HI HR 125PM.mov",
+      "sizeBytes": 5279703846,
+      "mtime": "2022-12-23T16:47:59-05:00",
+      "folderType": "Upper",
+      "hr": 125,
+      "sessionNum": "#2",
+      "typeHint": null,
+      "rawTags": [
+        "BB",
+        "HI",
+        "125PM"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "395eb29ec4",
+      "filename": "#2 HR 110 Triceps PM.mov",
+      "relPath": "Upper/2023/Q1 2023/#2 HR 110 Triceps PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/#2 HR 110 Triceps PM.mov",
+      "sizeBytes": 6056855264,
+      "mtime": "2023-01-06T17:12:00-05:00",
+      "folderType": "Upper",
+      "hr": 110,
+      "sessionNum": "#2",
+      "typeHint": null,
+      "rawTags": [
+        "Triceps"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "3d75240fe0",
+      "filename": "#2 HR 122 DB 26 min PM.mov",
+      "relPath": "Upper/2023/Q1 2023/#2 HR 122 DB 26 min PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/#2 HR 122 DB 26 min PM.mov",
+      "sizeBytes": 3012775109,
+      "mtime": "2023-01-20T16:56:49-05:00",
+      "folderType": "Upper",
+      "hr": 122,
+      "sessionNum": "#2",
+      "typeHint": null,
+      "rawTags": [
+        "DB",
+        "min"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "8b358c2aae",
+      "filename": "B2B 138 BB press-Chin.mov",
+      "relPath": "Upper/2023/Q1 2023/B2B 138 BB press-Chin.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/B2B 138 BB press-Chin.mov",
+      "sizeBytes": 6095781191,
+      "mtime": "2023-03-03T16:55:43-05:00",
+      "folderType": "Upper",
+      "hr": 138,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "B2B",
+        "BB",
+        "press-Chin"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "66ac62e597",
+      "filename": "HR 115 Volume PM.mov",
+      "relPath": "Upper/2023/Q1 2023/HR 115 Volume PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/HR 115 Volume PM.mov",
+      "sizeBytes": 6017989499,
+      "mtime": "2023-02-24T16:51:43-05:00",
+      "folderType": "Upper",
+      "hr": 115,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Volume"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "ab1dbe3ffa",
+      "filename": "HR 126 Handstand PM.mov",
+      "relPath": "Upper/2023/Q1 2023/HR 126 Handstand PM.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2023/Q1 2023/HR 126 Handstand PM.mov",
+      "sizeBytes": 5824882412,
+      "mtime": "2023-02-10T17:20:33-05:00",
+      "folderType": "Upper",
+      "hr": 126,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Handstand"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "beaaf339a7",
+      "filename": "50PullupsBurn.mov",
+      "relPath": "Upper/2024/50PullupsBurn.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2024/50PullupsBurn.mov",
+      "sizeBytes": 4284960451,
+      "mtime": "2024-03-14T06:26:50-04:00",
+      "folderType": "Upper",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "50PullupsBurn"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "800985cf6c",
+      "filename": "HR 120 BB, DL ***(2).mov",
+      "relPath": "Upper/2024/HR 120 BB, DL ***(2).mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2024/HR 120 BB, DL ***(2).mov",
+      "sizeBytes": 6558467326,
+      "mtime": "2024-02-18T11:26:12-05:00",
+      "folderType": "Upper",
+      "hr": 120,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "BB",
+        "DL",
+        "***(2"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "56059a978d",
+      "filename": "HR 135 DL,DB,PushUps,Landmine.mov",
+      "relPath": "Upper/2024/HR 135 DL,DB,PushUps,Landmine.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2024/HR 135 DL,DB,PushUps,Landmine.mov",
+      "sizeBytes": 5723975972,
+      "mtime": "2024-01-04T17:24:36-05:00",
+      "folderType": "Upper",
+      "hr": 135,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "DL",
+        "DB",
+        "PushUps",
+        "Landmine"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "a77c478c57",
+      "filename": "HR 152 DL-Landmine,DB.mov",
+      "relPath": "Upper/2024/HR 152 DL-Landmine,DB.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2024/HR 152 DL-Landmine,DB.mov",
+      "sizeBytes": 6223531238,
+      "mtime": "2024-01-25T17:27:00-05:00",
+      "folderType": "Upper",
+      "hr": 152,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "DL-Landmine",
+        "DB"
+      ],
+      "dateInName": null
+    },
+    {
+      "id": "4749363ba2",
+      "filename": "NR 136 DL , Rows, Push Press.mov",
+      "relPath": "Upper/2024/NR 136 DL , Rows, Push Press.mov",
+      "absPath": "/Volumes/SantiTB/Eddy's Hell/Upper/2024/NR 136 DL , Rows, Push Press.mov",
+      "sizeBytes": 5582267842,
+      "mtime": "2024-01-11T17:21:01-05:00",
+      "folderType": "Upper",
+      "hr": 136,
+      "sessionNum": null,
+      "typeHint": "Push",
+      "rawTags": [
+        "NR",
+        "DL",
+        "Rows",
+        "Push",
+        "Press"
+      ],
+      "dateInName": null,
+      "typeHints": [
+        "Push"
+      ]
+    },
+    {
+      "id": "9b27f204e3",
+      "filename": "2min DL,Lunges, SqPress,DB.mov",
+      "relPath": "2min DL,Lunges, SqPress,DB.mov",
+      "absPath": "/Volumes/SantiTB/2min DL,Lunges, SqPress,DB.mov",
+      "sizeBytes": 1818230784,
+      "mtime": "2024-04-16T16:10:51-04:00",
+      "folderType": "OutsideRoot",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "2min",
+        "DL",
+        "Lunges",
+        "SqPress",
+        "DB"
+      ],
+      "dateInName": null,
+      "locationNote": "Loose root-level workout outside Eddy's Hell"
+    },
+    {
+      "id": "ad5ada96a9",
+      "filename": "Streng BB DL.mov",
+      "relPath": "Streng BB DL.mov",
+      "absPath": "/Volumes/SantiTB/Streng BB DL.mov",
+      "sizeBytes": 6127878144,
+      "mtime": "2024-04-26T16:10:12-04:00",
+      "folderType": "OutsideRoot",
+      "hr": null,
+      "sessionNum": null,
+      "typeHint": null,
+      "rawTags": [
+        "Streng",
+        "BB",
+        "DL"
+      ],
+      "dateInName": null,
+      "locationNote": "Loose root-level workout outside Eddy's Hell"
+    }
+  ]
+}

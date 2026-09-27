@@ -1,0 +1,59 @@
+Eddy's Hell — Hosting / Auth deploy notes
+Updated 2026-09-26 ~9:30 PM ET (America/New_York).
+
+## Environments
+Stable (friends / known-good v1.0.0):
+  https://eddy-s-hell.web.app/
+Beta (Santiago feature testing — does not affect stable):
+  https://eddy-s-hell-beta.web.app/
+Pages mirror (steers to stable web.app):
+  https://sblanco2005.github.io/eddys-hell/
+
+Firebase project: eddy-s-hell
+Hosting sites:
+  stable target → site id eddy-s-hell
+  beta   target → site id eddy-s-hell-beta
+
+## Deploy commands
+From /workspace/eddys-hell-app (syncs root → dist, then deploys):
+
+  scripts/deploy-hosting.sh beta      # beta only — preferred for experiments
+  scripts/deploy-hosting.sh stable    # friends site — use only for known-good
+  scripts/deploy-hosting.sh both
+
+Equivalent firebase CLI:
+  firebase deploy --only hosting:beta   --project eddy-s-hell
+  firebase deploy --only hosting:stable --project eddy-s-hell
+
+GitHub Pages mirror (does not touch Firebase Hosting):
+  scripts/publish-pages.sh
+
+Do NOT move/retag v1.0.0. Tag stays on the known-good freeze.
+
+## Auth / OAuth
+authDomain (firebase-config.json): eddy-s-hell.web.app
+  (unchanged — popup works cross-site within same project when origins authorized)
+
+Popup-first on both stable and beta Hosting. Beta is first-class:
+  - hostname eddy-s-hell-beta.web.app treated as Firebase Hosting
+  - no auto-steer from beta → stable
+  - subtle BETA badge when hostname includes "beta"
+
+Authorized domains / OAuth (Console) — add if not already present:
+  Firebase Auth authorized domain:
+    eddy-s-hell-beta.web.app
+  Google Cloud OAuth client (Web) JS origin:
+    https://eddy-s-hell-beta.web.app
+  Redirect URI:
+    https://eddy-s-hell-beta.web.app/__/auth/handler
+
+Stable OAuth (already set):
+  https://eddy-s-hell.web.app/
+  https://eddy-s-hell.web.app/__/auth/handler
+
+## Prior notes
+auth.js: popup-first on web.app (fallback redirect if popup blocked);
+  initializeAuth includes browserPopupRedirectResolver.
+Stable Hosting release 2026-09-26 ~6:09 PM ET via tmp-hosting-deploy SA
+  (Console/SA path; SA key deleted after use — do not leave long-lived keys in repo).
+gh-pages published via scripts/publish-pages.sh.

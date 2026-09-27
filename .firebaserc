@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "eddy-s-hell"
+  },
+  "targets": {
+    "eddy-s-hell": {
+      "hosting": {
+        "stable": [
+          "eddy-s-hell"
+        ],
+        "beta": [
+          "eddy-s-hell-beta"
+        ]
+      }
+    }
+  }
+}

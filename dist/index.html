@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>Eddy's Hell · Thursday</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <div class="brand-row">
+        <div class="brand">
+          <span class="flame" aria-hidden="true">⚡</span>
+          <div>
+            <h1>Eddy’s Hell <span class="badge beta-badge" id="beta-badge" hidden>BETA</span></h1>
+            <p class="sub" id="brand-sub">Thursday workout</p>
+          </div>
+        </div>
+        <div class="user-slot" id="user-slot" hidden>
+          <img class="avatar" id="user-avatar" alt="" width="36" height="36" hidden />
+          <div class="user-meta">
+            <span class="user-name" id="user-name"></span>
+            <span class="user-role" id="user-role"></span>
+          </div>
+          <button type="button" class="btn ghost btn-sm" id="btn-signout">Sign out</button>
+        </div>
+      </div>
+      <nav class="tabs" id="admin-tabs" role="tablist" hidden>
+        <button type="button" class="tab active" data-view="rule" role="tab" aria-selected="true">Admin · Rule</button>
+        <button type="button" class="tab" data-view="pick" role="tab" aria-selected="false">This week’s pick</button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- LANDING / SIGN-IN -->
+      <section id="view-landing" class="view" aria-label="Sign in" hidden>
+        <article class="card landing-card">
+          <p class="landing-kicker">Thursday crew</p>
+          <h2 class="landing-title">Sign in to see this week’s workout</h2>
+          <p class="hint landing-hint" id="locked-title">Workout locked until you sign in.</p>
+
+          <div id="host-mirror-banner" class="auth-banner" hidden>
+            <strong>Prefer the live app link</strong>
+            <p>
+              For reliable Google sign-in on iPhone, use
+              <a href="https://eddy-s-hell.web.app/" id="host-mirror-link">https://eddy-s-hell.web.app/</a>
+              instead of this GitHub Pages mirror.
+            </p>
+          </div>
+
+          <div id="auth-not-configured" class="auth-banner" hidden>
+            <strong>Auth not configured</strong>
+            <p>Add your Firebase web config to <code>data/firebase-config.json</code> (see README). Google sign-in stays disabled until then.</p>
+          </div>
+
+          <div id="auth-denied" class="auth-banner auth-denied" hidden>
+            <strong id="auth-denied-title">Sign-in issue</strong>
+            <p id="auth-denied-msg">Ask Santiago to add your email.</p>
+          </div>
+
+          <div id="auth-inapp" class="auth-banner auth-inapp" hidden>
+            <strong>Open in Safari</strong>
+            <p id="auth-inapp-msg">
+              Google sign-in does not work inside WhatsApp, Instagram, or Facebook.
+              Open this page in Safari, then sign in.
+            </p>
+            <label class="field-label" for="auth-inapp-url">Copy this link</label>
+            <div class="inapp-url-row">
+              <input type="text" id="auth-inapp-url" readonly value="" />
+              <button type="button" class="btn secondary btn-sm" id="btn-copy-url">Copy</button>
+            </div>
+            <p class="hint inapp-hint" id="auth-inapp-copied" hidden>Link copied — paste it into Safari.</p>
+          </div>
+
+          <div class="actions landing-actions">
+            <button type="button" class="btn accent" id="btn-google" hidden>Sign in with Google</button>
+          </div>
+
+          <div id="mock-signin" class="mock-box" hidden>
+            <p class="hint"><strong>Localhost mock</strong> — Firebase not set up yet. Pick a role to test:</p>
+            <div class="actions">
+              <button type="button" class="btn primary" id="btn-mock-admin">Continue as Admin</button>
+              <button type="button" class="btn secondary" id="btn-mock-member">Continue as Member</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- MEMBER: THIS WEEK + CHECK-IN -->
+      <section id="view-member" class="view" aria-label="This week's workout" hidden>
+        <article class="card pick-card" id="member-empty" hidden>
+          <div class="empty">
+            <p class="empty-title">This week’s workout isn’t up yet</p>
+            <p class="hint">Santiago will publish Thursday’s pick here. Hang tight.</p>
+          </div>
+        </article>
+
+        <article class="card pick-card" id="member-pick" hidden>
+          <header class="card-head">
+            <h2>This week’s workout</h2>
+            <span class="badge accent" id="member-type">—</span>
+          </header>
+          <h3 class="pick-name" id="member-filename">—</h3>
+          <dl class="meta-grid member-meta">
+            <div><dt>HR</dt><dd id="member-hr">—</dd></div>
+            <div><dt>Type</dt><dd id="member-folder">—</dd></div>
+            <div><dt>Accepted</dt><dd id="member-when">—</dd></div>
+          </dl>
+          <p class="why member-why" id="member-why" hidden></p>
+
+          <div class="yt-block" id="member-yt-block">
+            <div class="yt-embed-wrap" id="member-yt-embed" hidden></div>
+            <p class="yt-pending" id="member-yt-pending" hidden>Video not published yet</p>
+          </div>
+
+          <div class="checkin-box" id="checkin-box">
+            <h3 class="checkin-title">Friend check-in</h3>
+            <p class="hint checkin-help" id="checkin-help">
+              After you finish the workout, tap <strong>Check in</strong> so Santiago knows you did it.
+            </p>
+            <label class="field-label" for="checkin-notes">Notes <span class="opt">(optional)</span></label>
+            <input type="text" id="checkin-notes" placeholder="How’d it go?" autocomplete="off" maxlength="280" />
+            <div class="actions">
+              <button type="button" class="btn accent" id="btn-checkin">Check in — I finished</button>
+            </div>
+            <p class="toast" id="checkin-toast" hidden>Checked in — nice work.</p>
+            <p class="checkin-done" id="checkin-done" hidden>
+              ✓ You’re checked in for this week <span id="checkin-done-at"></span>
+            </p>
+            <p class="hint checkin-sync" id="checkin-sync-hint" hidden></p>
+          </div>
+        </article>
+      </section>
+
+      <!-- RULE VIEW (admin) -->
+      <section id="view-rule" class="view" aria-label="Admin rule" hidden>
+        <article class="card rule-card">
+          <header class="card-head">
+            <h2>Rule</h2>
+            <span class="badge" id="match-badge">— matches</span>
+          </header>
+
+          <div class="field">
+            <label>Types</label>
+            <div class="chips" id="type-chips" role="group" aria-label="Folder types"></div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="min-hr">Min HR</label>
+              <input type="number" id="min-hr" min="0" max="220" step="1" value="120" />
+            </div>
+            <div class="field toggle-field">
+              <label class="toggle">
+                <input type="checkbox" id="require-hr" checked />
+                <span class="toggle-ui"></span>
+                <span>Require HR</span>
+              </label>
+              <p class="hint">Off = allow missing HR</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Recency</label>
+            <div class="seg" role="radiogroup" aria-label="Recency">
+              <label><input type="radio" name="recency" value="recent" checked /><span>Prefer recent</span></label>
+              <label><input type="radio" name="recency" value="older" /><span>Prefer older</span></label>
+              <label><input type="radio" name="recency" value="any" /><span>Any</span></label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="toggle rotate-toggle">
+              <input type="checkbox" id="rotate" checked />
+              <span class="toggle-ui"></span>
+              <span>Rotate — avoid last</span>
+            </label>
+            <div class="rotate-row">
+              <input type="number" id="rotate-weeks" min="1" max="104" value="8" />
+              <span class="unit">weeks</span>
+            </div>
+            <div class="history-box" id="used-history">
+              <p class="hint">No used history yet.</p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="tag-contains">Tag / filename contains <span class="opt">(optional)</span></label>
+            <input type="text" id="tag-contains" placeholder="e.g. BB, HIIT, DL" autocomplete="off" />
+          </div>
+
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-save">Save rule</button>
+            <button type="button" class="btn accent" id="btn-dryrun">Dry-run pick</button>
+          </div>
+          <p class="toast" id="save-toast" hidden>Rule saved.</p>
+        </article>
+
+        <article class="card members-card" id="members-card">
+          <header class="card-head">
+            <h2>Members</h2>
+            <span class="badge" id="members-count">0 members allowed</span>
+          </header>
+          <p class="hint">Allowlist who can sign in. Empty = only admins. Admins are always allowed.</p>
+          <ul class="members-list" id="members-list">
+            <li class="hint">No members yet — only admins can use the app.</li>
+          </ul>
+          <div class="members-add-row">
+            <input type="email" id="member-email-input" placeholder="friend@example.com" autocomplete="email" />
+            <button type="button" class="btn secondary btn-sm" id="btn-member-add">Add</button>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-members-save">Save members</button>
+          </div>
+          <p class="toast" id="members-toast" hidden>Members saved.</p>
+          <p class="hint publish-hint" id="members-publish-hint" hidden>
+            Publish pending — Grok Bot will sync to Pages.
+          </p>
+        </article>
+
+        <article class="card members-card" id="pt-card">
+          <header class="card-head">
+            <h2>PT summary</h2>
+            <span class="badge">Weekly email</span>
+          </header>
+          <p class="hint">Destination for Thursday check-in summaries (email send is still manual / deferred). Check-ins themselves are recorded in the app.</p>
+          <div class="field">
+            <label for="pt-email-input">Summary email</label>
+            <input type="email" id="pt-email-input" placeholder="eddy_pazmino@yahoo.com" autocomplete="email" />
+          </div>
+          <div class="actions">
+            <button type="button" class="btn primary" id="btn-pt-save">Save PT email</button>
+          </div>
+          <p class="toast" id="pt-toast" hidden>PT summary address saved.</p>
+          <p class="hint publish-hint" id="pt-publish-hint" hidden>
+            Publish pending — Grok Bot will sync to Pages.
+          </p>
+        </article>
+      </section>
+
+      <!-- PICK VIEW (admin) -->
+      <section id="view-pick" class="view" aria-label="This week's pick" hidden>
+        <article class="card pick-card" id="pick-empty">
+          <div class="empty">
+            <p class="empty-title">No pick yet</p>
+            <p class="hint">Set a rule and hit <strong>Dry-run pick</strong> — or accept a prior pick stays if Thursday is skipped.</p>
+            <button type="button" class="btn ghost" id="btn-goto-rule">Edit rule</button>
+          </div>
+        </article>
+
+        <article class="card pick-card" id="pick-result" hidden>
+          <header class="card-head">
+            <h2>This week’s pick</h2>
+            <span class="badge accent" id="pick-type">—</span>
+          </header>
+          <h3 class="pick-name" id="pick-filename">—</h3>
+          <dl class="meta-grid">
+            <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
+            <div><dt>Tags</dt><dd id="pick-tags">—</dd></div>
+            <div><dt>Path</dt><dd class="mono" id="pick-path">—</dd></div>
+            <div><dt>Size</dt><dd id="pick-size">—</dd></div>
+            <div><dt>Modified</dt><dd id="pick-mtime">—</dd></div>
+            <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
+          </dl>
+          <div class="why" id="pick-why"></div>
+          <div class="actions" id="pick-actions">
+            <button type="button" class="btn secondary" id="btn-again">Pick again</button>
+            <button type="button" class="btn accent" id="btn-keep" hidden>Keep this week</button>
+            <button type="button" class="btn accent" id="btn-accept" hidden>Set as this week</button>
+          </div>
+          <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
+          <p class="hint publish-pending" id="publish-pending" hidden>Publish pending — Grok Bot will sync to Pages.</p>
+
+          <div class="yt-admin" id="yt-admin">
+            <header class="card-head yt-admin-head">
+              <h3>YouTube video</h3>
+              <span class="badge" id="yt-status-badge">Not set</span>
+            </header>
+            <div class="yt-embed-wrap" id="admin-yt-embed" hidden></div>
+            <p class="yt-pending" id="admin-yt-pending">Video not published yet</p>
+          </div>
+        </article>
+
+        <article class="card pick-card error-card" id="pick-error" hidden>
+          <p class="empty-title">No matches</p>
+          <p class="hint" id="pick-error-msg">Loosen filters and try again.</p>
+          <button type="button" class="btn ghost" id="btn-error-rule">Edit rule</button>
+        </article>
+
+        <article class="card checkins-card" id="admin-checkins" hidden>
+          <header class="card-head">
+            <h2>Who checked in this week</h2>
+            <span class="badge" id="checkins-count">0</span>
+          </header>
+          <p class="hint" id="admin-checkins-sync">Emails and timestamps from friends who tapped Check in.</p>
+          <ul class="checkins-list" id="checkins-list">
+            <li class="hint">Nobody has checked in yet — friends tap Check in after the workout.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span id="catalog-meta">Loading…</span>
+    </footer>
+  </div>
+  <script src="auth.js?v=1790460425"></script>
+  <script src="app.js?v=1790460425"></script>
+</body>
+</html>
