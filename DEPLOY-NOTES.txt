@@ -201,7 +201,7 @@ live in Non-live with the staged candidate preview.
 - Next week staged (Not live): Dry-run pick / Pick again (one btn), Reveal, Stage,
   staged cloud summary + dry-run preview
 - Blank-screen race: paintGuestShellEarly + Auth.init 12s timeout (defer paint)
-Cache-bust ?v=1790530366. Deploy hosting:beta only.
+Cache-bust ?v=1790530448. Deploy hosting:beta only.
 Stable untouched. Do NOT retag v1.0.0.
 
 ## 2026-09-27 ~1:35 PM ET — blank beta body fix (beta only)
@@ -212,3 +212,6 @@ left header-only blank (no Sign in / This week). Repro: delay firebase-auth.js.
 Fix: paintGuestShellEarly() after catalog wire (Sign in + week hint immediately);
 12s Auth.init timeout; safeApplyRoleUI + boot().catch fallbacks; cache-bust
 ?v=1790530220. Stable untouched. Firestore thisWeek still HR140 + EAFLtVigQHY.
+
+## 2026-09-27 deploy — Rule UI Live/Non-live + blank paint
+Cache-bust ?v=1790530448. hosting:beta only. Stable untouched.
