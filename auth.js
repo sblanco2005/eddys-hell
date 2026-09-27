@@ -646,7 +646,7 @@
     }
     try {
       const snap = await firestoreGetDoc(firestoreDoc(fbDb, "config", "thisWeek"));
-      if (!snap.exists()) return null;
+      if (!snap.exists) return null;
       const data = snap.data();
       firestoreStatus = "cloud";
       return data && (data.pickId || data.id) ? data : null;
@@ -676,7 +676,7 @@
       thisWeekUnsub = firestoreOnSnapshot(
         firestoreDoc(fbDb, "config", "thisWeek"),
         (snap) => {
-          if (!snap.exists()) return;
+          if (!snap.exists) return;
           const data = snap.data();
           if (data && (data.pickId || data.id) && typeof callback === "function") {
             try {
@@ -740,7 +740,7 @@
     }
     try {
       const snap = await firestoreGetDoc(firestoreDoc(fbDb, "config", "rule"));
-      if (!snap.exists()) return null;
+      if (!snap.exists) return null;
       const data = snap.data();
       firestoreStatus = "cloud";
       return data && typeof data === "object" ? data : null;
