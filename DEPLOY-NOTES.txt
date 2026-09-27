@@ -57,3 +57,20 @@ auth.js: popup-first on web.app (fallback redirect if popup blocked);
 Stable Hosting release 2026-09-26 ~6:09 PM ET via tmp-hosting-deploy SA
   (Console/SA path; SA key deleted after use — do not leave long-lived keys in repo).
 gh-pages published via scripts/publish-pages.sh.
+
+## Pending (needs Firebase Console / CLI login — 2026-09-26 ~9:30 PM ET)
+Beta Hosting site not created yet (https://eddy-s-hell-beta.web.app/ returns Site Not Found).
+OAuth authorized domains / JS origins for beta not applied yet (CLI had no authorized account).
+
+One-time setup after `firebase login` (or tmp SA like prior deploy):
+  firebase hosting:sites:create eddy-s-hell-beta --project eddy-s-hell
+  # targets already in .firebaserc — then:
+  scripts/deploy-hosting.sh beta
+
+Console checklist:
+  Auth → Settings → Authorized domains → add eddy-s-hell-beta.web.app
+  Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Web client →
+    Authorized JavaScript origins: https://eddy-s-hell-beta.web.app
+    Authorized redirect URIs: https://eddy-s-hell-beta.web.app/__/auth/handler
+
+Delete any temporary service-account key after use (never commit keys).
