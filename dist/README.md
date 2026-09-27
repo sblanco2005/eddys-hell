@@ -123,4 +123,6 @@ touch dist/.nojekyll
 
 ## Default rule
 
-Rotate · Prefer recent · Full body · HR > 120 · last 8 weeks avoided.
+Rotate · Prefer recent · Full body · HR > 120 · last 8 weeks avoided · **Auto-pick ON**.
+
+`autoPick` lives on `data/default-rule.json` and `data/state.json` → `rule.autoPick` (also `localStorage` key `eddys-hell-admin-v1`). Wednesday routine should read it: **ON** = auto dry-run/set pick; **OFF** = keep this week’s pick, still upload if YouTube is missing. Admin Save rule also writes pending payload `eddys-hell-rule-pending-v1` for sync.

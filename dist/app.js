@@ -12,6 +12,8 @@
   const MEMBERS_PENDING_KEY = "eddys-hell-members-pending-v1";
   const PT_KEY = "eddys-hell-pt-v1";
   const PT_PENDING_KEY = "eddys-hell-pt-pending-v1";
+  /** Pending default-rule / state.rule sync for Wednesday routine */
+  const RULE_PENDING_KEY = "eddys-hell-rule-pending-v1";
   /** @type {string[]} draft emails in Members UI */
   let membersDraft = [];
   /** @type {{ email: string, updatedAt: string|null }} PT summary destination */
@@ -49,6 +51,7 @@
       folderTypes: ["Full"],
       minHR: 120,
       requireHR: true,
+      autoPick: true,
       recency: "recent",
       rotate: true,
       rotateWeeks: 8,
@@ -938,10 +941,12 @@
 
   function readRuleFromForm() {
     const recencyEl = document.querySelector('input[name="recency"]:checked');
+    const autoEl = $("auto-pick");
     return {
       folderTypes: [...(state.rule.folderTypes || [])],
       minHR: Number($("min-hr").value) || 0,
       requireHR: $("require-hr").checked,
+      autoPick: autoEl ? !!autoEl.checked : true,
       recency: recencyEl ? recencyEl.value : "recent",
       rotate: $("rotate").checked,
       rotateWeeks: Math.max(1, Number($("rotate-weeks").value) || 8),
@@ -953,6 +958,8 @@
     state.rule = { ...defaultRule(), ...rule };
     $("min-hr").value = state.rule.minHR;
     $("require-hr").checked = !!state.rule.requireHR;
+    const autoEl = $("auto-pick");
+    if (autoEl) autoEl.checked = state.rule.autoPick !== false;
     $("rotate").checked = !!state.rule.rotate;
     $("rotate-weeks").value = state.rule.rotateWeeks;
     $("tag-contains").value = state.rule.tagContains || "";
@@ -1303,7 +1310,7 @@
   }
 
   function wireFormLive() {
-    for (const id of ["min-hr", "require-hr", "rotate", "rotate-weeks", "tag-contains"]) {
+    for (const id of ["min-hr", "require-hr", "auto-pick", "rotate", "rotate-weeks", "tag-contains"]) {
       $(id).addEventListener("input", updateMatchBadge);
       $(id).addEventListener("change", updateMatchBadge);
     }
@@ -1497,11 +1504,35 @@
     $("btn-save").addEventListener("click", () => {
       state.rule = readRuleFromForm();
       saveState();
+      // Pending payload so Wednesday routine / Grok Bot can sync data/default-rule.json + state.rule
+      try {
+        localStorage.setItem(
+          RULE_PENDING_KEY,
+          JSON.stringify({
+            rule: state.rule,
+            defaultRule: {
+              folderTypes: state.rule.folderTypes,
+              minHR: state.rule.minHR,
+              requireHR: state.rule.requireHR,
+              autoPick: state.rule.autoPick !== false,
+              recency: state.rule.recency,
+              rotate: state.rule.rotate,
+              rotateWeeks: state.rule.rotateWeeks,
+              tagContains: state.rule.tagContains || "",
+            },
+            updatedAt: new Date().toISOString(),
+          })
+        );
+      } catch (_) { /* ok */ }
       const toast = $("save-toast");
       toast.hidden = false;
+      toast.textContent =
+        "Rule saved (auto-pick " +
+        (state.rule.autoPick !== false ? "ON" : "OFF") +
+        ").";
       setTimeout(() => {
         toast.hidden = true;
-      }, 2000);
+      }, 2500);
     });
 
     $("btn-dryrun").addEventListener("click", runDryRun);
@@ -1550,8 +1581,14 @@
       defaultRule,
       catalog,
       getState: () => state,
+      /** Wednesday routine: true = auto dry-run/accept; false = keep this week (still upload if YT missing) */
+      isAutoPickEnabled: () => {
+        const r = (state && state.rule) || {};
+        return r.autoPick !== false;
+      },
       resolveThisWeek,
       parseYoutubeId,
+      ARCHIVE_ROOT,
     };
   }
 

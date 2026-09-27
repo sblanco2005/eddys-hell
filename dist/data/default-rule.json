@@ -1,9 +1,12 @@
 {
-  "folderTypes": ["Full"],
+  "folderTypes": [
+    "Full"
+  ],
   "minHR": 120,
   "requireHR": true,
   "recency": "recent",
   "rotate": true,
   "rotateWeeks": 8,
-  "tagContains": ""
+  "tagContains": "",
+  "autoPick": true
 }
