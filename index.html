@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css?v=1790528375" />
+  <link rel="stylesheet" href="styles.css?v=1790529745" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -110,7 +110,9 @@
           <header class="card-head">
             <h2>This week’s workout</h2>
             <span class="badge accent" id="member-type">—</span>
+            <span class="badge live-badge" id="member-live-badge" hidden>LIVE</span>
           </header>
+          <p class="hint member-staged-note" id="member-staged-note" hidden></p>
           <h3 class="pick-name" id="member-filename">—</h3>
           <dl class="meta-grid member-meta">
             <div><dt>HR</dt><dd id="member-hr">—</dd></div>
@@ -227,6 +229,17 @@
           <p class="toast" id="save-toast" hidden>Rule saved.</p>
         </article>
 
+        <!-- Staged next week (admin only) — never the live This week card -->
+        <article class="card staged-card" id="staged-next-card" hidden>
+          <header class="card-head">
+            <h2>Next week staged</h2>
+            <span class="badge">Not live</span>
+          </header>
+          <h3 class="pick-name" id="staged-next-name">—</h3>
+          <p class="hint" id="staged-next-meta"></p>
+          <p class="hint">Friends keep seeing <strong>This week’s workout</strong> until YouTube upload → promote. Staging never clears the live video.</p>
+        </article>
+
         <!-- Candidate pick preview (admin only — friends never see this) -->
         <article class="card pick-card" id="pick-empty">
           <header class="card-head">
@@ -341,7 +354,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=1790528375"></script>
-  <script src="app.js?v=1790528375"></script>
+  <script src="auth.js?v=1790529745"></script>
+  <script src="app.js?v=1790529745"></script>
 </body>
 </html>

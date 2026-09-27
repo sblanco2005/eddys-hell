@@ -255,7 +255,9 @@
    * thisWeekFile is overwritten by loadCloudConfig when cloud doc is present/newer.
    */
   function resolveThisWeek() {
-    if (thisWeekFile && (thisWeekFile.pickId || thisWeekFile.id)) {
+    // Prefer in-memory live file (Firestore hydrate or Hosting bootstrap).
+    // Never treat a no-video doc as live — that is staged (config/nextWeek).
+    if (thisWeekFile && (thisWeekFile.pickId || thisWeekFile.id) && thisWeekFile.youtubeId) {
       const id = thisWeekFile.pickId || thisWeekFile.id;
       return {
         id,
@@ -269,17 +271,18 @@
         pickedAt: thisWeekFile.pickedAt,
         why: thisWeekFile.why,
         matchCount: thisWeekFile.matchCount,
-        youtubeId: thisWeekFile.youtubeId || null,
+        youtubeId: thisWeekFile.youtubeId,
         youtubeUrl: thisWeekFile.youtubeUrl || null,
         archiveRoot: thisWeekFile.archiveRoot || ARCHIVE_ROOT,
         updatedAt: thisWeekFile.updatedAt || null,
         source: thisWeekFile._source || "file",
       };
     }
-    if (state.lastPick) {
+    // lastPick only counts as live when it already has youtubeId (promoted).
+    if (state.lastPick && state.lastPick.youtubeId) {
       return {
         ...state.lastPick,
-        youtubeId: state.lastPick.youtubeId || null,
+        youtubeId: state.lastPick.youtubeId,
         youtubeUrl: state.lastPick.youtubeUrl || null,
         source: "local",
       };
@@ -441,25 +444,53 @@
 
   function applyCloudThisWeek(cloud) {
     if (!cloud || !(cloud.pickId || cloud.id)) return false;
+    // LIVE thisWeek must always carry youtubeId. A staged/no-video write that
+    // landed in config/thisWeek (bug or stale tab) must NEVER replace a good
+    // live week or clear the member/admin This week card.
+    if (!cloud.youtubeId) {
+      if (thisWeekFile && thisWeekFile.youtubeId) {
+        console.warn(
+          "Ignoring cloud thisWeek without youtubeId — keeping live video week",
+          cloud.pickId || cloud.id,
+          cloud.filename
+        );
+        return false;
+      }
+      console.warn(
+        "Ignoring cloud thisWeek without youtubeId (not live)",
+        cloud.pickId || cloud.id,
+        cloud.filename
+      );
+      return false;
+    }
     const cloudTs = tsOfThisWeek(cloud);
     const localTs = tsOfThisWeek(thisWeekFile);
     // Prefer cloud when present and >= repo/local published stamp
     if (!thisWeekFile || cloudTs >= localTs || !localTs) {
       const merged = { ...cloud, _source: "cloud" };
-      // If Firestore omits youtubeId but Hosting/local bootstrap has one for the
-      // same pick/file, keep the embed (publish without youtubeId must not wipe).
-      if (
-        !merged.youtubeId &&
-        thisWeekFile &&
-        thisWeekFile.youtubeId &&
-        samePublishedPick(thisWeekFile, cloud)
-      ) {
-        merged.youtubeId = thisWeekFile.youtubeId;
-        merged.youtubeUrl =
-          thisWeekFile.youtubeUrl ||
-          ("https://www.youtube.com/watch?v=" + thisWeekFile.youtubeId);
-      }
       thisWeekFile = merged;
+      // Keep lastPick aligned with LIVE so Rule candidate restore cannot
+      // resurface a staged/no-video pick as if it were this week.
+      try {
+        state.lastPick = {
+          id: merged.pickId || merged.id,
+          filename: merged.filename,
+          folderType: merged.folderType,
+          hr: merged.hr,
+          relPath: merged.relPath,
+          sizeBytes: merged.sizeBytes,
+          mtime: merged.mtime,
+          rawTags: merged.rawTags || [],
+          pickedAt: merged.pickedAt,
+          why: merged.why,
+          matchCount: merged.matchCount,
+          youtubeId: merged.youtubeId,
+          youtubeUrl:
+            merged.youtubeUrl ||
+            ("https://www.youtube.com/watch?v=" + merged.youtubeId),
+        };
+        saveState();
+      } catch (_) { /* ok */ }
       return true;
     }
     return false;
@@ -638,19 +669,33 @@
 
   function updateStagedHint() {
     const el = $("staged-next-hint");
-    if (!el) return;
+    const card = $("staged-next-card");
+    const nameEl = $("staged-next-name");
+    const metaEl = $("staged-next-meta");
     const staged = resolveStagedNext();
     if (!staged) {
-      el.hidden = true;
-      el.textContent = "";
+      if (el) {
+        el.hidden = true;
+        el.textContent = "";
+      }
+      if (card) card.hidden = true;
+      if (nameEl) nameEl.textContent = "—";
+      if (metaEl) metaEl.textContent = "";
       return;
     }
-    el.hidden = false;
     const name = staged.filename || staged.pickId || "pick";
-    el.textContent =
-      "Staged next: " +
-      name +
-      " — live week unchanged until YouTube upload.";
+    const bits = [];
+    if (staged.folderType) bits.push(staged.folderType);
+    if (staged.hr != null) bits.push("HR " + staged.hr);
+    bits.push("not live — friends still see This week");
+    if (el) {
+      el.hidden = false;
+      el.textContent =
+        "Staged next: " + name + " — live week unchanged until YouTube upload.";
+    }
+    if (card) card.hidden = false;
+    if (nameEl) nameEl.textContent = name;
+    if (metaEl) metaEl.textContent = bits.join(" · ");
   }
 
   async function stagePayloadToCloud(payload) {
@@ -1116,6 +1161,25 @@
     }
 
     const tw = resolveThisWeek();
+    const liveBadge = $("member-live-badge");
+    if (liveBadge) {
+      liveBadge.hidden = !asAdmin;
+      liveBadge.textContent = "LIVE";
+    }
+    const stagedNote = $("member-staged-note");
+    if (stagedNote) {
+      const staged = resolveStagedNext();
+      if (asAdmin && staged) {
+        stagedNote.hidden = false;
+        stagedNote.textContent =
+          "Next week staged on Rule tab: " +
+          (staged.filename || staged.pickId) +
+          " (not shown here until YouTube promote).";
+      } else {
+        stagedNote.hidden = true;
+        stagedNote.textContent = "";
+      }
+    }
     if (!tw) {
       $("member-empty").hidden = false;
       $("member-pick").hidden = true;
@@ -1622,8 +1686,15 @@
       renderHistory();
       updateMatchBadge();
       updatePickActions();
-      renderSharedCheckins(resolveThisWeek());
+      updateStagedHint();
+      // Re-paint live This week card so staging never looks like it replaced live.
+      const twLive = resolveThisWeek();
+      renderSharedCheckins(twLive);
       renderYoutubeAdminControls();
+      const memberView = $("view-member");
+      if (memberView && !memberView.hidden && authUser) {
+        renderMemberView({ asAdmin: authUser.role === "admin" });
+      }
       return;
     }
 
@@ -1803,7 +1874,9 @@
       return;
     }
     pickIsCandidate = false;
-    if (state.lastPick) {
+    // Only restore lastPick when it is a real LIVE week (has youtubeId).
+    // A staged/no-video lastPick must not paint the Rule card as This week.
+    if (state.lastPick && state.lastPick.youtubeId) {
       restoreLastPickIfAny();
       return;
     }

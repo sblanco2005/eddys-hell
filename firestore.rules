@@ -28,7 +28,11 @@ service cloud.firestore {
     // Hosting data/*.json remains bootstrap/fallback only.
     match /config/thisWeek {
       allow read: if signedIn();
-      allow create, update: if isAdmin();
+      // LIVE only: admin writes must include a real youtubeId. Staging without
+      // video belongs in config/nextWeek — rules reject no-video thisWeek writes.
+      allow create, update: if isAdmin()
+        && request.resource.data.youtubeId is string
+        && request.resource.data.youtubeId.size() >= 11;
       allow delete: if false;
     }
     // Staged next-week candidate (admin only). Not shown to members as live.

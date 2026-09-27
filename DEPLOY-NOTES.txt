@@ -174,3 +174,19 @@ Auth: stageNextWeek, loadNextWeekFromCloud, promoteStagedToLive.
 Rules: config/nextWeek admin write / signed-in read.
 Cache-bust ?v=1790528375. Deploy hosting:beta + firestore:rules.
 Stable untouched. Do NOT retag v1.0.0.
+
+## 2026-09-27 ~1:22 PM ET — beta only (UX: live vs staged)
+Root cause: Stage/Publish from a stale tab (or pre-stage JS) wrote Pull 155
+with youtubeId:null into Firestore config/thisWeek at 1:18 PM ET, so Admin
+“This week’s pick” (member card) showed “#2 Pull 155…” + “Video not published yet”.
+Hosting data/this-week.json was already HR140; cloud hydrate overwrote UI.
+
+Fix:
+  - Restored Firestore config/thisWeek → HR140 + youtubeId EAFLtVigQHY
+  - Moved Pull 155 into config/nextWeek (status:staged)
+  - applyCloudThisWeek / resolveThisWeek ignore no-youtubeId as live
+  - Firestore rules: thisWeek writes REQUIRE youtubeId (11+ chars)
+  - Admin Rule: “Next week staged” panel; This week tab shows LIVE badge
+  - Staging never mutates thisWeekFile / lastPick / member card
+Cache-bust ?v=1790529745. Deploy hosting:beta + firestore:rules.
+Stable untouched. Do NOT retag v1.0.0.
