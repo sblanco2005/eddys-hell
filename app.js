@@ -7,6 +7,8 @@
 
   const STORAGE_KEY = "eddys-hell-admin-v1";
   const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
+  /** Absolute Mac library root for Reveal in Finder (https cannot open Finder). */
+  const MAC_LIBRARY_ROOT = "/Volumes/SantiTB/Eddy's Hell/";
   const MEMBERS_PENDING_KEY = "eddys-hell-members-pending-v1";
   const PT_KEY = "eddys-hell-pt-v1";
   const PT_PENDING_KEY = "eddys-hell-pt-pending-v1";
@@ -374,6 +376,7 @@
   function updatePickActions() {
     const btnAccept = $("btn-accept");
     const btnKeep = $("btn-keep");
+    const btnReveal = $("btn-reveal-finder");
     if (!btnAccept || !btnKeep) return;
     if (pickIsCandidate) {
       btnAccept.hidden = false;
@@ -382,7 +385,81 @@
       btnAccept.hidden = true;
       btnKeep.hidden = !resolveThisWeek();
     }
+    if (btnReveal) {
+      const rel =
+        (currentResult && currentResult.pick && currentResult.pick.relPath) ||
+        (state.lastPick && state.lastPick.relPath) ||
+        "";
+      const showing = !$("pick-result").hidden;
+      btnReveal.hidden = !(showing && rel);
+    }
     updatePublishPendingHint();
+  }
+
+
+  function absoluteMacPath(relPath) {
+    const root = MAC_LIBRARY_ROOT.endsWith("/")
+      ? MAC_LIBRARY_ROOT
+      : MAC_LIBRARY_ROOT + "/";
+    const rel = String(relPath || "")
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "");
+    return root + rel;
+  }
+
+  async function revealInFinder() {
+    const rel =
+      (currentResult && currentResult.pick && currentResult.pick.relPath) ||
+      (state.lastPick && state.lastPick.relPath) ||
+      "";
+    if (!rel) return;
+    const abs = absoluteMacPath(rel);
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(abs);
+        copied = true;
+      }
+    } catch (_) {
+      copied = false;
+    }
+    if (!copied) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = abs;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch (_) {
+        copied = false;
+      }
+    }
+    const toast = $("accept-toast");
+    if (toast) {
+      toast.hidden = false;
+      toast.textContent = copied
+        ? "Path copied — Finder → Go → Go to Folder (⇧⌘G), then paste"
+        : "Copy failed — path: " + abs;
+      setTimeout(() => {
+        toast.hidden = true;
+      }, 4500);
+    }
+    // Optional: https hosting usually blocks file:// — clipboard is the real path
+    try {
+      const fileUrl =
+        "file://" +
+        abs
+          .split("/")
+          .map((seg, i) => (i === 0 && seg === "" ? "" : encodeURIComponent(seg)))
+          .join("/");
+      window.open(fileUrl, "_blank");
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function parsePTPayload(data) {
@@ -1431,6 +1508,8 @@
     $("btn-again").addEventListener("click", pickAgain);
     $("btn-accept").addEventListener("click", acceptPick);
     $("btn-keep").addEventListener("click", keepThisWeek);
+    const btnReveal = $("btn-reveal-finder");
+    if (btnReveal) btnReveal.addEventListener("click", revealInFinder);
     const gotoRule = $("btn-goto-rule");
     if (gotoRule) gotoRule.addEventListener("click", () => showView("rule"));
     const errRule = $("btn-error-rule");
