@@ -7,6 +7,8 @@
 
   const STORAGE_KEY = "eddys-hell-admin-v1";
   const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
+  /** Absolute Mac library root for Reveal in Finder (https cannot open Finder). */
+  const MAC_LIBRARY_ROOT = "/Volumes/SantiTB/Eddy's Hell/";
   const MEMBERS_PENDING_KEY = "eddys-hell-members-pending-v1";
   const PT_KEY = "eddys-hell-pt-v1";
   const PT_PENDING_KEY = "eddys-hell-pt-pending-v1";
@@ -374,6 +376,7 @@
   function updatePickActions() {
     const btnAccept = $("btn-accept");
     const btnKeep = $("btn-keep");
+    const btnReveal = $("btn-reveal-finder");
     if (!btnAccept || !btnKeep) return;
     if (pickIsCandidate) {
       btnAccept.hidden = false;
@@ -382,7 +385,81 @@
       btnAccept.hidden = true;
       btnKeep.hidden = !resolveThisWeek();
     }
+    if (btnReveal) {
+      const rel =
+        (currentResult && currentResult.pick && currentResult.pick.relPath) ||
+        (state.lastPick && state.lastPick.relPath) ||
+        "";
+      const showing = !$("pick-result").hidden;
+      btnReveal.hidden = !(showing && rel);
+    }
     updatePublishPendingHint();
+  }
+
+
+  function absoluteMacPath(relPath) {
+    const root = MAC_LIBRARY_ROOT.endsWith("/")
+      ? MAC_LIBRARY_ROOT
+      : MAC_LIBRARY_ROOT + "/";
+    const rel = String(relPath || "")
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "");
+    return root + rel;
+  }
+
+  async function revealInFinder() {
+    const rel =
+      (currentResult && currentResult.pick && currentResult.pick.relPath) ||
+      (state.lastPick && state.lastPick.relPath) ||
+      "";
+    if (!rel) return;
+    const abs = absoluteMacPath(rel);
+    let copied = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(abs);
+        copied = true;
+      }
+    } catch (_) {
+      copied = false;
+    }
+    if (!copied) {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = abs;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch (_) {
+        copied = false;
+      }
+    }
+    const toast = $("accept-toast");
+    if (toast) {
+      toast.hidden = false;
+      toast.textContent = copied
+        ? "Path copied — Finder → Go → Go to Folder (⇧⌘G), then paste"
+        : "Copy failed — path: " + abs;
+      setTimeout(() => {
+        toast.hidden = true;
+      }, 4500);
+    }
+    // Optional: https hosting usually blocks file:// — clipboard is the real path
+    try {
+      const fileUrl =
+        "file://" +
+        abs
+          .split("/")
+          .map((seg, i) => (i === 0 && seg === "" ? "" : encodeURIComponent(seg)))
+          .join("/");
+      window.open(fileUrl, "_blank");
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   function parsePTPayload(data) {
@@ -487,9 +564,11 @@
     el.hidden = false;
     el.classList.add("active");
 
-    if (name === "rule" || name === "pick") {
+    // Admin tabs: rule = Rule; pick = This week (member experience)
+    if (name === "rule" || name === "pick" || name === "member") {
+      const tabName = name === "member" ? "pick" : name;
       for (const tab of document.querySelectorAll(".tab")) {
-        const on = tab.dataset.view === name;
+        const on = tab.dataset.view === tabName;
         tab.classList.toggle("active", on);
         tab.setAttribute("aria-selected", on ? "true" : "false");
       }
@@ -608,15 +687,23 @@
     }
   }
 
-  function renderMemberView() {
+  function renderMemberView(opts) {
+    const asAdmin = !!(opts && opts.asAdmin);
     showView("member");
-    $("admin-tabs").hidden = true;
-    $("brand-sub").textContent = "This week’s workout";
+    if (asAdmin) {
+      $("admin-tabs").hidden = false;
+      $("brand-sub").textContent = "Thursday workout admin";
+    } else {
+      $("admin-tabs").hidden = true;
+      $("brand-sub").textContent = "This week’s workout";
+    }
 
     const tw = resolveThisWeek();
     if (!tw) {
       $("member-empty").hidden = false;
       $("member-pick").hidden = true;
+      const roster = $("shared-checkins");
+      if (roster) roster.hidden = true;
       return;
     }
     $("member-empty").hidden = true;
@@ -637,9 +724,13 @@
     renderYoutubeForMember(tw);
 
     renderMemberCheckin(tw);
+    renderSharedCheckins(tw);
     // Pull latest check-ins (Firestore when available) without blocking UI
     window.EddysHellAuth.refreshCheckinsForPick(tw.id).then(() => {
-      if (authUser) renderMemberCheckin(tw);
+      if (authUser) {
+        renderMemberCheckin(tw);
+        renderSharedCheckins(tw);
+      }
     });
     window.EddysHellAuth.watchCheckinsForPick(tw.id);
   }
@@ -691,10 +782,16 @@
     $("admin-tabs").hidden = false;
     $("brand-sub").textContent = "Thursday workout admin";
     const view = preferredView || "rule";
-    showView(view);
-    if (view === "pick") {
-      ensurePickViewFromPublished();
-      renderAdminCheckins();
+    if (view === "pick" || view === "member") {
+      // This week’s pick tab = same experience as friends (check-in + roster)
+      renderMemberView({ asAdmin: true });
+      return;
+    }
+    showView("rule");
+    // Candidate preview defaults to empty until dry-run
+    if (!currentResult) {
+      showPickPanels({ empty: true, result: false, error: false });
+      updatePickActions();
     }
   }
 
@@ -903,44 +1000,43 @@
     showPickPanels({ empty: false, result: false, error: true });
   }
 
-  function renderAdminCheckins() {
-    const box = $("admin-checkins");
-    const tw = resolveThisWeek();
+  function renderSharedCheckins(tw) {
+    const box = $("shared-checkins");
+    if (!box) return;
     if (!tw) {
       box.hidden = true;
       return;
     }
     box.hidden = false;
-    window.EddysHellAuth.watchCheckinsForPick(tw.id);
-    window.EddysHellAuth.refreshCheckinsForPick(tw.id).then(() => {
-      paintAdminCheckinsList(tw);
-    });
-    paintAdminCheckinsList(tw);
+    paintSharedCheckinsList(tw);
   }
 
-  function paintAdminCheckinsList(tw) {
+  function paintSharedCheckinsList(tw) {
+    if (!tw) return;
     const list = window.EddysHellAuth.checkinsForPick(tw.id);
-    $("checkins-count").textContent = String(list.length);
-    const sync = $("admin-checkins-sync");
+    const countEl = $("checkins-count");
+    if (countEl) countEl.textContent = String(list.length);
+    const sync = $("shared-checkins-sync");
     if (sync) {
       const mode = window.EddysHellAuth.getCheckinSyncMode();
       if (mode === "cloud") {
         sync.textContent = "Live list — emails + timestamps (synced across devices).";
       } else if (mode === "local-error") {
         sync.textContent =
-          "Showing this device’s check-ins. Enable Firestore in Firebase to sync friends’ devices.";
+          "Showing this device’s check-ins. Enable Firestore in Firebase to sync across devices.";
       } else {
         sync.textContent =
-          "Emails and timestamps from friends who tapped Check in (this device until cloud sync is on).";
+          "Emails and timestamps from everyone who tapped Check in (this device until cloud sync is on).";
       }
     }
     const ul = $("checkins-list");
+    if (!ul) return;
     ul.innerHTML = "";
     if (!list.length) {
       const li = document.createElement("li");
       li.className = "hint";
       li.textContent =
-        "Nobody has checked in yet — friends tap Check in after the workout.";
+        "Nobody has checked in yet — tap Check in after the workout.";
       ul.appendChild(li);
       return;
     }
@@ -963,22 +1059,35 @@
       .replace(/"/g, "&quot;");
   }
 
+  function scrollCandidatePreviewIntoView() {
+    const el =
+      (!$("pick-result").hidden && $("pick-result")) ||
+      (!$("pick-error").hidden && $("pick-error")) ||
+      (!$("pick-empty").hidden && $("pick-empty")) ||
+      $("pick-result") ||
+      $("pick-empty");
+    if (el && el.scrollIntoView) {
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+
   function runDryRun() {
     const rule = readRuleFromForm();
     state.rule = rule;
     const result = pick(catalog.files, rule, state.usedHistory);
     currentResult = result.ok ? result : null;
     pickIsCandidate = !!(result.ok && result.pick);
-    showView("pick");
+    // Stay on Admin Rule — candidate preview lives here (friends never see it)
+    showView("rule");
     if (!result.ok) {
       pickIsCandidate = false;
       renderPickError(result.error);
-      renderAdminCheckins();
       updatePickActions();
+      scrollCandidatePreviewIntoView();
       return;
     }
     renderPickResult(result);
-    renderAdminCheckins();
+    scrollCandidatePreviewIntoView();
   }
 
   function pickAgain() {
@@ -1073,7 +1182,7 @@
     setTimeout(() => {
       toast.hidden = true;
     }, 3500);
-    renderAdminCheckins();
+    renderSharedCheckins(resolveThisWeek());
     renderYoutubeAdminControls();
   }
 
@@ -1089,7 +1198,7 @@
       toast.hidden = true;
     }, 2500);
     updatePickActions();
-    renderAdminCheckins();
+    renderSharedCheckins(resolveThisWeek());
     renderYoutubeAdminControls();
   }
 
@@ -1302,7 +1411,7 @@
           $("checkin-toast").hidden = true;
         }, 2500);
         renderMemberCheckin(tw);
-        if (authUser.role === "admin") paintAdminCheckinsList(tw);
+        paintSharedCheckinsList(tw);
       } catch (err) {
         alert("Check-in failed: " + (err.message || err));
         btn.disabled = false;
@@ -1368,10 +1477,19 @@
           syncMembersDraftFromAuth();
           renderMembersUI();
           renderPTUI();
+          // Candidate section lives on rule; keep current dry-run or empty
+          if (currentResult && pickIsCandidate) {
+            renderPickResult(currentResult);
+          } else if (!currentResult && !pickIsCandidate) {
+            // Show empty unless a published/accepted pick is already painted
+            if ($("pick-result").hidden && $("pick-error").hidden) {
+              showPickPanels({ empty: true, result: false, error: false });
+            }
+          }
         }
         if (tab.dataset.view === "pick") {
-          ensurePickViewFromPublished();
-          renderAdminCheckins();
+          // Same This week experience as friends: workout + check-in + shared roster
+          renderMemberView({ asAdmin: true });
         }
       });
     }
@@ -1390,8 +1508,12 @@
     $("btn-again").addEventListener("click", pickAgain);
     $("btn-accept").addEventListener("click", acceptPick);
     $("btn-keep").addEventListener("click", keepThisWeek);
-    $("btn-goto-rule").addEventListener("click", () => showView("rule"));
-    $("btn-error-rule").addEventListener("click", () => showView("rule"));
+    const btnReveal = $("btn-reveal-finder");
+    if (btnReveal) btnReveal.addEventListener("click", revealInFinder);
+    const gotoRule = $("btn-goto-rule");
+    if (gotoRule) gotoRule.addEventListener("click", () => showView("rule"));
+    const errRule = $("btn-error-rule");
+    if (errRule) errRule.addEventListener("click", () => showView("rule"));
 
     $("btn-member-add").addEventListener("click", addMemberFromInput);
     $("member-email-input").addEventListener("keydown", (ev) => {
@@ -1414,12 +1536,11 @@
     window.EddysHellAuth.onCheckinsChange(() => {
       const tw = resolveThisWeek();
       if (!tw || !authUser) return;
-      if (authUser.role === "member") {
+      const memberView = $("view-member");
+      const onMember = memberView && !memberView.hidden;
+      if (onMember) {
         renderMemberCheckin(tw);
-      } else if (authUser.role === "admin") {
-        const pickView = $("view-pick");
-        if (pickView && !pickView.hidden) paintAdminCheckinsList(tw);
-        // Admin viewing member-style this-week isn't used; refresh list when on pick
+        paintSharedCheckinsList(tw);
       }
     });
 

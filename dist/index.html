@@ -119,9 +119,9 @@
           </div>
 
           <div class="checkin-box" id="checkin-box">
-            <h3 class="checkin-title">Friend check-in</h3>
+            <h3 class="checkin-title">Check in</h3>
             <p class="hint checkin-help" id="checkin-help">
-              After you finish the workout, tap <strong>Check in</strong> so Santiago knows you did it.
+              After you finish the workout, tap <strong>Check in</strong> so the crew knows you did it.
             </p>
             <label class="field-label" for="checkin-notes">Notes <span class="opt">(optional)</span></label>
             <input type="text" id="checkin-notes" placeholder="How’d it go?" autocomplete="off" maxlength="280" />
@@ -134,6 +134,17 @@
             </p>
             <p class="hint checkin-sync" id="checkin-sync-hint" hidden></p>
           </div>
+        </article>
+
+        <article class="card checkins-card" id="shared-checkins" hidden>
+          <header class="card-head">
+            <h2>Who checked in this week</h2>
+            <span class="badge" id="checkins-count">0</span>
+          </header>
+          <p class="hint" id="shared-checkins-sync">Live list — emails and timestamps from everyone who tapped Check in.</p>
+          <ul class="checkins-list" id="checkins-list">
+            <li class="hint">Nobody has checked in yet — tap Check in after the workout.</li>
+          </ul>
         </article>
       </section>
 
@@ -201,6 +212,53 @@
           <p class="toast" id="save-toast" hidden>Rule saved.</p>
         </article>
 
+        <!-- Candidate pick preview (admin only — friends never see this) -->
+        <article class="card pick-card" id="pick-empty">
+          <header class="card-head">
+            <h2>Candidate pick</h2>
+            <span class="badge">Next upload (admin)</span>
+          </header>
+          <div class="empty">
+            <p class="empty-title">No candidate yet</p>
+            <p class="hint">Hit <strong>Dry-run pick</strong> above to preview a file — friends only see it after you set it as this week.</p>
+          </div>
+        </article>
+
+        <article class="card pick-card" id="pick-result" hidden>
+          <header class="card-head">
+            <h2>Candidate pick</h2>
+            <span class="badge accent" id="pick-type">—</span>
+          </header>
+          <p class="hint candidate-admin-hint">Next upload (admin) — not visible to friends until you set it as this week.</p>
+          <h3 class="pick-name" id="pick-filename">—</h3>
+          <dl class="meta-grid">
+            <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
+            <div><dt>Tags</dt><dd id="pick-tags">—</dd></div>
+            <div><dt>Path</dt><dd class="mono" id="pick-path">—</dd></div>
+            <div><dt>Size</dt><dd id="pick-size">—</dd></div>
+            <div><dt>Modified</dt><dd id="pick-mtime">—</dd></div>
+            <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
+          </dl>
+          <div class="why" id="pick-why"></div>
+          <div class="actions" id="pick-actions">
+            <button type="button" class="btn secondary" id="btn-again">Pick again</button>
+            <button type="button" class="btn secondary" id="btn-reveal-finder" hidden>Reveal in Finder</button>
+            <button type="button" class="btn accent" id="btn-keep" hidden>Keep this week</button>
+            <button type="button" class="btn accent" id="btn-accept" hidden>Set as this week</button>
+          </div>
+          <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
+          <p class="hint publish-pending" id="publish-pending" hidden>Publish pending — Grok Bot will sync to Pages.</p>
+        </article>
+
+        <article class="card pick-card error-card" id="pick-error" hidden>
+          <header class="card-head">
+            <h2>Candidate pick</h2>
+            <span class="badge">Next upload (admin)</span>
+          </header>
+          <p class="empty-title">No matches</p>
+          <p class="hint" id="pick-error-msg">Loosen filters and try again.</p>
+        </article>
+
         <article class="card members-card" id="members-card">
           <header class="card-head">
             <h2>Members</h2>
@@ -243,39 +301,9 @@
         </article>
       </section>
 
-      <!-- PICK VIEW (admin) -->
+      <!-- PICK VIEW (admin) — published week status only -->
       <section id="view-pick" class="view" aria-label="This week's pick" hidden>
-        <article class="card pick-card" id="pick-empty">
-          <div class="empty">
-            <p class="empty-title">No pick yet</p>
-            <p class="hint">Set a rule and hit <strong>Dry-run pick</strong> — or accept a prior pick stays if Thursday is skipped.</p>
-            <button type="button" class="btn ghost" id="btn-goto-rule">Edit rule</button>
-          </div>
-        </article>
-
-        <article class="card pick-card" id="pick-result" hidden>
-          <header class="card-head">
-            <h2>This week’s pick</h2>
-            <span class="badge accent" id="pick-type">—</span>
-          </header>
-          <h3 class="pick-name" id="pick-filename">—</h3>
-          <dl class="meta-grid">
-            <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
-            <div><dt>Tags</dt><dd id="pick-tags">—</dd></div>
-            <div><dt>Path</dt><dd class="mono" id="pick-path">—</dd></div>
-            <div><dt>Size</dt><dd id="pick-size">—</dd></div>
-            <div><dt>Modified</dt><dd id="pick-mtime">—</dd></div>
-            <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
-          </dl>
-          <div class="why" id="pick-why"></div>
-          <div class="actions" id="pick-actions">
-            <button type="button" class="btn secondary" id="btn-again">Pick again</button>
-            <button type="button" class="btn accent" id="btn-keep" hidden>Keep this week</button>
-            <button type="button" class="btn accent" id="btn-accept" hidden>Set as this week</button>
-          </div>
-          <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
-          <p class="hint publish-pending" id="publish-pending" hidden>Publish pending — Grok Bot will sync to Pages.</p>
-
+        <article class="card pick-card" id="yt-admin-card">
           <div class="yt-admin" id="yt-admin">
             <header class="card-head yt-admin-head">
               <h3>YouTube video</h3>
@@ -286,22 +314,6 @@
           </div>
         </article>
 
-        <article class="card pick-card error-card" id="pick-error" hidden>
-          <p class="empty-title">No matches</p>
-          <p class="hint" id="pick-error-msg">Loosen filters and try again.</p>
-          <button type="button" class="btn ghost" id="btn-error-rule">Edit rule</button>
-        </article>
-
-        <article class="card checkins-card" id="admin-checkins" hidden>
-          <header class="card-head">
-            <h2>Who checked in this week</h2>
-            <span class="badge" id="checkins-count">0</span>
-          </header>
-          <p class="hint" id="admin-checkins-sync">Emails and timestamps from friends who tapped Check in.</p>
-          <ul class="checkins-list" id="checkins-list">
-            <li class="hint">Nobody has checked in yet — friends tap Check in after the workout.</li>
-          </ul>
-        </article>
       </section>
     </main>
 
@@ -309,7 +321,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=1790460425"></script>
-  <script src="app.js?v=1790460425"></script>
+  <script src="auth.js?v=1790493200"></script>
+  <script src="app.js?v=1790493200"></script>
 </body>
 </html>
