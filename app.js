@@ -698,6 +698,61 @@
     if (metaEl) metaEl.textContent = bits.join(" · ");
   }
 
+  /** Live Candidate pick card — read-only thisWeek with youtubeId. No dry-run/reveal. */
+  function renderLiveWeekCard() {
+    const empty = $("live-week-empty");
+    const body = $("live-week-body");
+    const tw = resolveThisWeek();
+    if (!tw) {
+      if (empty) empty.hidden = false;
+      if (body) body.hidden = true;
+      return;
+    }
+    if (empty) empty.hidden = true;
+    if (body) body.hidden = false;
+    const set = (id, val) => {
+      const el = $(id);
+      if (el) el.textContent = val;
+    };
+    set("live-week-filename", tw.filename || "—");
+    set("live-week-hr", tw.hr != null ? String(tw.hr) : "—");
+    set("live-week-type", tw.folderType || "—");
+    set(
+      "live-week-yt",
+      tw.youtubeId
+        ? tw.youtubeId
+        : "—"
+    );
+    set("live-week-path", tw.relPath || "—");
+    const why = $("live-week-why");
+    if (why) {
+      if (tw.why) {
+        why.hidden = false;
+        why.textContent = tw.why;
+      } else {
+        why.hidden = true;
+        why.textContent = "";
+      }
+    }
+  }
+
+  /** One Non-live button: Dry-run pick / Pick again are the same control. */
+  function updateDryRunButtonLabel() {
+    const btn = $("btn-dryrun");
+    if (!btn) return;
+    const hasCandidate = !!(currentResult && pickIsCandidate && currentResult.pick);
+    btn.textContent = hasCandidate ? "Pick again" : "Dry-run pick";
+  }
+
+  function runDryRunOrAgain() {
+    if (currentResult && pickIsCandidate && currentResult.pick) {
+      pickAgain();
+    } else {
+      runDryRun();
+    }
+    updateDryRunButtonLabel();
+  }
+
   async function stagePayloadToCloud(payload) {
     const Auth = window.EddysHellAuth;
     if (!Auth || !Auth.stageNextWeek) {
@@ -770,11 +825,10 @@
   function updatePickActions() {
     const btnAccept = $("btn-accept");
     const btnKeep = $("btn-keep");
-    if (btnAccept && btnKeep) {
+    // Non-live section only: Stage / same-pick Publish. Live card is read-only.
+    if (btnAccept) {
       if (pickIsCandidate) {
         btnAccept.hidden = false;
-        btnKeep.hidden = true;
-        // Candidate without youtubeId → stage only (no live write).
         const f = currentResult && currentResult.pick;
         const prev = resolveThisWeek();
         const sameAsPrev =
@@ -785,15 +839,18 @@
             (prev.filename && f.filename && prev.filename === f.filename));
         const hasYt = !!(sameAsPrev && prev && prev.youtubeId);
         btnAccept.textContent = hasYt ? "Publish this week" : "Stage next week";
+        if (btnKeep) btnKeep.hidden = true;
       } else {
         btnAccept.hidden = true;
-        btnKeep.hidden = !resolveThisWeek();
-        if (btnKeep) btnKeep.textContent = "Publish this week";
+        // Re-publish lives on This week's pick tab / YouTube promote — not on Non-live empty.
+        if (btnKeep) btnKeep.hidden = true;
       }
     }
     updateRevealFinderButton();
     updatePublishPendingHint();
     updateStagedHint();
+    updateDryRunButtonLabel();
+    renderLiveWeekCard();
   }
 
   function absoluteMacPath(relPath) {
@@ -996,6 +1053,7 @@
     const id = map[name];
     if (!id) return;
     const el = $(id);
+    if (!el) return;
     el.hidden = false;
     el.classList.add("active");
 
@@ -1038,6 +1096,7 @@
 
   function renderUserSlot() {
     const slot = $("user-slot");
+    if (!slot) return;
     if (!authUser) {
       slot.hidden = true;
       return;
@@ -1269,9 +1328,7 @@
       return;
     }
     showView("rule");
-    // Show last / published pick on the candidate card when available so
-    // Reveal in Finder is reachable without another dry-run. Dry-run still
-    // replaces this with a fresh candidate (pickIsCandidate).
+    // Live card = thisWeek; Non-live empty until Dry-run (or keep current candidate).
     ensurePickViewFromPublished();
   }
 
@@ -1350,6 +1407,77 @@
     $("pt-email-input").value = ptSummary.email || "";
     const pending = localStorage.getItem(PT_PENDING_KEY) === "1";
     $("pt-publish-hint").hidden = !pending;
+  }
+
+  /**
+   * Paint Sign-in landing BEFORE Auth.init finishes.
+   * Root cause of blank beta: all .view start hidden; boot awaited Firebase
+   * module load + authStateReady before onAuthChange → applyRoleUI. Slow/hung
+   * auth left header-only forever. Guests must always see Sign in + week hint.
+   */
+  function paintGuestShellEarly() {
+    try {
+      showView("landing");
+      forceGuestChrome();
+      const sub = $("brand-sub");
+      if (sub) sub.textContent = "Thursday workout";
+      const Auth = window.EddysHellAuth;
+      const onBeta = Auth && Auth.isBetaHost && Auth.isBetaHost();
+      const betaBadge = $("beta-badge");
+      if (betaBadge) {
+        betaBadge.hidden = !onBeta;
+        if (onBeta) {
+          document.title = "Eddy's Hell · BETA";
+          if (sub && !/beta/i.test(sub.textContent || "")) {
+            sub.textContent = "Thursday workout · beta";
+          }
+        }
+      }
+      const tw = resolveThisWeek();
+      const locked = $("locked-title");
+      if (locked) {
+        locked.textContent = tw
+          ? `This week: ${tw.filename || "workout"} (sign in to unlock)`
+          : "Workout locked until you sign in.";
+      }
+      // Optimistic Sign in — do not flash "Auth not configured" while Firebase loads.
+      const notCfg = $("auth-not-configured");
+      if (notCfg) notCfg.hidden = true;
+      const inApp = Auth && Auth.isInAppBrowser && Auth.isInAppBrowser();
+      const btn = $("btn-google");
+      if (btn) {
+        btn.hidden = !!inApp;
+        btn.disabled = false;
+        btn.textContent = "Sign in with Google";
+      }
+      const mock = $("mock-signin");
+      if (mock) mock.hidden = true;
+      const inAppEl = $("auth-inapp");
+      if (inAppEl) inAppEl.hidden = !inApp;
+    } catch (err) {
+      console.error("paintGuestShellEarly:", err);
+      try {
+        showView("landing");
+      } catch (_) { /* last resort */ }
+    }
+  }
+
+  function safeApplyRoleUI() {
+    try {
+      applyRoleUI();
+    } catch (err) {
+      console.error("applyRoleUI failed — falling back to Sign in:", err);
+      authUser = null;
+      try {
+        paintGuestShellEarly();
+        // Prefer full landing if Auth APIs are up
+        if (window.EddysHellAuth && window.EddysHellAuth.isConfigured) {
+          renderLanding();
+        }
+      } catch (err2) {
+        console.error(err2);
+      }
+    }
   }
 
   function applyRoleUI() {
@@ -1868,40 +1996,16 @@
   }
 
   function ensurePickViewFromPublished() {
+    // Live Candidate pick card always reflects resolveThisWeek() (youtubeId required).
+    renderLiveWeekCard();
     if (currentResult && pickIsCandidate) {
-      /* keep current dry-run candidate */
+      /* keep current dry-run candidate in Non-live section */
       renderPickResult(currentResult);
       return;
     }
+    // Do NOT paint live thisWeek into Non-live pick-result (Reveal/Stage live there only).
     pickIsCandidate = false;
-    // Only restore lastPick when it is a real LIVE week (has youtubeId).
-    // A staged/no-video lastPick must not paint the Rule card as This week.
-    if (state.lastPick && state.lastPick.youtubeId) {
-      restoreLastPickIfAny();
-      return;
-    }
-    const tw = resolveThisWeek();
-    if (tw) {
-      const f =
-        catalog.files.find((x) => x.id === tw.id) || {
-          id: tw.id,
-          filename: tw.filename,
-          folderType: tw.folderType,
-          hr: tw.hr,
-          relPath: tw.relPath,
-          sizeBytes: tw.sizeBytes,
-          mtime: tw.mtime,
-          rawTags: tw.rawTags || [],
-        };
-      currentResult = {
-        ok: true,
-        pick: f,
-        matches: Array(tw.matchCount || 1).fill(f),
-        why: tw.why || "Published this week",
-      };
-      renderPickResult(currentResult);
-      return;
-    }
+    currentResult = null;
     showPickPanels({ empty: true, result: false, error: false });
     updatePickActions();
   }
@@ -2253,10 +2357,10 @@
       }, 3500);
     });
 
-    $("btn-dryrun").addEventListener("click", runDryRun);
-    $("btn-again").addEventListener("click", pickAgain);
+    $("btn-dryrun").addEventListener("click", runDryRunOrAgain);
     $("btn-accept").addEventListener("click", acceptPick);
-    $("btn-keep").addEventListener("click", keepThisWeek);
+    const btnKeep = $("btn-keep");
+    if (btnKeep) btnKeep.addEventListener("click", keepThisWeek);
     const btnReveal = $("btn-reveal-finder");
     if (btnReveal) btnReveal.addEventListener("click", revealInFinder);
     const gotoRule = $("btn-goto-rule");
@@ -2274,12 +2378,35 @@
     $("btn-members-save").addEventListener("click", saveMembersList);
     $("btn-pt-save").addEventListener("click", savePTSummary);
 
-    await window.EddysHellAuth.init();
+    // Paint Sign in immediately — never leave all views hidden while Firebase loads.
+    paintGuestShellEarly();
+
+    const AUTH_INIT_MS = 12000;
+    try {
+      await Promise.race([
+        window.EddysHellAuth.init(),
+        new Promise((_, reject) => {
+          setTimeout(() => {
+            const err = new Error("Auth init timed out — showing Sign in");
+            err.code = "auth-init-timeout";
+            reject(err);
+          }, AUTH_INIT_MS);
+        }),
+      ]);
+    } catch (err) {
+      console.warn("Auth.init:", err);
+      // Keep guest shell visible; user can still tap Sign in once modules load.
+      paintGuestShellEarly();
+    }
     syncMembersDraftFromAuth();
     renderMembersUI();
     renderPTUI();
     // Firestore is live SoT for this-week + rule (Hosting JSON = bootstrap)
-    await loadCloudConfig();
+    try {
+      await loadCloudConfig();
+    } catch (err) {
+      console.warn("loadCloudConfig:", err);
+    }
     // Restore staged next-week from localStorage (does not affect live thisWeek).
     const localStaged = loadStagedLocal();
     if (localStaged) {
@@ -2305,7 +2432,7 @@
     }
     window.EddysHellAuth.onAuthChange((user) => {
       authUser = user;
-      applyRoleUI();
+      safeApplyRoleUI();
       if (user) {
         loadCloudConfig().catch((err) => console.warn(err));
       }
@@ -2368,6 +2495,14 @@
 
   boot().catch((err) => {
     console.error(err);
-    $("catalog-meta").textContent = "Failed to load: " + err.message;
+    const meta = $("catalog-meta");
+    if (meta) meta.textContent = "Failed to load: " + (err && err.message ? err.message : String(err));
+    try {
+      paintGuestShellEarly();
+    } catch (_) {
+      try {
+        showView("landing");
+      } catch (__){ /* ignore */ }
+    }
   });
 })();

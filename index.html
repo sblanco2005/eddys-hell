@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css?v=1790529745" />
+  <link rel="stylesheet" href="styles.css?v=1790530366" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -224,72 +224,91 @@
 
           <div class="actions">
             <button type="button" class="btn primary" id="btn-save">Save rule</button>
-            <button type="button" class="btn accent" id="btn-dryrun">Dry-run pick</button>
           </div>
           <p class="toast" id="save-toast" hidden>Rule saved.</p>
         </article>
 
-        <!-- Staged next week (admin only) — never the live This week card -->
-        <article class="card staged-card" id="staged-next-card" hidden>
+        <!-- LIVE: currently live this-week only (read-only). No dry-run / reveal / stage. -->
+        <article class="card pick-card live-week-card" id="live-week-card">
+          <header class="card-head">
+            <h2>Candidate pick</h2>
+            <span class="badge live-badge">LIVE</span>
+          </header>
+          <div class="empty" id="live-week-empty" hidden>
+            <p class="empty-title">No live week yet</p>
+            <p class="hint">Friends see nothing until a pick is published with YouTube.</p>
+          </div>
+          <div id="live-week-body">
+            <p class="hint candidate-admin-hint">Currently live for friends (<code>config/thisWeek</code>). Read-only — staging never changes this.</p>
+            <h3 class="pick-name" id="live-week-filename">—</h3>
+            <dl class="meta-grid">
+              <div><dt>HR</dt><dd id="live-week-hr">—</dd></div>
+              <div><dt>Type</dt><dd id="live-week-type">—</dd></div>
+              <div><dt>YouTube</dt><dd id="live-week-yt">—</dd></div>
+              <div><dt>Path</dt><dd class="mono" id="live-week-path">—</dd></div>
+            </dl>
+            <p class="why" id="live-week-why" hidden></p>
+          </div>
+        </article>
+
+        <!-- NON-LIVE: dry-run / pick again (one button), Reveal, Stage, staged preview -->
+        <article class="card staged-card nonlive-card" id="nonlive-card">
           <header class="card-head">
             <h2>Next week staged</h2>
             <span class="badge">Not live</span>
           </header>
-          <h3 class="pick-name" id="staged-next-name">—</h3>
-          <p class="hint" id="staged-next-meta"></p>
-          <p class="hint">Friends keep seeing <strong>This week’s workout</strong> until YouTube upload → promote. Staging never clears the live video.</p>
-        </article>
+          <p class="hint">Dry-run a candidate, reveal the Mac path, then <strong>Stage next week</strong>. Friends keep seeing <strong>Candidate pick (LIVE)</strong> until YouTube upload → promote.</p>
 
-        <!-- Candidate pick preview (admin only — friends never see this) -->
-        <article class="card pick-card" id="pick-empty">
-          <header class="card-head">
-            <h2>Candidate pick</h2>
-            <span class="badge">Next upload (admin)</span>
-          </header>
-          <div class="empty">
-            <p class="empty-title">No candidate yet</p>
-            <p class="hint">Hit <strong>Dry-run pick</strong> above to preview a file — <strong>Stage next week</strong> saves the candidate without changing what friends see. Live week updates only after YouTube upload.</p>
+          <div id="staged-next-card" hidden>
+            <h3 class="pick-name" id="staged-next-name">—</h3>
+            <p class="hint" id="staged-next-meta"></p>
+            <p class="hint">Already staged in cloud — live week unchanged.</p>
           </div>
-        </article>
 
-        <article class="card pick-card" id="pick-result" hidden>
-          <header class="card-head">
-            <h2>Candidate pick</h2>
-            <span class="badge accent" id="pick-type">—</span>
-          </header>
-          <p class="hint candidate-admin-hint">Next upload (admin) — Stage next week keeps live week unchanged until YouTube upload.</p>
-          <h3 class="pick-name" id="pick-filename">—</h3>
-          <dl class="meta-grid">
-            <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
-            <div><dt>Tags</dt><dd id="pick-tags">—</dd></div>
-            <div><dt>Path</dt><dd class="mono" id="pick-path">—</dd></div>
-            <div><dt>Size</dt><dd id="pick-size">—</dd></div>
-            <div><dt>Modified</dt><dd id="pick-mtime">—</dd></div>
-            <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
-          </dl>
-          <div class="why" id="pick-why"></div>
-          <div class="actions path-reveal-row" id="path-reveal-row" hidden>
-            <button type="button" class="btn secondary" id="btn-reveal-finder">Reveal in Finder</button>
-            <label class="reveal-path-label" for="reveal-path-display">Mac path (select &amp; copy)</label>
-            <input type="text" class="mono reveal-path-display" id="reveal-path-display" readonly hidden value="" />
+          <div class="actions nonlive-pick-actions">
+            <button type="button" class="btn accent" id="btn-dryrun">Dry-run pick</button>
           </div>
-          <div class="actions" id="pick-actions">
-            <button type="button" class="btn secondary" id="btn-again">Pick again</button>
-            <button type="button" class="btn accent" id="btn-keep" hidden>Publish this week</button>
-            <button type="button" class="btn accent" id="btn-accept" hidden>Stage next week</button>
-          </div>
-          <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
-          <p class="hint staged-next-hint" id="staged-next-hint" hidden></p>
-          <p class="hint publish-pending" id="publish-pending" hidden></p>
-        </article>
 
-        <article class="card pick-card error-card" id="pick-error" hidden>
-          <header class="card-head">
-            <h2>Candidate pick</h2>
-            <span class="badge">Next upload (admin)</span>
-          </header>
-          <p class="empty-title">No matches</p>
-          <p class="hint" id="pick-error-msg">Loosen filters and try again.</p>
+          <div class="nonlive-preview" id="pick-empty">
+            <div class="empty">
+              <p class="empty-title">No candidate yet</p>
+              <p class="hint">Hit <strong>Dry-run pick</strong> to preview a file — <strong>Stage next week</strong> saves without changing what friends see.</p>
+            </div>
+          </div>
+
+          <div class="nonlive-preview" id="pick-result" hidden>
+            <header class="card-head nonlive-preview-head">
+              <h3 class="pick-preview-title">Dry-run candidate</h3>
+              <span class="badge accent" id="pick-type">—</span>
+            </header>
+            <h3 class="pick-name" id="pick-filename">—</h3>
+            <dl class="meta-grid">
+              <div><dt>HR</dt><dd id="pick-hr">—</dd></div>
+              <div><dt>Tags</dt><dd id="pick-tags">—</dd></div>
+              <div><dt>Path</dt><dd class="mono" id="pick-path">—</dd></div>
+              <div><dt>Size</dt><dd id="pick-size">—</dd></div>
+              <div><dt>Modified</dt><dd id="pick-mtime">—</dd></div>
+              <div><dt>Candidates</dt><dd id="pick-count">—</dd></div>
+            </dl>
+            <div class="why" id="pick-why"></div>
+            <div class="actions path-reveal-row" id="path-reveal-row" hidden>
+              <button type="button" class="btn secondary" id="btn-reveal-finder">Reveal in Finder</button>
+              <label class="reveal-path-label" for="reveal-path-display">Mac path (select &amp; copy)</label>
+              <input type="text" class="mono reveal-path-display" id="reveal-path-display" readonly hidden value="" />
+            </div>
+            <div class="actions" id="pick-actions">
+              <button type="button" class="btn accent" id="btn-accept" hidden>Stage next week</button>
+              <button type="button" class="btn accent" id="btn-keep" hidden>Publish this week</button>
+            </div>
+            <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
+            <p class="hint staged-next-hint" id="staged-next-hint" hidden></p>
+            <p class="hint publish-pending" id="publish-pending" hidden></p>
+          </div>
+
+          <div class="nonlive-preview error-card" id="pick-error" hidden>
+            <p class="empty-title">No matches</p>
+            <p class="hint" id="pick-error-msg">Loosen filters and try again.</p>
+          </div>
         </article>
 
         <article class="card members-card" id="members-card">
@@ -354,7 +373,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=1790529745"></script>
-  <script src="app.js?v=1790529745"></script>
+  <script src="auth.js?v=1790530366"></script>
+  <script src="app.js?v=1790530366"></script>
 </body>
 </html>
