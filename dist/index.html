@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#0b0f14" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="livefix-20260927-1340" />
+  <meta name="eddys-hell-build" content="difficulty-20260927-1355" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css?v=20260927-1340-livefix" />
+  <link rel="stylesheet" href="styles.css?v=20260927-1355-difficulty" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -132,14 +132,19 @@
           <div class="checkin-box" id="checkin-box">
             <h3 class="checkin-title">Check in</h3>
             <p class="hint checkin-help" id="checkin-help">
-              After you finish the workout, tap <strong>Check in</strong> so the crew knows you did it.
+              After you finish, pick <strong>Easy / Okay / Hard</strong>, then tap <strong>Check in</strong> so the crew knows you did it.
             </p>
-            <label class="field-label" for="checkin-notes">Notes <span class="opt">(optional)</span></label>
-            <input type="text" id="checkin-notes" placeholder="How’d it go?" autocomplete="off" maxlength="280" />
+            <label class="field-label" id="checkin-difficulty-label">How was it? <span class="req">(pick one)</span></label>
+            <div class="seg difficulty-seg" role="radiogroup" aria-labelledby="checkin-difficulty-label" id="checkin-difficulty">
+              <label><input type="radio" name="checkin-difficulty" value="easy" /><span>Easy</span></label>
+              <label><input type="radio" name="checkin-difficulty" value="okay" /><span>Okay</span></label>
+              <label><input type="radio" name="checkin-difficulty" value="hard" /><span>Hard</span></label>
+            </div>
             <div class="actions">
-              <button type="button" class="btn accent" id="btn-checkin">Check in — I finished</button>
+              <button type="button" class="btn accent" id="btn-checkin" disabled>Check in — I finished</button>
             </div>
             <p class="toast" id="checkin-toast" hidden>Checked in — nice work.</p>
+            <p class="toast toast-warn" id="checkin-need-diff" hidden>Pick Easy, Okay, or Hard before checking in.</p>
             <p class="checkin-done" id="checkin-done" hidden>
               ✓ You’re checked in for this week <span id="checkin-done-at"></span>
             </p>
@@ -375,7 +380,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20260927-1340-livefix"></script>
-  <script src="app.js?v=20260927-1340-livefix"></script>
+  <script src="auth.js?v=20260927-1355-difficulty"></script>
+  <script src="app.js?v=20260927-1355-difficulty"></script>
 </body>
 </html>

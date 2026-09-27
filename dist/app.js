@@ -1286,29 +1286,67 @@
     return "Saved on this device.";
   }
 
+
+  const DIFFICULTY_LABELS = { easy: "Easy", okay: "Okay", hard: "Hard" };
+
+  function selectedCheckinDifficulty() {
+    const el = document.querySelector('input[name="checkin-difficulty"]:checked');
+    return el ? el.value : "";
+  }
+
+  function setCheckinDifficultyUI(value, { locked } = {}) {
+    const seg = $("checkin-difficulty");
+    const radios = document.querySelectorAll('input[name="checkin-difficulty"]');
+    for (const r of radios) {
+      r.checked = Boolean(value) && r.value === value;
+      r.disabled = Boolean(locked);
+    }
+    if (seg) seg.dataset.locked = locked ? "1" : "0";
+  }
+
+  function syncCheckinButtonEnabled() {
+    const btn = $("btn-checkin");
+    if (!btn || btn.hidden) return;
+    const has = Boolean(selectedCheckinDifficulty());
+    btn.disabled = !has;
+    btn.classList.toggle("checking", false);
+  }
+
+  function difficultyBadgeHtml(diff) {
+    const key = String(diff || "").toLowerCase();
+    const label = DIFFICULTY_LABELS[key];
+    if (!label) return "";
+    return ` <span class="difficulty-badge ${escapeHtml(key)}">${escapeHtml(label)}</span>`;
+  }
+
   function renderMemberCheckin(tw) {
     if (!tw || !authUser) return;
     const mine = window.EddysHellAuth.myCheckin(tw.id, authUser.email);
     const btn = $("btn-checkin");
     const syncHint = $("checkin-sync-hint");
     const help = $("checkin-help");
+    const needDiff = $("checkin-need-diff");
+    if (needDiff) needDiff.hidden = true;
     if (mine) {
       btn.hidden = true;
-      btn.disabled = false;
+      btn.disabled = true;
       btn.textContent = "Check in — I finished";
-      $("checkin-notes").disabled = true;
-      $("checkin-notes").value = mine.notes || "";
+      btn.classList.remove("checking");
+      setCheckinDifficultyUI(mine.difficulty || "", { locked: true });
       $("checkin-done").hidden = false;
-      $("checkin-done-at").textContent = mine.at
-        ? "· " + formatWhen(mine.at)
-        : "";
+      const when = mine.at ? "· " + formatWhen(mine.at) : "";
+      const diffLabel = DIFFICULTY_LABELS[String(mine.difficulty || "").toLowerCase()];
+      $("checkin-done-at").textContent = diffLabel
+        ? `· ${diffLabel} ${when}`.trim()
+        : when;
       $("checkin-toast").hidden = true;
       if (help) help.hidden = true;
     } else {
       btn.hidden = false;
-      btn.disabled = false;
       btn.textContent = "Check in — I finished";
-      $("checkin-notes").disabled = false;
+      btn.classList.remove("checking");
+      setCheckinDifficultyUI(selectedCheckinDifficulty(), { locked: false });
+      syncCheckinButtonEnabled();
       $("checkin-done").hidden = true;
       if (help) help.hidden = false;
     }
@@ -1675,8 +1713,8 @@
     }
     for (const c of list) {
       const li = document.createElement("li");
-      const notes = c.notes ? ` — ${c.notes}` : "";
-      li.innerHTML = `<strong>${escapeHtml(c.displayName || c.email)}</strong>
+      const notes = !c.difficulty && c.notes ? ` — ${c.notes}` : "";
+      li.innerHTML = `<strong>${escapeHtml(c.displayName || c.email)}</strong>${difficultyBadgeHtml(c.difficulty)}
         <span class="mute">${escapeHtml(c.email)}</span>
         <span class="mute"> · ${escapeHtml(formatWhen(c.at))}</span>
         <span>${escapeHtml(notes)}</span>`;
@@ -2209,22 +2247,44 @@
         applyRoleUI();
       }
     });
+    const diffRadios = document.querySelectorAll('input[name="checkin-difficulty"]');
+    for (const r of diffRadios) {
+      r.addEventListener("change", () => {
+        const need = $("checkin-need-diff");
+        if (need) need.hidden = true;
+        syncCheckinButtonEnabled();
+      });
+    }
     $("btn-checkin").addEventListener("click", async () => {
       const tw = resolveThisWeek();
       if (!tw || !authUser) return;
+      const difficulty = selectedCheckinDifficulty();
+      if (!difficulty) {
+        const need = $("checkin-need-diff");
+        if (need) {
+          need.hidden = false;
+          setTimeout(() => {
+            need.hidden = true;
+          }, 2800);
+        }
+        syncCheckinButtonEnabled();
+        return;
+      }
       const confirmed = window.confirm(
         "Mark yourself as checked in for this week?"
       );
       if (!confirmed) return;
       const btn = $("btn-checkin");
       btn.disabled = true;
+      btn.classList.add("checking");
       btn.textContent = "Checking in…";
       try {
         await window.EddysHellAuth.upsertCheckin({
           email: authUser.email,
           displayName: authUser.displayName,
           pickId: tw.id,
-          notes: $("checkin-notes").value,
+          difficulty,
+          notes: "",
         });
         $("checkin-toast").hidden = false;
         setTimeout(() => {
@@ -2234,8 +2294,9 @@
         paintSharedCheckinsList(tw);
       } catch (err) {
         alert("Check-in failed: " + (err.message || err));
-        btn.disabled = false;
+        btn.classList.remove("checking");
         btn.textContent = "Check in — I finished";
+        syncCheckinButtonEnabled();
       }
     });
   }

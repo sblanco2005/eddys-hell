@@ -452,14 +452,16 @@
     return "local";
   }
 
-  function upsertCheckinLocal({ email, displayName, pickId, notes, at }) {
+  function upsertCheckinLocal({ email, displayName, pickId, difficulty, notes, at }) {
     const list = loadCheckins();
     const e = normalizeEmail(email);
+    const diff = String(difficulty || "").toLowerCase();
     const row = {
       email: e,
       displayName: displayName || e,
       pickId,
       at: at || new Date().toISOString(),
+      difficulty: ["easy", "okay", "hard"].includes(diff) ? diff : "",
       notes: (notes || "").trim(),
     };
     mergeCheckinRow(list, row);
@@ -467,22 +469,24 @@
     return row;
   }
 
-  async function upsertCheckin({ email, displayName, pickId, notes }) {
-    const row = upsertCheckinLocal({ email, displayName, pickId, notes });
+  async function upsertCheckin({ email, displayName, pickId, difficulty, notes }) {
+    const row = upsertCheckinLocal({ email, displayName, pickId, difficulty, notes });
     notifyCheckins();
 
     if (firestoreReady && fbDb && firestoreSetDoc && firestoreDoc) {
       try {
         const id = checkinDocId(pickId, row.email);
+        const payload = {
+          email: row.email,
+          displayName: row.displayName,
+          pickId: row.pickId,
+          at: row.at,
+          notes: row.notes || "",
+        };
+        if (row.difficulty) payload.difficulty = row.difficulty;
         await firestoreSetDoc(
           firestoreDoc(fbDb, "checkins", id),
-          {
-            email: row.email,
-            displayName: row.displayName,
-            pickId: row.pickId,
-            at: row.at,
-            notes: row.notes,
-          },
+          payload,
           { merge: true }
         );
         firestoreStatus = "cloud";

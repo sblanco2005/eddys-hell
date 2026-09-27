@@ -656,13 +656,61 @@ input:focus {
   font-weight: 650;
 }
 .checkin-help { margin: 0 0 12px; }
+.difficulty-seg {
+  margin: 0 0 14px;
+}
+.difficulty-seg[data-locked="1"] label {
+  pointer-events: none;
+  opacity: 0.85;
+}
+.difficulty-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+  background: var(--bg-chip);
+  color: var(--text-dim);
+}
+.difficulty-badge.easy {
+  border-color: rgba(72, 187, 120, 0.45);
+  color: #6ee7a0;
+  background: rgba(72, 187, 120, 0.12);
+}
+.difficulty-badge.okay {
+  border-color: rgba(246, 173, 85, 0.5);
+  color: #f6c177;
+  background: rgba(246, 173, 85, 0.12);
+}
+.difficulty-badge.hard {
+  border-color: rgba(255, 107, 74, 0.55);
+  color: #ffb3a3;
+  background: var(--accent-soft);
+}
+.toast-warn {
+  color: #f6c177;
+}
+.field-label .req {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--text-mute);
+}
 .checkin-sync {
   margin-top: 10px;
   font-size: 0.78rem;
 }
 #btn-checkin:disabled {
-  opacity: 0.65;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+#btn-checkin:disabled.checking {
   cursor: wait;
+  opacity: 0.65;
 }
 .field-label {
   display: block;
