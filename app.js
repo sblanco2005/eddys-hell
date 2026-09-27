@@ -426,13 +426,37 @@
     return best;
   }
 
+  function samePublishedPick(a, b) {
+    if (!a || !b) return false;
+    const aId = a.pickId || a.id || "";
+    const bId = b.pickId || b.id || "";
+    if (aId && bId && aId === bId) return true;
+    if (a.relPath && b.relPath && String(a.relPath) === String(b.relPath)) return true;
+    if (a.filename && b.filename && String(a.filename) === String(b.filename)) return true;
+    return false;
+  }
+
   function applyCloudThisWeek(cloud) {
     if (!cloud || !(cloud.pickId || cloud.id)) return false;
     const cloudTs = tsOfThisWeek(cloud);
     const localTs = tsOfThisWeek(thisWeekFile);
     // Prefer cloud when present and >= repo/local published stamp
     if (!thisWeekFile || cloudTs >= localTs || !localTs) {
-      thisWeekFile = { ...cloud, _source: "cloud" };
+      const merged = { ...cloud, _source: "cloud" };
+      // If Firestore omits youtubeId but Hosting/local bootstrap has one for the
+      // same pick/file, keep the embed (publish without youtubeId must not wipe).
+      if (
+        !merged.youtubeId &&
+        thisWeekFile &&
+        thisWeekFile.youtubeId &&
+        samePublishedPick(thisWeekFile, cloud)
+      ) {
+        merged.youtubeId = thisWeekFile.youtubeId;
+        merged.youtubeUrl =
+          thisWeekFile.youtubeUrl ||
+          ("https://www.youtube.com/watch?v=" + thisWeekFile.youtubeId);
+      }
+      thisWeekFile = merged;
       return true;
     }
     return false;
@@ -1385,11 +1409,21 @@
     if (!currentResult || !currentResult.pick) return;
     const f = currentResult.pick;
     const now = new Date().toISOString();
-    // Keep existing YouTube id only if re-accepting the same published pick
+    // Keep existing YouTube id if re-accepting the same published pick/file
     const prev = resolveThisWeek();
+    const sameAsPrev =
+      prev &&
+      (prev.id === f.id ||
+        (prev.relPath && f.relPath && prev.relPath === f.relPath) ||
+        (prev.filename && f.filename && prev.filename === f.filename));
     const keepYt =
-      prev && prev.id === f.id
-        ? { youtubeId: prev.youtubeId || null, youtubeUrl: prev.youtubeUrl || null }
+      sameAsPrev && prev.youtubeId
+        ? {
+            youtubeId: prev.youtubeId,
+            youtubeUrl:
+              prev.youtubeUrl ||
+              ("https://www.youtube.com/watch?v=" + prev.youtubeId),
+          }
         : { youtubeId: null, youtubeUrl: null };
     state.lastPick = {
       id: f.id,
@@ -1810,19 +1844,22 @@
       state.rule = { ...defaultRule(), ...repoDefault, ...state.rule };
     }
 
-    try {
-      const twRes = await fetch("data/this-week.json", { cache: "no-store" });
-      if (twRes.ok) {
-        thisWeekFile = await twRes.json();
-        if (thisWeekFile) thisWeekFile._source = "file";
-      }
-    } catch (_) {
-      thisWeekFile = null;
-    }
-
-    const res = await fetch("data/catalog.json");
-    if (!res.ok) throw new Error("Failed to load catalog.json");
-    catalog = await res.json();
+    // Parallel Hosting JSON — don't serialize this-week + catalog on phone networks
+    const twFetch = fetch("data/this-week.json", { cache: "no-store" })
+      .then(async (twRes) => {
+        if (twRes.ok) {
+          thisWeekFile = await twRes.json();
+          if (thisWeekFile) thisWeekFile._source = "file";
+        }
+      })
+      .catch(() => {
+        thisWeekFile = null;
+      });
+    const catalogFetch = fetch("data/catalog.json").then(async (res) => {
+      if (!res.ok) throw new Error("Failed to load catalog.json");
+      catalog = await res.json();
+    });
+    await Promise.all([twFetch, catalogFetch]);
 
     const meta = catalog.meta || {};
     $("catalog-meta").textContent =

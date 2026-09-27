@@ -131,3 +131,20 @@ Hosting `data/*.json` is bootstrap/fallback only. Check-ins unchanged.
 Rules deploy: `firebase deploy --only firestore:rules --project eddy-s-hell`
 Hosting: `scripts/deploy-hosting.sh beta` only (stable untouched).
 Do NOT retag v1.0.0.
+
+## 2026-09-27 ~12:35 PM ET — beta only (video preserve + check-in QA + load)
+Bugs reported on phone Safari beta:
+1) YouTube vanished after Power BB DL HR153 publish without youtubeId.
+   Cause: new pick (2022b4d91d) replaced prior Hosting HR140 + youtubeId EAFLtVigQHY;
+   Firestore config/thisWeek written with youtubeId:null. Power BB never had its own YT.
+   Fix: publishThisWeek + applyCloudThisWeek + acceptPick preserve youtubeId when
+   same pickId/filename/relPath and new payload omits it (merge no longer wipes).
+2) False check-in “Sep 27 at 12:08 PM ET” — Firestore doc
+   checkins/2022b4d91d__sblanco2005@gmail.com at 16:08:57Z created during QA smoke
+   (same minute as thisWeek/rule admin updates). Deleted via firebase firestore:delete.
+   Check-in still requires window.confirm — not auto on load/sign-in.
+3) ~40s phone load: top culprits Firebase modular ESM sequential import
+   (~100KB+150KB+440KB from gstatic) + auth cold start; catalog.json only ~31KB.
+   Mitigation: Promise.all Firebase imports, modulepreload/preconnect gstatic,
+   non-blocking font stylesheet, parallel this-week+catalog fetch, JS/CSS max-age=86400.
+Stable untouched. Do NOT retag v1.0.0.

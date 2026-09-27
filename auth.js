@@ -604,12 +604,46 @@
     }
   }
 
+  function sameThisWeekPick(a, b) {
+    if (!a || !b) return false;
+    const aId = a.pickId || a.id || "";
+    const bId = b.pickId || b.id || "";
+    if (aId && bId && aId === bId) return true;
+    if (a.relPath && b.relPath && String(a.relPath) === String(b.relPath)) return true;
+    if (a.filename && b.filename && String(a.filename) === String(b.filename)) return true;
+    return false;
+  }
+
   async function publishThisWeek(payload) {
     requireFirestoreWrite();
     const base = payload && typeof payload === "object" ? payload : {};
     const pickId = base.pickId || base.id;
     if (!pickId) {
       throw new Error("publishThisWeek: missing pickId");
+    }
+    let youtubeId = base.youtubeId || null;
+    let youtubeUrl = base.youtubeUrl || null;
+    // Preserve existing youtubeId when re-publishing the same pick/file without one.
+    // Writing null with merge:true previously wiped a live YouTube id.
+    if (!youtubeId) {
+      try {
+        const existing = await loadThisWeekFromCloud();
+        if (
+          existing &&
+          existing.youtubeId &&
+          sameThisWeekPick(existing, { pickId, filename: base.filename, relPath: base.relPath })
+        ) {
+          youtubeId = existing.youtubeId;
+          youtubeUrl =
+            youtubeUrl ||
+            existing.youtubeUrl ||
+            ("https://www.youtube.com/watch?v=" + existing.youtubeId);
+        }
+      } catch (err) {
+        console.warn("publishThisWeek youtube preserve read failed:", err);
+      }
+    } else if (!youtubeUrl) {
+      youtubeUrl = "https://www.youtube.com/watch?v=" + youtubeId;
     }
     const docPayload = scrubUndefined({
       pickId,
@@ -624,8 +658,8 @@
       pickedAt: base.pickedAt || new Date().toISOString(),
       why: base.why || "",
       matchCount: base.matchCount ?? null,
-      youtubeId: base.youtubeId || null,
-      youtubeUrl: base.youtubeUrl || null,
+      youtubeId,
+      youtubeUrl,
       archiveRoot: base.archiveRoot || "/Volumes/EddysHell/",
       note: base.note || null,
       updatedAt: new Date().toISOString(),
@@ -843,59 +877,34 @@
   // ——— Firebase ———
 
   async function loadFirebaseModular() {
-    const { initializeApp } = await import(
-      "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"
-    );
-    const {
-      getAuth,
-      initializeAuth,
-      browserLocalPersistence,
-      browserPopupRedirectResolver,
-      setPersistence,
-      GoogleAuthProvider,
-      signInWithPopup,
-      signInWithRedirect,
-      getRedirectResult,
-      onAuthStateChanged,
-      signOut,
-    } = await import(
-      "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"
-    );
-    const {
-      getFirestore,
-      doc,
-      setDoc,
-      getDoc,
-      collection,
-      query,
-      where,
-      getDocs,
-      onSnapshot,
-    } = await import(
-      "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
-    );
+    // Parallel ESM fetches — sequential awaits stacked ~3 round-trips on phone Safari.
+    const [appMod, authMod, fsMod] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"),
+    ]);
     return {
-      initializeApp,
-      getAuth,
-      initializeAuth,
-      browserLocalPersistence,
-      browserPopupRedirectResolver,
-      setPersistence,
-      GoogleAuthProvider,
-      signInWithPopup,
-      signInWithRedirect,
-      getRedirectResult,
-      onAuthStateChanged,
-      signOut,
-      getFirestore,
-      doc,
-      setDoc,
-      getDoc,
-      collection,
-      query,
-      where,
-      getDocs,
-      onSnapshot,
+      initializeApp: appMod.initializeApp,
+      getAuth: authMod.getAuth,
+      initializeAuth: authMod.initializeAuth,
+      browserLocalPersistence: authMod.browserLocalPersistence,
+      browserPopupRedirectResolver: authMod.browserPopupRedirectResolver,
+      setPersistence: authMod.setPersistence,
+      GoogleAuthProvider: authMod.GoogleAuthProvider,
+      signInWithPopup: authMod.signInWithPopup,
+      signInWithRedirect: authMod.signInWithRedirect,
+      getRedirectResult: authMod.getRedirectResult,
+      onAuthStateChanged: authMod.onAuthStateChanged,
+      signOut: authMod.signOut,
+      getFirestore: fsMod.getFirestore,
+      doc: fsMod.doc,
+      setDoc: fsMod.setDoc,
+      getDoc: fsMod.getDoc,
+      collection: fsMod.collection,
+      query: fsMod.query,
+      where: fsMod.where,
+      getDocs: fsMod.getDocs,
+      onSnapshot: fsMod.onSnapshot,
     };
   }
 
