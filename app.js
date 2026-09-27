@@ -1904,7 +1904,7 @@
       await publishPayloadToCloud(payload);
       if (toast) {
         toast.hidden = false;
-        toast.textContent = "Published — friends on beta will see this.";
+        toast.textContent = "Published — friends will see this.";
       }
       setPublishStatus("");
       persistStagedLocal(null);
@@ -2007,7 +2007,7 @@
     try {
       await publishPayloadToCloud(payload);
       toast.hidden = false;
-      toast.textContent = "Published — friends on beta will see this.";
+      toast.textContent = "Published — friends will see this.";
       setPublishStatus("");
     } catch (err) {
       console.warn("re-publish this week failed:", err);
@@ -2429,7 +2429,7 @@
             localStorage.removeItem(RULE_PENDING_KEY);
           } catch (_) { /* ok */ }
           toast.hidden = false;
-          toast.textContent = "Rule published to beta.";
+          toast.textContent = "Rule published.";
         } else {
           toast.hidden = false;
           toast.textContent =

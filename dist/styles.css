@@ -198,6 +198,11 @@ body.is-guest #user-slot {
   border: 1px solid rgba(230, 184, 0, 0.35);
 }
 
+/* Safari: class display beats bare [hidden] — only show on beta host */
+.badge.beta-badge[hidden] {
+  display: none !important;
+}
+
 /* Fields */
 .field {
   margin-bottom: 16px;
