@@ -7,6 +7,12 @@ service cloud.firestore {
     function emailLower() {
       return request.auth.token.email.lower();
     }
+    // Mirror data/admins.json — only these emails may publish this-week / rule.
+    function isAdmin() {
+      return signedIn() && emailLower() in [
+        'sblanco2005@gmail.com'
+      ];
+    }
     // Check-ins: any signed-in allowlisted user can read; writers must match their own email.
     // App-level allowlist still gates who can sign in.
     match /checkins/{docId} {
@@ -16,6 +22,18 @@ service cloud.firestore {
         && request.resource.data.email == emailLower()
         && request.resource.data.pickId is string
         && request.resource.data.keys().hasAll(['email', 'displayName', 'pickId', 'at']);
+      allow delete: if false;
+    }
+    // Live this-week pick + admin rule (source of truth for beta friends).
+    // Hosting data/*.json remains bootstrap/fallback only.
+    match /config/thisWeek {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+    match /config/rule {
+      allow read: if signedIn();
+      allow create, update: if isAdmin();
       allow delete: if false;
     }
   }

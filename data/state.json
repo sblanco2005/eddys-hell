@@ -1,7 +1,10 @@
 {
   "rule": {
     "folderTypes": [
-      "Full"
+      "Full",
+      "Upper",
+      "Pull",
+      "CrossFit"
     ],
     "minHR": 120,
     "requireHR": true,
@@ -9,7 +12,8 @@
     "rotate": true,
     "rotateWeeks": 8,
     "tagContains": "",
-    "autoPick": true
+    "autoPick": true,
+    "version": 3
   },
   "usedHistory": [],
   "lastPick": null

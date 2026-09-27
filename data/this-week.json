@@ -1,16 +1,23 @@
 {
-  "pickId": "9f757b1922",
-  "filename": "HR 140 2022-06-06 at 4.31.48 PM.mov",
-  "folderType": "Full",
-  "hr": 140,
-  "relPath": "Full/2022/Q2 2022 Full Body/HR 140 2022-06-06 at 4.31.48 PM.mov",
-  "sizeBytes": 4910505316,
-  "mtime": "2022-06-06T17:24:35-04:00",
-  "rawTags": [],
-  "pickedAt": "2026-09-26T14:50:13.440Z",
-  "why": "Type: Full \u00b7 HR 140 > 120 \u00b7 prefer recent (top pool) \u00b7 rotate: excluded last 8w \u00b7 20 candidates",
-  "matchCount": 20,
-  "note": "youtubeId is set by the publish pipeline. Admin Set-as-this-week updates browser state only until scripts/publish-pages.sh syncs data/this-week.json.",
-  "youtubeId": "EAFLtVigQHY",
-  "youtubeUrl": "https://www.youtube.com/watch?v=EAFLtVigQHY"
+  "pickId": "2022b4d91d",
+  "filename": "Power BB DL HR153.mov",
+  "folderType": "Push",
+  "hr": 153,
+  "relPath": "Full/Push/Power BB DL HR153.mov",
+  "sizeBytes": 6178616813,
+  "mtime": "2024-04-26T16:04:50-04:00",
+  "rawTags": [
+    "Power",
+    "BB",
+    "DL",
+    "HR153"
+  ],
+  "pickedAt": "2026-09-27T15:17:28.083Z",
+  "why": "Admin candidate \u00b7 Push \u00b7 HR 153 \u00b7 Power BB DL (published via Firestore live SoT; Hosting JSON bootstrap)",
+  "matchCount": 1,
+  "note": "Live pick/rule come from Firestore config/thisWeek + config/rule. Hosting data/this-week.json is fallback/bootstrap only.",
+  "youtubeId": null,
+  "youtubeUrl": null,
+  "archiveRoot": "/Volumes/EddysHell/",
+  "updatedAt": "2026-09-27T15:17:28.083Z"
 }

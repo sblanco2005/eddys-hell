@@ -581,7 +581,177 @@
     }
   }
 
-  // ——— Mock (localhost only) ———
+  // ——— Config: this-week + rule (Firestore live source of truth) ———
+
+  /** Strip undefined so Firestore setDoc does not reject. */
+  function scrubUndefined(obj) {
+    if (!obj || typeof obj !== "object") return obj;
+    const out = Array.isArray(obj) ? [] : {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === undefined) continue;
+      out[k] = v && typeof v === "object" && !Array.isArray(v) && !(v instanceof Date)
+        ? scrubUndefined(v)
+        : v;
+    }
+    return out;
+  }
+
+  function requireFirestoreWrite() {
+    if (!firestoreReady || !fbDb || !firestoreSetDoc || !firestoreDoc) {
+      const err = new Error("Firestore not ready — cannot publish yet.");
+      err.code = "firestore-not-ready";
+      throw err;
+    }
+  }
+
+  async function publishThisWeek(payload) {
+    requireFirestoreWrite();
+    const base = payload && typeof payload === "object" ? payload : {};
+    const pickId = base.pickId || base.id;
+    if (!pickId) {
+      throw new Error("publishThisWeek: missing pickId");
+    }
+    const docPayload = scrubUndefined({
+      pickId,
+      id: pickId,
+      filename: base.filename || "",
+      folderType: base.folderType || null,
+      hr: typeof base.hr === "number" ? base.hr : base.hr ?? null,
+      relPath: base.relPath || "",
+      sizeBytes: base.sizeBytes ?? null,
+      mtime: base.mtime || null,
+      rawTags: Array.isArray(base.rawTags) ? base.rawTags : [],
+      pickedAt: base.pickedAt || new Date().toISOString(),
+      why: base.why || "",
+      matchCount: base.matchCount ?? null,
+      youtubeId: base.youtubeId || null,
+      youtubeUrl: base.youtubeUrl || null,
+      archiveRoot: base.archiveRoot || "/Volumes/EddysHell/",
+      note: base.note || null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser ? normalizeEmail(currentUser.email) : null,
+    });
+    await firestoreSetDoc(
+      firestoreDoc(fbDb, "config", "thisWeek"),
+      docPayload,
+      { merge: true }
+    );
+    firestoreStatus = "cloud";
+    return docPayload;
+  }
+
+  async function loadThisWeekFromCloud() {
+    if (!firestoreReady || !fbDb || !firestoreGetDoc || !firestoreDoc) {
+      return null;
+    }
+    try {
+      const snap = await firestoreGetDoc(firestoreDoc(fbDb, "config", "thisWeek"));
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      firestoreStatus = "cloud";
+      return data && (data.pickId || data.id) ? data : null;
+    } catch (err) {
+      console.warn("Firestore thisWeek read failed:", err);
+      firestoreStatus = "error";
+      return null;
+    }
+  }
+
+  /** @type {(() => void)|null} */
+  let thisWeekUnsub = null;
+
+  function watchThisWeek(callback) {
+    if (thisWeekUnsub) {
+      try {
+        thisWeekUnsub();
+      } catch (_) {
+        /* ok */
+      }
+      thisWeekUnsub = null;
+    }
+    if (!firestoreReady || !fbDb || !firestoreOnSnapshot || !firestoreDoc) {
+      return () => {};
+    }
+    try {
+      thisWeekUnsub = firestoreOnSnapshot(
+        firestoreDoc(fbDb, "config", "thisWeek"),
+        (snap) => {
+          if (!snap.exists()) return;
+          const data = snap.data();
+          if (data && (data.pickId || data.id) && typeof callback === "function") {
+            try {
+              callback(data);
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        },
+        (err) => {
+          console.warn("Firestore thisWeek watch failed:", err);
+          firestoreStatus = "error";
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore thisWeek watch setup failed:", err);
+    }
+    return () => {
+      if (thisWeekUnsub) {
+        try {
+          thisWeekUnsub();
+        } catch (_) {
+          /* ok */
+        }
+        thisWeekUnsub = null;
+      }
+    };
+  }
+
+  async function publishRule(rule) {
+    requireFirestoreWrite();
+    const base = rule && typeof rule === "object" ? rule : {};
+    const docPayload = scrubUndefined({
+      folderTypes: Array.isArray(base.folderTypes) ? base.folderTypes : [],
+      minHR: typeof base.minHR === "number" ? base.minHR : Number(base.minHR) || 0,
+      requireHR: base.requireHR !== false,
+      autoPick: base.autoPick !== false,
+      recency: base.recency || "recent",
+      rotate: !!base.rotate,
+      rotateWeeks:
+        typeof base.rotateWeeks === "number"
+          ? base.rotateWeeks
+          : Number(base.rotateWeeks) || 8,
+      tagContains: base.tagContains || "",
+      version: base.version ?? null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser ? normalizeEmail(currentUser.email) : null,
+    });
+    await firestoreSetDoc(
+      firestoreDoc(fbDb, "config", "rule"),
+      docPayload,
+      { merge: true }
+    );
+    firestoreStatus = "cloud";
+    return docPayload;
+  }
+
+  async function loadRuleFromCloud() {
+    if (!firestoreReady || !fbDb || !firestoreGetDoc || !firestoreDoc) {
+      return null;
+    }
+    try {
+      const snap = await firestoreGetDoc(firestoreDoc(fbDb, "config", "rule"));
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      firestoreStatus = "cloud";
+      return data && typeof data === "object" ? data : null;
+    } catch (err) {
+      console.warn("Firestore rule read failed:", err);
+      firestoreStatus = "error";
+      return null;
+    }
+  }
+
+    // ——— Mock (localhost only) ———
 
   function loadMockSession() {
     if (!isLocalhost()) return null;
@@ -695,6 +865,7 @@
       getFirestore,
       doc,
       setDoc,
+      getDoc,
       collection,
       query,
       where,
@@ -719,6 +890,7 @@
       getFirestore,
       doc,
       setDoc,
+      getDoc,
       collection,
       query,
       where,
@@ -741,6 +913,8 @@
   let firestoreDoc = null;
   /** @type {any} */
   let firestoreSetDoc = null;
+  /** @type {any} */
+  let firestoreGetDoc = null;
   /** @type {any} */
   let firestoreCollection = null;
   /** @type {any} */
@@ -842,6 +1016,7 @@
 
     firestoreDoc = mod.doc;
     firestoreSetDoc = mod.setDoc;
+    firestoreGetDoc = mod.getDoc;
     firestoreCollection = mod.collection;
     firestoreQuery = mod.query;
     firestoreWhere = mod.where;
@@ -1066,6 +1241,11 @@
     onCheckinsChange,
     getCheckinSyncMode,
     isFirestoreReady: () => firestoreReady,
+    publishThisWeek,
+    loadThisWeekFromCloud,
+    watchThisWeek,
+    publishRule,
+    loadRuleFromCloud,
     CHECKINS_KEY,
     MEMBERS_KEY,
     getMembers,

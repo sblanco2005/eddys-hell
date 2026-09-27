@@ -1,11 +1,13 @@
 /**
  * Eddy's Hell — Thursday workout (admin + member)
- * Storage: eddys-hell-admin-v1, eddys-hell-checkins-v1, eddys-hell-members-v1, eddys-hell-pt-v1
+ * Storage: eddys-hell-admin-v2, eddys-hell-checkins-v1, eddys-hell-members-v1, eddys-hell-pt-v1
  */
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "eddys-hell-admin-v1";
+  /** Bumped v2→v3 so stale Full-only / HR140 / rotate 2w rules don't override default-rule.json */
+  const STORAGE_KEY = "eddys-hell-admin-v2";
+  const RULE_VERSION = 3;
   const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
   /** Mac archive volume for Reveal in Finder (https cannot open Finder). Easy to change. */
   const ARCHIVE_ROOT = "/Volumes/EddysHell/";
@@ -25,6 +27,7 @@
   const TYPE_ORDER = [
     "Full", "Upper", "Lower", "Push", "Pull",
     "HIIT", "Kettlebell", "Circuit", "CrossFit",
+    "Week1", "Week2",
   ];
 
   /** @type {{ meta: object, files: Array }} */
@@ -48,7 +51,8 @@
 
   function defaultRule() {
     return {
-      folderTypes: ["Full"],
+      version: RULE_VERSION,
+      folderTypes: ["Full", "Upper", "Pull", "CrossFit"],
       minHR: 120,
       requireHR: true,
       autoPick: true,
@@ -243,7 +247,10 @@
 
   // ——— This week resolution ———
 
-  /** Prefer repo this-week.json, then localStorage lastPick */
+  /**
+   * Live pick: Firestore (in thisWeekFile after cloud hydrate) → repo JSON → localStorage.
+   * thisWeekFile is overwritten by loadCloudConfig when cloud doc is present/newer.
+   */
   function resolveThisWeek() {
     if (thisWeekFile && (thisWeekFile.pickId || thisWeekFile.id)) {
       const id = thisWeekFile.pickId || thisWeekFile.id;
@@ -261,7 +268,9 @@
         matchCount: thisWeekFile.matchCount,
         youtubeId: thisWeekFile.youtubeId || null,
         youtubeUrl: thisWeekFile.youtubeUrl || null,
-        source: "file",
+        archiveRoot: thisWeekFile.archiveRoot || ARCHIVE_ROOT,
+        updatedAt: thisWeekFile.updatedAt || null,
+        source: thisWeekFile._source || "file",
       };
     }
     if (state.lastPick) {
@@ -373,32 +382,204 @@
   function updatePublishPendingHint() {
     const el = $("publish-pending");
     if (!el) return;
+    // Only show transient failure / status messages; success uses accept-toast.
+    if (el.dataset.liveStatus === "1") return;
     el.hidden = localStorage.getItem(PENDING_PUBLISH_KEY) !== "1";
+    if (!el.hidden && !el.textContent.trim()) {
+      el.textContent = "Publish not synced yet — tap Publish this week.";
+    }
+  }
+
+  function setPublishStatus(msg, { error = false, sticky = false } = {}) {
+    const el = $("publish-pending");
+    if (!el) return;
+    if (!msg) {
+      el.hidden = true;
+      el.dataset.liveStatus = "";
+      el.textContent = "";
+      updatePublishPendingHint();
+      return;
+    }
+    el.dataset.liveStatus = "1";
+    el.hidden = false;
+    el.textContent = msg;
+    el.style.color = error ? "" : "";
+    if (!sticky) {
+      setTimeout(() => {
+        if (el.dataset.liveStatus === "1" && el.textContent === msg) {
+          el.dataset.liveStatus = "";
+          el.hidden = true;
+          updatePublishPendingHint();
+        }
+      }, error ? 8000 : 4500);
+    }
+  }
+
+  function tsOfThisWeek(obj) {
+    if (!obj) return 0;
+    const candidates = [obj.updatedAt, obj.pickedAt, obj._ts];
+    let best = 0;
+    for (const c of candidates) {
+      const t = Date.parse(c || 0) || 0;
+      if (t > best) best = t;
+    }
+    return best;
+  }
+
+  function applyCloudThisWeek(cloud) {
+    if (!cloud || !(cloud.pickId || cloud.id)) return false;
+    const cloudTs = tsOfThisWeek(cloud);
+    const localTs = tsOfThisWeek(thisWeekFile);
+    // Prefer cloud when present and >= repo/local published stamp
+    if (!thisWeekFile || cloudTs >= localTs || !localTs) {
+      thisWeekFile = { ...cloud, _source: "cloud" };
+      return true;
+    }
+    return false;
+  }
+
+  function applyCloudRule(cloudRule) {
+    if (!cloudRule || typeof cloudRule !== "object") return false;
+    const next = {
+      ...defaultRule(),
+      ...cloudRule,
+    };
+    // Drop Firestore metadata from rule object used by picker
+    delete next.updatedAt;
+    delete next.updatedBy;
+    state.rule = next;
+    saveState();
+    try {
+      localStorage.removeItem(RULE_PENDING_KEY);
+    } catch (_) { /* ok */ }
+    writeRuleToForm(state.rule);
+    updateMatchBadge();
+    return true;
+  }
+
+  async function loadCloudConfig() {
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.isFirestoreReady || !Auth.isFirestoreReady()) return;
+    let changed = false;
+    try {
+      const cloudTw = await Auth.loadThisWeekFromCloud();
+      if (cloudTw && applyCloudThisWeek(cloudTw)) changed = true;
+    } catch (err) {
+      console.warn("loadThisWeekFromCloud:", err);
+    }
+    try {
+      const cloudRule = await Auth.loadRuleFromCloud();
+      if (cloudRule && applyCloudRule(cloudRule)) changed = true;
+    } catch (err) {
+      console.warn("loadRuleFromCloud:", err);
+    }
+    if (changed) {
+      ensurePickViewFromPublished();
+      renderYoutubeAdminControls();
+      const tw = resolveThisWeek();
+      if (tw && authUser) {
+        renderSharedCheckins(tw);
+        const memberView = $("view-member");
+        if (memberView && !memberView.hidden) {
+          renderMemberView({ asAdmin: authUser.role === "admin" });
+        }
+      }
+    }
+  }
+
+  function payloadFromThisWeek(tw) {
+    if (!tw) return null;
+    return {
+      pickId: tw.id || tw.pickId,
+      filename: tw.filename,
+      folderType: tw.folderType,
+      hr: tw.hr,
+      relPath: tw.relPath,
+      sizeBytes: tw.sizeBytes,
+      mtime: tw.mtime,
+      rawTags: tw.rawTags || [],
+      pickedAt: tw.pickedAt || new Date().toISOString(),
+      why: tw.why || "",
+      matchCount: tw.matchCount ?? null,
+      youtubeId: tw.youtubeId || null,
+      youtubeUrl: tw.youtubeUrl || null,
+      archiveRoot: tw.archiveRoot || ARCHIVE_ROOT,
+    };
+  }
+
+  async function publishPayloadToCloud(payload) {
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.publishThisWeek) {
+      throw new Error("Auth publish API missing");
+    }
+    const saved = await Auth.publishThisWeek(payload);
+    thisWeekFile = { ...saved, _source: "cloud" };
+    try {
+      localStorage.removeItem(PENDING_PUBLISH_KEY);
+    } catch (_) { /* ok */ }
+    try {
+      localStorage.setItem(
+        "eddys-hell-this-week-broadcast-v1",
+        JSON.stringify({ ...saved, _ts: Date.now() })
+      );
+    } catch (_) { /* ok */ }
+    return saved;
+  }
+
+  function getRevealRelPath() {
+    const fromPick =
+      (currentResult && currentResult.pick && currentResult.pick.relPath) ||
+      (state.lastPick && state.lastPick.relPath) ||
+      "";
+    if (fromPick) return String(fromPick);
+    const pathEl = $("pick-path");
+    const t = pathEl && pathEl.textContent ? pathEl.textContent.trim() : "";
+    if (t && t !== "—") return t;
+    return "";
+  }
+
+  function updateRevealFinderButton() {
+    const btnReveal = $("btn-reveal-finder");
+    const row = $("path-reveal-row");
+    const pathDisplay = $("reveal-path-display");
+    const pickResult = $("pick-result");
+    const showing = !!(pickResult && !pickResult.hidden);
+    const rel = getRevealRelPath();
+    const show = !!(showing && rel);
+    if (btnReveal) {
+      btnReveal.hidden = !show;
+      btnReveal.textContent = "Reveal in Finder";
+      btnReveal.setAttribute("aria-label", "Reveal in Finder");
+    }
+    if (row) row.hidden = !show;
+    if (pathDisplay) {
+      if (show) {
+        const abs = absoluteMacPath(rel);
+        pathDisplay.hidden = false;
+        pathDisplay.value = abs;
+        pathDisplay.title = abs;
+      } else {
+        pathDisplay.hidden = true;
+        pathDisplay.value = "";
+      }
+    }
   }
 
   function updatePickActions() {
     const btnAccept = $("btn-accept");
     const btnKeep = $("btn-keep");
-    const btnReveal = $("btn-reveal-finder");
-    if (!btnAccept || !btnKeep) return;
-    if (pickIsCandidate) {
-      btnAccept.hidden = false;
-      btnKeep.hidden = true;
-    } else {
-      btnAccept.hidden = true;
-      btnKeep.hidden = !resolveThisWeek();
+    if (btnAccept && btnKeep) {
+      if (pickIsCandidate) {
+        btnAccept.hidden = false;
+        btnKeep.hidden = true;
+      } else {
+        btnAccept.hidden = true;
+        btnKeep.hidden = !resolveThisWeek();
+      }
     }
-    if (btnReveal) {
-      const rel =
-        (currentResult && currentResult.pick && currentResult.pick.relPath) ||
-        (state.lastPick && state.lastPick.relPath) ||
-        "";
-      const showing = !$("pick-result").hidden;
-      btnReveal.hidden = !(showing && rel);
-    }
+    updateRevealFinderButton();
     updatePublishPendingHint();
   }
-
 
   function absoluteMacPath(relPath) {
     const root = ARCHIVE_ROOT.endsWith("/")
@@ -410,59 +591,95 @@
     return root + rel;
   }
 
-  async function revealInFinder() {
-    const rel =
-      (currentResult && currentResult.pick && currentResult.pick.relPath) ||
-      (state.lastPick && state.lastPick.relPath) ||
-      "";
-    if (!rel) return;
-    const abs = absoluteMacPath(rel);
-    let copied = false;
+  function copyTextFallback(text) {
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(abs);
-        copied = true;
-      }
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "0";
+      ta.style.left = "0";
+      ta.style.width = "1px";
+      ta.style.height = "1px";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return !!ok;
     } catch (_) {
-      copied = false;
+      return false;
     }
-    if (!copied) {
+  }
+
+  async function copyPathToClipboard(abs) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
       try {
-        const ta = document.createElement("textarea");
-        ta.value = abs;
-        ta.setAttribute("readonly", "");
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        copied = document.execCommand("copy");
-        document.body.removeChild(ta);
+        await navigator.clipboard.writeText(abs);
+        return true;
       } catch (_) {
-        copied = false;
+        /* fall through */
+      }
+    }
+    return copyTextFallback(abs);
+  }
+
+  function showRevealPathUi(abs, copied) {
+    const pathDisplay = $("reveal-path-display");
+    if (pathDisplay) {
+      pathDisplay.hidden = false;
+      pathDisplay.value = abs;
+      pathDisplay.title = abs;
+      try {
+        pathDisplay.focus();
+        pathDisplay.select();
+      } catch (_) {
+        /* ignore */
       }
     }
     const toast = $("accept-toast");
     if (toast) {
       toast.hidden = false;
       toast.textContent = copied
-        ? "Path copied — Finder → Go → Go to Folder (⇧⌘G), then paste"
-        : "Copy failed — path: " + abs;
-      setTimeout(() => {
+        ? "Path copied — Finder → Go → Go to Folder (⇧⌘G), then paste:\n" + abs
+        : "Copy may have failed — select & copy this path (⇧⌘G in Finder):\n" + abs;
+      // Keep visible longer so Safari users can read/select the path from toast
+      clearTimeout(showRevealPathUi._hideToast);
+      showRevealPathUi._hideToast = setTimeout(() => {
         toast.hidden = true;
-      }, 4500);
+      }, 12000);
     }
-    // Optional: https hosting usually blocks file:// — clipboard is the real path
+    // Always offer a selectable prompt so clipboard failures are never silent
     try {
-      const fileUrl =
-        "file://" +
+      window.prompt(
+        copied
+          ? "Path copied to clipboard. If paste fails, copy from here — then Finder → Go → Go to Folder (⇧⌘G):"
+          : "Clipboard unavailable. Select All / Copy this path — then Finder → Go → Go to Folder (⇧⌘G):",
         abs
-          .split("/")
-          .map((seg, i) => (i === 0 && seg === "" ? "" : encodeURIComponent(seg)))
-          .join("/");
-      window.open(fileUrl, "_blank");
+      );
     } catch (_) {
       /* ignore */
     }
+  }
+
+  async function revealInFinder() {
+    const rel = getRevealRelPath();
+    if (!rel) {
+      const toast = $("accept-toast");
+      if (toast) {
+        toast.hidden = false;
+        toast.textContent = "No file path available yet — dry-run or load this week first.";
+        setTimeout(() => {
+          toast.hidden = true;
+        }, 4000);
+      }
+      return;
+    }
+    const abs = absoluteMacPath(rel);
+    const copied = await copyPathToClipboard(abs);
+    showRevealPathUi(abs, copied);
   }
 
   function parsePTPayload(data) {
@@ -791,11 +1008,10 @@
       return;
     }
     showView("rule");
-    // Candidate preview defaults to empty until dry-run
-    if (!currentResult) {
-      showPickPanels({ empty: true, result: false, error: false });
-      updatePickActions();
-    }
+    // Show last / published pick on the candidate card when available so
+    // Reveal in Finder is reachable without another dry-run. Dry-run still
+    // replaces this with a fresh candidate (pickIsCandidate).
+    ensurePickViewFromPublished();
   }
 
   function syncMembersDraftFromAuth() {
@@ -943,6 +1159,7 @@
     const recencyEl = document.querySelector('input[name="recency"]:checked');
     const autoEl = $("auto-pick");
     return {
+      version: (state.rule && state.rule.version) || RULE_VERSION,
       folderTypes: [...(state.rule.folderTypes || [])],
       minHR: Number($("min-hr").value) || 0,
       requireHR: $("require-hr").checked,
@@ -982,6 +1199,12 @@
     $("pick-empty").hidden = !empty;
     $("pick-result").hidden = !result;
     $("pick-error").hidden = !error;
+    if (!result) {
+      const row = $("path-reveal-row");
+      const btnReveal = $("btn-reveal-finder");
+      if (row) row.hidden = true;
+      if (btnReveal) btnReveal.hidden = true;
+    }
   }
 
   function renderPickResult(result) {
@@ -999,6 +1222,7 @@
     showPickPanels({ empty: false, result: true, error: false });
     $("accept-toast").hidden = true;
     updatePickActions();
+    updateRevealFinderButton();
     renderYoutubeAdminControls();
   }
 
@@ -1122,7 +1346,7 @@
     renderPickResult(result);
   }
 
-  function acceptPick() {
+  async function acceptPick() {
     if (!currentResult || !currentResult.pick) return;
     const f = currentResult.pick;
     const now = new Date().toISOString();
@@ -1167,43 +1391,111 @@
       matchCount: currentResult.matches.length,
       youtubeId: keepYt.youtubeId,
       youtubeUrl: keepYt.youtubeUrl,
+      archiveRoot: ARCHIVE_ROOT,
     };
-    // In-memory only — browser cannot write GitHub; Grok Bot / publish-pages syncs
-    thisWeekFile = payload;
-    localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+    thisWeekFile = { ...payload, _source: "local" };
     pickIsCandidate = false;
 
+    const btnAccept = $("btn-accept");
+    if (btnAccept) {
+      btnAccept.disabled = true;
+      btnAccept.textContent = "Publishing…";
+    }
+    const toast = $("accept-toast");
     try {
-      localStorage.setItem(
-        "eddys-hell-this-week-broadcast-v1",
-        JSON.stringify({ ...payload, _ts: Date.now() })
+      await publishPayloadToCloud(payload);
+      toast.hidden = false;
+      toast.textContent = "Published — friends on beta will see this.";
+      setPublishStatus("");
+    } catch (err) {
+      console.warn("publishThisWeek failed:", err);
+      try {
+        localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+      } catch (_) { /* ok */ }
+      toast.hidden = false;
+      toast.textContent = "Saved locally — cloud publish failed.";
+      setPublishStatus(
+        "Publish failed: " + ((err && err.message) || String(err)),
+        { error: true, sticky: true }
       );
-    } catch (_) { /* ok */ }
+    } finally {
+      if (btnAccept) {
+        btnAccept.disabled = false;
+        btnAccept.textContent = "Publish this week";
+      }
+    }
 
     renderHistory();
     updateMatchBadge();
-    const toast = $("accept-toast");
-    toast.hidden = false;
-    toast.textContent = "Set as this week’s pick.";
     updatePickActions();
     setTimeout(() => {
       toast.hidden = true;
-    }, 3500);
+    }, 4000);
     renderSharedCheckins(resolveThisWeek());
     renderYoutubeAdminControls();
   }
 
-  function keepThisWeek() {
+  /** Re-publish whatever resolveThisWeek() currently shows (admin Publish button). */
+  async function keepThisWeek() {
     pickIsCandidate = false;
-    // Re-show published / in-memory this week
+    const tw = resolveThisWeek();
+    if (!tw) {
+      ensurePickViewFromPublished();
+      updatePickActions();
+      return;
+    }
+    // Sync lastPick to what's on screen so local + cloud match
+    state.lastPick = {
+      id: tw.id,
+      filename: tw.filename,
+      folderType: tw.folderType,
+      hr: tw.hr,
+      relPath: tw.relPath,
+      sizeBytes: tw.sizeBytes,
+      mtime: tw.mtime,
+      rawTags: tw.rawTags || [],
+      pickedAt: tw.pickedAt || new Date().toISOString(),
+      why: tw.why,
+      matchCount: tw.matchCount,
+      youtubeId: tw.youtubeId || null,
+      youtubeUrl: tw.youtubeUrl || null,
+    };
+    saveState();
     currentResult = null;
     ensurePickViewFromPublished();
+
+    const payload = payloadFromThisWeek(tw);
+    const btnKeep = $("btn-keep");
+    if (btnKeep) {
+      btnKeep.disabled = true;
+      btnKeep.textContent = "Publishing…";
+    }
     const toast = $("accept-toast");
-    toast.hidden = false;
-    toast.textContent = "Keeping this week’s pick.";
+    try {
+      await publishPayloadToCloud(payload);
+      toast.hidden = false;
+      toast.textContent = "Published — friends on beta will see this.";
+      setPublishStatus("");
+    } catch (err) {
+      console.warn("re-publish this week failed:", err);
+      try {
+        localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+      } catch (_) { /* ok */ }
+      toast.hidden = false;
+      toast.textContent = "Saved locally — cloud publish failed.";
+      setPublishStatus(
+        "Publish failed: " + ((err && err.message) || String(err)),
+        { error: true, sticky: true }
+      );
+    } finally {
+      if (btnKeep) {
+        btnKeep.disabled = false;
+        btnKeep.textContent = "Publish this week";
+      }
+    }
     setTimeout(() => {
       toast.hidden = true;
-    }, 2500);
+    }, 4000);
     updatePickActions();
     renderSharedCheckins(resolveThisWeek());
     renderYoutubeAdminControls();
@@ -1403,6 +1695,10 @@
     $("btn-checkin").addEventListener("click", async () => {
       const tw = resolveThisWeek();
       if (!tw || !authUser) return;
+      const confirmed = window.confirm(
+        "Mark yourself as checked in for this week?"
+      );
+      if (!confirmed) return;
       const btn = $("btn-checkin");
       btn.disabled = true;
       btn.textContent = "Checking in…";
@@ -1433,33 +1729,49 @@
     loadState();
     await loadPTSummary();
 
+    let repoDefault = null;
     try {
-      const had = localStorage.getItem(STORAGE_KEY);
-      if (!had) {
-        const seedRes = await fetch("data/state.json");
+      const dr = await fetch("data/default-rule.json", { cache: "no-store" });
+      if (dr.ok) repoDefault = await dr.json();
+    } catch (_) { /* ok */ }
+
+    const desiredVersion = RULE_VERSION;
+    const hadStorage = !!localStorage.getItem(STORAGE_KEY);
+    const storedVersion = state.rule && state.rule.version;
+    // Always replace rule from default-rule.json when stored version !== RULE_VERSION
+    // (keep usedHistory / lastPick). Same-version still lets admin overrides win.
+    const versionMismatch = Number(storedVersion) !== Number(desiredVersion);
+
+    if (!hadStorage || versionMismatch) {
+      try {
+        const seedRes = await fetch("data/state.json", { cache: "no-store" });
         if (seedRes.ok) {
           const seed = await seedRes.json();
-          if (seed.rule) state.rule = { ...defaultRule(), ...seed.rule };
-          if (Array.isArray(seed.usedHistory)) state.usedHistory = seed.usedHistory;
-          if (seed.lastPick) state.lastPick = seed.lastPick;
+          if (!hadStorage) {
+            if (Array.isArray(seed.usedHistory)) state.usedHistory = seed.usedHistory;
+            if (seed.lastPick) state.lastPick = seed.lastPick;
+          }
+          if (!repoDefault && seed.rule) repoDefault = seed.rule;
         }
-      }
-    } catch (_) { /* optional */ }
-
-    try {
-      const dr = await fetch("data/default-rule.json");
-      if (dr.ok) {
-        const def = await dr.json();
-        state.rule = { ...def, ...state.rule };
-        if (!localStorage.getItem(STORAGE_KEY)) {
-          state.rule = { ...defaultRule(), ...def };
-        }
-      }
-    } catch (_) { /* ok */ }
+      } catch (_) { /* optional */ }
+      // Prefer live default-rule.json; fall back to state.json rule / defaultRule()
+      state.rule = {
+        ...defaultRule(),
+        ...(repoDefault || {}),
+        version: RULE_VERSION,
+      };
+      saveState();
+    } else if (repoDefault) {
+      // Same version: fill missing keys from defaults, keep admin overrides
+      state.rule = { ...defaultRule(), ...repoDefault, ...state.rule };
+    }
 
     try {
       const twRes = await fetch("data/this-week.json", { cache: "no-store" });
-      if (twRes.ok) thisWeekFile = await twRes.json();
+      if (twRes.ok) {
+        thisWeekFile = await twRes.json();
+        if (thisWeekFile) thisWeekFile._source = "file";
+      }
     } catch (_) {
       thisWeekFile = null;
     }
@@ -1484,15 +1796,8 @@
           syncMembersDraftFromAuth();
           renderMembersUI();
           renderPTUI();
-          // Candidate section lives on rule; keep current dry-run or empty
-          if (currentResult && pickIsCandidate) {
-            renderPickResult(currentResult);
-          } else if (!currentResult && !pickIsCandidate) {
-            // Show empty unless a published/accepted pick is already painted
-            if ($("pick-result").hidden && $("pick-error").hidden) {
-              showPickPanels({ empty: true, result: false, error: false });
-            }
-          }
+          // Keep dry-run candidate, else restore published/last pick (Reveal needs pick-result)
+          ensurePickViewFromPublished();
         }
         if (tab.dataset.view === "pick") {
           // Same This week experience as friends: workout + check-in + shared roster
@@ -1501,16 +1806,17 @@
       });
     }
 
-    $("btn-save").addEventListener("click", () => {
+    $("btn-save").addEventListener("click", async () => {
       state.rule = readRuleFromForm();
       saveState();
-      // Pending payload so Wednesday routine / Grok Bot can sync data/default-rule.json + state.rule
+      // Keep pending key as local backup for Mac Wednesday routine / Hosting JSON
       try {
         localStorage.setItem(
           RULE_PENDING_KEY,
           JSON.stringify({
             rule: state.rule,
             defaultRule: {
+              version: state.rule.version || RULE_VERSION,
               folderTypes: state.rule.folderTypes,
               minHR: state.rule.minHR,
               requireHR: state.rule.requireHR,
@@ -1525,14 +1831,46 @@
         );
       } catch (_) { /* ok */ }
       const toast = $("save-toast");
-      toast.hidden = false;
-      toast.textContent =
-        "Rule saved (auto-pick " +
-        (state.rule.autoPick !== false ? "ON" : "OFF") +
-        ").";
+      const btn = $("btn-save");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Publishing…";
+      }
+      try {
+        if (
+          window.EddysHellAuth &&
+          window.EddysHellAuth.publishRule &&
+          window.EddysHellAuth.isFirestoreReady &&
+          window.EddysHellAuth.isFirestoreReady()
+        ) {
+          await window.EddysHellAuth.publishRule(state.rule);
+          try {
+            localStorage.removeItem(RULE_PENDING_KEY);
+          } catch (_) { /* ok */ }
+          toast.hidden = false;
+          toast.textContent = "Rule published to beta.";
+        } else {
+          toast.hidden = false;
+          toast.textContent =
+            "Rule saved locally (cloud not ready). Auto-pick " +
+            (state.rule.autoPick !== false ? "ON" : "OFF") +
+            ".";
+        }
+      } catch (err) {
+        console.warn("publishRule failed:", err);
+        toast.hidden = false;
+        toast.textContent =
+          "Rule saved locally — publish failed: " +
+          ((err && err.message) || String(err));
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Save rule";
+        }
+      }
       setTimeout(() => {
         toast.hidden = true;
-      }, 2500);
+      }, 3500);
     });
 
     $("btn-dryrun").addEventListener("click", runDryRun);
@@ -1560,9 +1898,30 @@
     syncMembersDraftFromAuth();
     renderMembersUI();
     renderPTUI();
+    // Firestore is live SoT for this-week + rule (Hosting JSON = bootstrap)
+    await loadCloudConfig();
+    if (window.EddysHellAuth.watchThisWeek) {
+      window.EddysHellAuth.watchThisWeek((cloud) => {
+        if (applyCloudThisWeek(cloud)) {
+          ensurePickViewFromPublished();
+          renderYoutubeAdminControls();
+          const tw = resolveThisWeek();
+          if (tw && authUser) {
+            renderSharedCheckins(tw);
+            const memberView = $("view-member");
+            if (memberView && !memberView.hidden) {
+              renderMemberView({ asAdmin: authUser.role === "admin" });
+            }
+          }
+        }
+      });
+    }
     window.EddysHellAuth.onAuthChange((user) => {
       authUser = user;
       applyRoleUI();
+      if (user) {
+        loadCloudConfig().catch((err) => console.warn(err));
+      }
     });
     window.EddysHellAuth.onCheckinsChange(() => {
       const tw = resolveThisWeek();

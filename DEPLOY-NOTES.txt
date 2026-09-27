@@ -1,5 +1,5 @@
 Eddy's Hell — Hosting / Auth deploy notes
-Updated 2026-09-26 ~9:30 PM ET (America/New_York).
+Updated 2026-09-27 ~10:30 AM ET (America/New_York).
 
 ## Environments
 Stable (friends / known-good v1.0.0):
@@ -74,3 +74,60 @@ Console checklist:
     Authorized redirect URIs: https://eddy-s-hell-beta.web.app/__/auth/handler
 
 Delete any temporary service-account key after use (never commit keys).
+
+## 2026-09-27 ~10:30 AM ET — beta only
+Reveal in Finder: Admin Rule was forcing #pick-result empty on load, so the
+button stayed hidden unless you dry-ran again. Now restores published/last
+pick onto #pick-result; Reveal row always shown when relPath exists.
+Check-in: window.confirm before recording (admin + members).
+Stable untouched.
+
+## 2026-09-27 ~10:35 AM ET — beta only (Reveal in Finder Safari)
+Reveal in Finder never fails silently on Safari:
+  - Always shows full Mac path in toast (selectable, 12s)
+  - Always opens prompt() with path prefilled for manual copy
+  - Tries navigator.clipboard.writeText, then document.execCommand('copy')
+  - Readonly selectable path field always visible under the button when candidate loaded
+  - Removed useless window.open(file://) on https
+Stable untouched.
+
+## 2026-09-27 ~10:45 AM ET — beta only (EddysHell catalog)
+Archive source: ONLY /Volumes/EddysHell (no SantiTB).
+Rebuilt data/catalog.json from Mac scan (59 videos).
+Crossfit & Power → folderType CrossFit (Admin Rule type chip).
+ARCHIVE_ROOT = /Volumes/EddysHell/
+this-week.json remapped to EddysHell Full/2024/HR 140 BB DL HT PushPull ups.mov
+Stable untouched.
+
+## 2026-09-27 ~10:50 AM ET — beta only (admin rule storage bump)
+localStorage key eddys-hell-admin-v1 was overriding data/default-rule.json, so
+Santiago's old Full / HR>140 / tag dl rule stuck after catalog redeploys.
+Fix:
+  - STORAGE_KEY → eddys-hell-admin-v2
+  - rule.version = 2 on default-rule.json / state.json / defaultRule()
+  - Boot reseeds rule from default-rule.json when version mismatches (keeps
+    usedHistory / lastPick); same-version still lets admin overrides win
+Stable untouched.
+
+## 2026-09-27 ~10:48 AM ET — beta only (rule v3 four folderTypes)
+Live default-rule still had folderTypes:[Full] so Santiago kept seeing
+Full + HR140 + rotate 2w (stale localStorage, same-version path kept overrides)
+and dry-run returned 0 matches.
+Fix:
+  - RULE_VERSION = 3
+  - default-rule.json / state.json rule / defaultRule():
+    folderTypes Full+Upper+Pull+CrossFit, minHR 120, requireHR true,
+    rotate true, rotateWeeks 8, tagContains "", autoPick true, version 3
+  - Boot: if stored rule.version !== 3, ALWAYS replace rule from
+    default-rule.json (keep usedHistory / lastPick)
+  - Cache-bust index.html scripts ?v=1790520444
+Stable untouched. Santiago: hard-refresh once.
+
+## 2026-09-27 ~11:20 AM ET — beta only (Firestore Publish this week + Save rule)
+Live SoT for pick/rule: Firestore `config/thisWeek` + `config/rule`.
+Admin buttons: both candidate + published paths labeled **Publish this week**
+(write local + Firestore). **Save rule** → `publishRule` → toast “Rule published to beta.”
+Hosting `data/*.json` is bootstrap/fallback only. Check-ins unchanged.
+Rules deploy: `firebase deploy --only firestore:rules --project eddy-s-hell`
+Hosting: `scripts/deploy-hosting.sh beta` only (stable untouched).
+Do NOT retag v1.0.0.

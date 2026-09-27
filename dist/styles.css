@@ -829,3 +829,47 @@ input:focus {
   color: var(--ok);
   font-weight: 600;
 }
+
+
+/* Reveal in Finder — own row under candidate meta so it is not lost among Accept/Keep */
+.path-reveal-row {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+.path-reveal-row .btn {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.reveal-path-label {
+  display: block;
+  width: 100%;
+  margin: 8px 0 4px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-weight: 550;
+}
+.reveal-path-display {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--text);
+  background: var(--bg-elevated, rgba(0,0,0,0.25));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  word-break: break-all;
+  user-select: all;
+  cursor: text;
+}
+.reveal-path-display[hidden] {
+  display: none !important;
+}
+.toast {
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}

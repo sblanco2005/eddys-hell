@@ -9,7 +9,7 @@ Until then, use Studio + paste the link into the app.
 
    ```bash
    cd ~/eddys-hell-app
-   ./scripts/compress-workout.sh "/Volumes/SantiTB/Eddy's Hell/…/workout.mov"
+   ./scripts/compress-workout.sh "/Volumes/EddysHell/…/workout.mov"
    # → ~/eddys-hell-app/out/week.mp4
    ```
 
