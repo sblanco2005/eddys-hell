@@ -7,8 +7,8 @@
 
   const STORAGE_KEY = "eddys-hell-admin-v1";
   const PENDING_PUBLISH_KEY = "eddys-hell-pending-publish-v1";
-  /** Absolute Mac library root for Reveal in Finder (https cannot open Finder). */
-  const MAC_LIBRARY_ROOT = "/Volumes/SantiTB/Eddy's Hell/";
+  /** Mac archive volume for Reveal in Finder (https cannot open Finder). Easy to change. */
+  const ARCHIVE_ROOT = "/Volumes/EddysHell/";
   const MEMBERS_PENDING_KEY = "eddys-hell-members-pending-v1";
   const PT_KEY = "eddys-hell-pt-v1";
   const PT_PENDING_KEY = "eddys-hell-pt-pending-v1";
@@ -398,9 +398,9 @@
 
 
   function absoluteMacPath(relPath) {
-    const root = MAC_LIBRARY_ROOT.endsWith("/")
-      ? MAC_LIBRARY_ROOT
-      : MAC_LIBRARY_ROOT + "/";
+    const root = ARCHIVE_ROOT.endsWith("/")
+      ? ARCHIVE_ROOT
+      : ARCHIVE_ROOT + "/";
     const rel = String(relPath || "")
       .replace(/\\/g, "/")
       .replace(/^\/+/, "");
