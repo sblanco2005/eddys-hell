@@ -817,7 +817,9 @@
 
   function renderLanding() {
     showView("landing");
+    // Belt-and-suspenders: class display:grid/flex must not leak guest chrome
     $("admin-tabs").hidden = true;
+    $("user-slot").hidden = true;
     $("brand-sub").textContent = "Thursday workout";
 
     const tw = resolveThisWeek();
@@ -1094,6 +1096,7 @@
   function applyRoleUI() {
     renderUserSlot();
     if (!authUser) {
+      // renderLanding also forces admin-tabs + user-slot hidden
       renderLanding();
       return;
     }
@@ -1103,6 +1106,9 @@
       renderMembersUI();
       renderPTUI();
       renderAdminShell("rule");
+      // Assert landing is not left visible alongside admin chrome
+      const landing = $("view-landing");
+      if (landing) landing.hidden = true;
       return;
     }
     renderMemberView();
