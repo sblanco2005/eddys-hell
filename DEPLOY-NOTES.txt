@@ -148,3 +148,14 @@ Bugs reported on phone Safari beta:
    Mitigation: Promise.all Firebase imports, modulepreload/preconnect gstatic,
    non-blocking font stylesheet, parallel this-week+catalog fetch, JS/CSS max-age=86400.
 Stable untouched. Do NOT retag v1.0.0.
+
+## 2026-09-27 ~12:50 PM ET — beta only (Publish this week requires YouTube)
+Rule: Admin **Publish this week** (and any path that writes Firestore
+`config/thisWeek` / Hosting this-week as the live pick) only updates when the
+pick already has `youtubeId`. Otherwise refuse with toast
+"Upload YouTube first — won't replace this week without a video." and leave
+the current live thisWeek untouched.
+Blocked: acceptPick / keepThisWeek / Auth.publishThisWeek / scripts/set-this-week.js
+when youtubeId missing (same-pick preserve still fills id before the gate).
+Wednesday/bot: EddysHell.canPublishThisWeek(); auto-accept without YT is refused.
+Cache-bust ?v=1790527694. Stable untouched. Do NOT retag v1.0.0.

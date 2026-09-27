@@ -426,13 +426,37 @@
     return best;
   }
 
+  function samePublishedPick(a, b) {
+    if (!a || !b) return false;
+    const aId = a.pickId || a.id || "";
+    const bId = b.pickId || b.id || "";
+    if (aId && bId && aId === bId) return true;
+    if (a.relPath && b.relPath && String(a.relPath) === String(b.relPath)) return true;
+    if (a.filename && b.filename && String(a.filename) === String(b.filename)) return true;
+    return false;
+  }
+
   function applyCloudThisWeek(cloud) {
     if (!cloud || !(cloud.pickId || cloud.id)) return false;
     const cloudTs = tsOfThisWeek(cloud);
     const localTs = tsOfThisWeek(thisWeekFile);
     // Prefer cloud when present and >= repo/local published stamp
     if (!thisWeekFile || cloudTs >= localTs || !localTs) {
-      thisWeekFile = { ...cloud, _source: "cloud" };
+      const merged = { ...cloud, _source: "cloud" };
+      // If Firestore omits youtubeId but Hosting/local bootstrap has one for the
+      // same pick/file, keep the embed (publish without youtubeId must not wipe).
+      if (
+        !merged.youtubeId &&
+        thisWeekFile &&
+        thisWeekFile.youtubeId &&
+        samePublishedPick(thisWeekFile, cloud)
+      ) {
+        merged.youtubeId = thisWeekFile.youtubeId;
+        merged.youtubeUrl =
+          thisWeekFile.youtubeUrl ||
+          ("https://www.youtube.com/watch?v=" + thisWeekFile.youtubeId);
+      }
+      thisWeekFile = merged;
       return true;
     }
     return false;
@@ -505,6 +529,31 @@
       youtubeUrl: tw.youtubeUrl || null,
       archiveRoot: tw.archiveRoot || ARCHIVE_ROOT,
     };
+  }
+
+
+  const YT_REQUIRED_TOAST =
+    "Upload YouTube first — won't replace this week without a video.";
+
+  function showYtRequiredToast() {
+    const toast = $("accept-toast");
+    if (toast) {
+      toast.hidden = false;
+      toast.textContent = YT_REQUIRED_TOAST;
+      setTimeout(() => {
+        toast.hidden = true;
+      }, 5000);
+    }
+    setPublishStatus(YT_REQUIRED_TOAST, { error: true, sticky: true });
+  }
+
+  function isYoutubeRequiredError(err) {
+    return !!(
+      err &&
+      (err.code === "youtube-required" ||
+        (err.message &&
+          String(err.message).indexOf("Upload YouTube first") !== -1))
+    );
   }
 
   async function publishPayloadToCloud(payload) {
@@ -1385,12 +1434,28 @@
     if (!currentResult || !currentResult.pick) return;
     const f = currentResult.pick;
     const now = new Date().toISOString();
-    // Keep existing YouTube id only if re-accepting the same published pick
+    // Keep existing YouTube id if re-accepting the same published pick/file
     const prev = resolveThisWeek();
+    const sameAsPrev =
+      prev &&
+      (prev.id === f.id ||
+        (prev.relPath && f.relPath && prev.relPath === f.relPath) ||
+        (prev.filename && f.filename && prev.filename === f.filename));
     const keepYt =
-      prev && prev.id === f.id
-        ? { youtubeId: prev.youtubeId || null, youtubeUrl: prev.youtubeUrl || null }
+      sameAsPrev && prev.youtubeId
+        ? {
+            youtubeId: prev.youtubeId,
+            youtubeUrl:
+              prev.youtubeUrl ||
+              ("https://www.youtube.com/watch?v=" + prev.youtubeId),
+          }
         : { youtubeId: null, youtubeUrl: null };
+    // Hard rule: never replace live thisWeek without youtubeId already on the pick.
+    if (!keepYt.youtubeId) {
+      showYtRequiredToast();
+      return;
+    }
+
     state.lastPick = {
       id: f.id,
       filename: f.filename,
@@ -1444,15 +1509,40 @@
       setPublishStatus("");
     } catch (err) {
       console.warn("publishThisWeek failed:", err);
-      try {
-        localStorage.setItem(PENDING_PUBLISH_KEY, "1");
-      } catch (_) { /* ok */ }
-      toast.hidden = false;
-      toast.textContent = "Saved locally — cloud publish failed.";
-      setPublishStatus(
-        "Publish failed: " + ((err && err.message) || String(err)),
-        { error: true, sticky: true }
-      );
+      if (isYoutubeRequiredError(err)) {
+        // Roll back local thisWeek mutation — leave prior live pick untouched.
+        thisWeekFile = prev
+          ? {
+              pickId: prev.id || prev.pickId,
+              id: prev.id || prev.pickId,
+              filename: prev.filename,
+              folderType: prev.folderType,
+              hr: prev.hr,
+              relPath: prev.relPath,
+              sizeBytes: prev.sizeBytes,
+              mtime: prev.mtime,
+              rawTags: prev.rawTags || [],
+              pickedAt: prev.pickedAt,
+              why: prev.why,
+              matchCount: prev.matchCount,
+              youtubeId: prev.youtubeId || null,
+              youtubeUrl: prev.youtubeUrl || null,
+              archiveRoot: prev.archiveRoot || ARCHIVE_ROOT,
+              _source: prev.source || "local",
+            }
+          : thisWeekFile;
+        showYtRequiredToast();
+      } else {
+        try {
+          localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+        } catch (_) { /* ok */ }
+        toast.hidden = false;
+        toast.textContent = "Saved locally — cloud publish failed.";
+        setPublishStatus(
+          "Publish failed: " + ((err && err.message) || String(err)),
+          { error: true, sticky: true }
+        );
+      }
     } finally {
       if (btnAccept) {
         btnAccept.disabled = false;
@@ -1475,6 +1565,12 @@
     pickIsCandidate = false;
     const tw = resolveThisWeek();
     if (!tw) {
+      ensurePickViewFromPublished();
+      updatePickActions();
+      return;
+    }
+    if (!tw.youtubeId) {
+      showYtRequiredToast();
       ensurePickViewFromPublished();
       updatePickActions();
       return;
@@ -1513,15 +1609,19 @@
       setPublishStatus("");
     } catch (err) {
       console.warn("re-publish this week failed:", err);
-      try {
-        localStorage.setItem(PENDING_PUBLISH_KEY, "1");
-      } catch (_) { /* ok */ }
-      toast.hidden = false;
-      toast.textContent = "Saved locally — cloud publish failed.";
-      setPublishStatus(
-        "Publish failed: " + ((err && err.message) || String(err)),
-        { error: true, sticky: true }
-      );
+      if (isYoutubeRequiredError(err)) {
+        showYtRequiredToast();
+      } else {
+        try {
+          localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+        } catch (_) { /* ok */ }
+        toast.hidden = false;
+        toast.textContent = "Saved locally — cloud publish failed.";
+        setPublishStatus(
+          "Publish failed: " + ((err && err.message) || String(err)),
+          { error: true, sticky: true }
+        );
+      }
     } finally {
       if (btnKeep) {
         btnKeep.disabled = false;
@@ -1810,19 +1910,22 @@
       state.rule = { ...defaultRule(), ...repoDefault, ...state.rule };
     }
 
-    try {
-      const twRes = await fetch("data/this-week.json", { cache: "no-store" });
-      if (twRes.ok) {
-        thisWeekFile = await twRes.json();
-        if (thisWeekFile) thisWeekFile._source = "file";
-      }
-    } catch (_) {
-      thisWeekFile = null;
-    }
-
-    const res = await fetch("data/catalog.json");
-    if (!res.ok) throw new Error("Failed to load catalog.json");
-    catalog = await res.json();
+    // Parallel Hosting JSON — don't serialize this-week + catalog on phone networks
+    const twFetch = fetch("data/this-week.json", { cache: "no-store" })
+      .then(async (twRes) => {
+        if (twRes.ok) {
+          thisWeekFile = await twRes.json();
+          if (thisWeekFile) thisWeekFile._source = "file";
+        }
+      })
+      .catch(() => {
+        thisWeekFile = null;
+      });
+    const catalogFetch = fetch("data/catalog.json").then(async (res) => {
+      if (!res.ok) throw new Error("Failed to load catalog.json");
+      catalog = await res.json();
+    });
+    await Promise.all([twFetch, catalogFetch]);
 
     const meta = catalog.meta || {};
     $("catalog-meta").textContent =
@@ -1984,11 +2087,18 @@
       defaultRule,
       catalog,
       getState: () => state,
-      /** Wednesday routine: true = auto dry-run/accept; false = keep this week (still upload if YT missing) */
+      /** Wednesday routine: true = auto dry-run/accept; false = keep this week.
+       *  Publish paths still require youtubeId (see canPublishThisWeek). */
       isAutoPickEnabled: () => {
         const r = (state && state.rule) || {};
         return r.autoPick !== false;
       },
+      /** Bot/admin: true only when the pick already has youtubeId — required to publish thisWeek. */
+      canPublishThisWeek: (tw) => {
+        const pick = tw || resolveThisWeek();
+        return !!(pick && pick.youtubeId);
+      },
+      YT_REQUIRED_TOAST,
       resolveThisWeek,
       parseYoutubeId,
       ARCHIVE_ROOT,

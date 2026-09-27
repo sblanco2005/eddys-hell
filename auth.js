@@ -642,7 +642,16 @@
       } catch (err) {
         console.warn("publishThisWeek youtube preserve read failed:", err);
       }
-    } else if (!youtubeUrl) {
+    }
+    // Hard rule: never replace live thisWeek without a YouTube video already attached.
+    if (!youtubeId) {
+      const err = new Error(
+        "Upload YouTube first — won't replace this week without a video."
+      );
+      err.code = "youtube-required";
+      throw err;
+    }
+    if (!youtubeUrl) {
       youtubeUrl = "https://www.youtube.com/watch?v=" + youtubeId;
     }
     const docPayload = scrubUndefined({

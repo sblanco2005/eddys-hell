@@ -531,6 +531,31 @@
     };
   }
 
+
+  const YT_REQUIRED_TOAST =
+    "Upload YouTube first — won't replace this week without a video.";
+
+  function showYtRequiredToast() {
+    const toast = $("accept-toast");
+    if (toast) {
+      toast.hidden = false;
+      toast.textContent = YT_REQUIRED_TOAST;
+      setTimeout(() => {
+        toast.hidden = true;
+      }, 5000);
+    }
+    setPublishStatus(YT_REQUIRED_TOAST, { error: true, sticky: true });
+  }
+
+  function isYoutubeRequiredError(err) {
+    return !!(
+      err &&
+      (err.code === "youtube-required" ||
+        (err.message &&
+          String(err.message).indexOf("Upload YouTube first") !== -1))
+    );
+  }
+
   async function publishPayloadToCloud(payload) {
     const Auth = window.EddysHellAuth;
     if (!Auth || !Auth.publishThisWeek) {
@@ -1425,6 +1450,12 @@
               ("https://www.youtube.com/watch?v=" + prev.youtubeId),
           }
         : { youtubeId: null, youtubeUrl: null };
+    // Hard rule: never replace live thisWeek without youtubeId already on the pick.
+    if (!keepYt.youtubeId) {
+      showYtRequiredToast();
+      return;
+    }
+
     state.lastPick = {
       id: f.id,
       filename: f.filename,
@@ -1478,15 +1509,40 @@
       setPublishStatus("");
     } catch (err) {
       console.warn("publishThisWeek failed:", err);
-      try {
-        localStorage.setItem(PENDING_PUBLISH_KEY, "1");
-      } catch (_) { /* ok */ }
-      toast.hidden = false;
-      toast.textContent = "Saved locally — cloud publish failed.";
-      setPublishStatus(
-        "Publish failed: " + ((err && err.message) || String(err)),
-        { error: true, sticky: true }
-      );
+      if (isYoutubeRequiredError(err)) {
+        // Roll back local thisWeek mutation — leave prior live pick untouched.
+        thisWeekFile = prev
+          ? {
+              pickId: prev.id || prev.pickId,
+              id: prev.id || prev.pickId,
+              filename: prev.filename,
+              folderType: prev.folderType,
+              hr: prev.hr,
+              relPath: prev.relPath,
+              sizeBytes: prev.sizeBytes,
+              mtime: prev.mtime,
+              rawTags: prev.rawTags || [],
+              pickedAt: prev.pickedAt,
+              why: prev.why,
+              matchCount: prev.matchCount,
+              youtubeId: prev.youtubeId || null,
+              youtubeUrl: prev.youtubeUrl || null,
+              archiveRoot: prev.archiveRoot || ARCHIVE_ROOT,
+              _source: prev.source || "local",
+            }
+          : thisWeekFile;
+        showYtRequiredToast();
+      } else {
+        try {
+          localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+        } catch (_) { /* ok */ }
+        toast.hidden = false;
+        toast.textContent = "Saved locally — cloud publish failed.";
+        setPublishStatus(
+          "Publish failed: " + ((err && err.message) || String(err)),
+          { error: true, sticky: true }
+        );
+      }
     } finally {
       if (btnAccept) {
         btnAccept.disabled = false;
@@ -1509,6 +1565,12 @@
     pickIsCandidate = false;
     const tw = resolveThisWeek();
     if (!tw) {
+      ensurePickViewFromPublished();
+      updatePickActions();
+      return;
+    }
+    if (!tw.youtubeId) {
+      showYtRequiredToast();
       ensurePickViewFromPublished();
       updatePickActions();
       return;
@@ -1547,15 +1609,19 @@
       setPublishStatus("");
     } catch (err) {
       console.warn("re-publish this week failed:", err);
-      try {
-        localStorage.setItem(PENDING_PUBLISH_KEY, "1");
-      } catch (_) { /* ok */ }
-      toast.hidden = false;
-      toast.textContent = "Saved locally — cloud publish failed.";
-      setPublishStatus(
-        "Publish failed: " + ((err && err.message) || String(err)),
-        { error: true, sticky: true }
-      );
+      if (isYoutubeRequiredError(err)) {
+        showYtRequiredToast();
+      } else {
+        try {
+          localStorage.setItem(PENDING_PUBLISH_KEY, "1");
+        } catch (_) { /* ok */ }
+        toast.hidden = false;
+        toast.textContent = "Saved locally — cloud publish failed.";
+        setPublishStatus(
+          "Publish failed: " + ((err && err.message) || String(err)),
+          { error: true, sticky: true }
+        );
+      }
     } finally {
       if (btnKeep) {
         btnKeep.disabled = false;
@@ -2021,11 +2087,18 @@
       defaultRule,
       catalog,
       getState: () => state,
-      /** Wednesday routine: true = auto dry-run/accept; false = keep this week (still upload if YT missing) */
+      /** Wednesday routine: true = auto dry-run/accept; false = keep this week.
+       *  Publish paths still require youtubeId (see canPublishThisWeek). */
       isAutoPickEnabled: () => {
         const r = (state && state.rule) || {};
         return r.autoPick !== false;
       },
+      /** Bot/admin: true only when the pick already has youtubeId — required to publish thisWeek. */
+      canPublishThisWeek: (tw) => {
+        const pick = tw || resolveThisWeek();
+        return !!(pick && pick.youtubeId);
+      },
+      YT_REQUIRED_TOAST,
       resolveThisWeek,
       parseYoutubeId,
       ARCHIVE_ROOT,

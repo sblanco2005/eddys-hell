@@ -48,7 +48,9 @@ Until those keys are filled, production Pages shows **“Auth not configured”*
 ## This week’s pick (sharing with the group)
 
 **Live source of truth (beta):** Cloud Firestore docs `config/thisWeek` and `config/rule`.
-Admin **Publish this week** / **Save rule** write there so friends signed in on beta see the same pick/rule immediately. Hosting `data/this-week.json` + `data/default-rule.json` remain bootstrap/fallback only.
+Admin **Publish this week** / **Save rule** write there so friends signed in on beta see the same pick/rule immediately.
+
+**Publish this week requires YouTube:** `config/thisWeek` (and Hosting `data/this-week.json` via `set-this-week.js`) only update when the pick already has `youtubeId`. Otherwise the app refuses with toast *Upload YouTube first — won't replace this week without a video.* and leaves the live pick untouched. Same-pick re-publish still preserves an existing cloud youtubeId. Wednesday/bot: use `EddysHell.canPublishThisWeek()` before auto-accept. Hosting `data/this-week.json` + `data/default-rule.json` remain bootstrap/fallback only.
 
 Load order: **Firestore (if present) → repo JSON → localStorage**.
 
