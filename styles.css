@@ -1069,3 +1069,69 @@ input:focus {
   padding: 0.55rem 0.7rem;
   margin: 0;
 }
+
+
+/* ——— Check-in feed (beta notifications) ——— */
+.card-head .checkin-feed-bell {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.checkin-feed-bell-label {
+  letter-spacing: 0.01em;
+}
+.checkin-feed-badge {
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent, #ff6b4a);
+  color: #0b0f14;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.15rem;
+  text-align: center;
+}
+.checkin-feed-badge[hidden] {
+  display: none !important;
+}
+.checkin-feed-card {
+  margin-top: 12px;
+}
+.checkin-feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.checkin-feed-list li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+.checkin-feed-list li:last-child {
+  border-bottom: none;
+}
+.checkin-feed-list .feed-name {
+  font-weight: 650;
+}
+.checkin-feed-list .feed-diff {
+  margin: 0 0.35em;
+}
+.checkin-feed-list .feed-time {
+  color: var(--text-mute);
+  font-size: 0.85rem;
+}
+.checkin-feed-live-toast {
+  position: sticky;
+  bottom: 12px;
+  z-index: 20;
+  margin: 8px auto 0;
+  max-width: 28rem;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}

@@ -248,6 +248,185 @@
     }) + " ET";
   }
 
+  /** Time-only for feed lines (e.g. "5:12 PM"). */
+  function formatFeedTime(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString("en-US", {
+      timeZone: "America/New_York",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  /** Beta-only in-app check-in feed + badge. */
+  let checkinFeedOpen = false;
+  /** @type {string|null} */
+  let checkinFeedToastTimer = null;
+  /** @type {Set<string>} */
+  let checkinFeedKnownKeys = new Set();
+  let checkinFeedHydrated = false;
+
+  function isCheckinFeedEnabled() {
+    const Auth = window.EddysHellAuth;
+    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost());
+  }
+
+  function feedRowKey(row) {
+    return String(row.pickId || "") + "__" + String(row.email || "").toLowerCase() + "__" + String(row.at || "");
+  }
+
+  function updateCheckinFeedBadge(tw) {
+    const btn = $("btn-checkin-feed");
+    const badge = $("checkin-feed-badge");
+    if (!btn || !badge) return;
+    if (!isCheckinFeedEnabled() || !tw || !authUser) {
+      btn.hidden = true;
+      badge.hidden = true;
+      return;
+    }
+    btn.hidden = false;
+    const Auth = window.EddysHellAuth;
+    const n = Auth.unseenFeedCount ? Auth.unseenFeedCount(tw.id, authUser.email) : 0;
+    if (n > 0 && !checkinFeedOpen) {
+      badge.hidden = false;
+      badge.textContent = n > 99 ? "99+" : String(n);
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  function paintCheckinFeedList(tw) {
+    const ul = $("checkin-feed-list");
+    if (!ul || !tw) return;
+    const Auth = window.EddysHellAuth;
+    const list = Auth.feedForPick ? Auth.feedForPick(tw.id) : [];
+    ul.innerHTML = "";
+    if (!list.length) {
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "Nobody checked in yet this week.";
+      ul.appendChild(li);
+      return;
+    }
+    const DIFF = { easy: "Easy", okay: "Okay", hard: "Hard" };
+    for (const row of list) {
+      const li = document.createElement("li");
+      const name = Auth.shortMemberLabel
+        ? Auth.shortMemberLabel(row.displayName, row.email)
+        : row.displayName || "Member";
+      const diff = DIFF[String(row.difficulty || "").toLowerCase()] || "";
+      const when = formatFeedTime(row.at);
+      li.innerHTML =
+        `<span class="feed-name">${escapeHtml(name)}</span>` +
+        (diff ? ` <span class="feed-diff">· ${escapeHtml(diff)}</span>` : "") +
+        (when ? ` <span class="feed-time">· ${escapeHtml(when)}</span>` : "");
+      ul.appendChild(li);
+    }
+  }
+
+  function setCheckinFeedOpen(open) {
+    checkinFeedOpen = !!open;
+    const panel = $("checkin-feed-panel");
+    if (panel) panel.hidden = !checkinFeedOpen || !isCheckinFeedEnabled();
+    const tw = resolveThisWeek();
+    if (checkinFeedOpen && tw && authUser) {
+      paintCheckinFeedList(tw);
+      const Auth = window.EddysHellAuth;
+      const list = Auth.feedForPick ? Auth.feedForPick(tw.id) : [];
+      const newest = list[0] && list[0].at ? list[0].at : new Date().toISOString();
+      if (Auth.markFeedSeen) Auth.markFeedSeen(tw.id, newest);
+      updateCheckinFeedBadge(tw);
+    } else {
+      updateCheckinFeedBadge(tw);
+    }
+  }
+
+  function showCheckinFeedLiveToast(row) {
+    if (!isCheckinFeedEnabled() || checkinFeedOpen) return;
+    const toast = $("checkin-feed-live-toast");
+    if (!toast || !row) return;
+    const Auth = window.EddysHellAuth;
+    const name = Auth.shortMemberLabel
+      ? Auth.shortMemberLabel(row.displayName, row.email)
+      : row.displayName || "Someone";
+    const DIFF = { easy: "Easy", okay: "Okay", hard: "Hard" };
+    const diff = DIFF[String(row.difficulty || "").toLowerCase()] || "checked in";
+    toast.textContent = `${name} · ${diff} · just now`;
+    toast.hidden = false;
+    if (checkinFeedToastTimer) clearTimeout(checkinFeedToastTimer);
+    checkinFeedToastTimer = setTimeout(() => {
+      toast.hidden = true;
+      checkinFeedToastTimer = null;
+    }, 3200);
+  }
+
+  function handleCheckinFeedChange() {
+    if (!isCheckinFeedEnabled() || !authUser) return;
+    const tw = resolveThisWeek();
+    if (!tw) return;
+    const Auth = window.EddysHellAuth;
+    const list = Auth.feedForPick ? Auth.feedForPick(tw.id) : [];
+    const me = String(authUser.email || "").toLowerCase();
+    if (!checkinFeedHydrated) {
+      checkinFeedKnownKeys = new Set(list.map(feedRowKey));
+      checkinFeedHydrated = true;
+    } else {
+      for (const row of list) {
+        const key = feedRowKey(row);
+        if (checkinFeedKnownKeys.has(key)) continue;
+        checkinFeedKnownKeys.add(key);
+        if (String(row.email || "").toLowerCase() !== me) {
+          showCheckinFeedLiveToast(row);
+        }
+      }
+    }
+    if (checkinFeedOpen) paintCheckinFeedList(tw);
+    updateCheckinFeedBadge(tw);
+  }
+
+  function bindCheckinFeedControls() {
+    const openBtn = $("btn-checkin-feed");
+    const closeBtn = $("btn-checkin-feed-close");
+    if (openBtn && !openBtn.dataset.bound) {
+      openBtn.dataset.bound = "1";
+      openBtn.addEventListener("click", () => {
+        setCheckinFeedOpen(!checkinFeedOpen);
+      });
+    }
+    if (closeBtn && !closeBtn.dataset.bound) {
+      closeBtn.dataset.bound = "1";
+      closeBtn.addEventListener("click", () => setCheckinFeedOpen(false));
+    }
+  }
+
+  function setupCheckinFeedForWeek(tw) {
+    bindCheckinFeedControls();
+    if (!isCheckinFeedEnabled() || !tw || !authUser) {
+      const btn = $("btn-checkin-feed");
+      if (btn) btn.hidden = true;
+      const panel = $("checkin-feed-panel");
+      if (panel) panel.hidden = true;
+      const badge = $("checkin-feed-badge");
+      if (badge) badge.hidden = true;
+      return;
+    }
+    checkinFeedHydrated = false;
+    checkinFeedKnownKeys = new Set();
+    updateCheckinFeedBadge(tw);
+    if (checkinFeedOpen) {
+      paintCheckinFeedList(tw);
+      const panel = $("checkin-feed-panel");
+      if (panel) panel.hidden = false;
+    }
+    const Auth = window.EddysHellAuth;
+    if (Auth.refreshCheckinFeedForPick) {
+      Auth.refreshCheckinFeedForPick(tw.id).then(() => handleCheckinFeedChange());
+    }
+    if (Auth.watchCheckinFeedForPick) Auth.watchCheckinFeedForPick(tw.id);
+  }
+
+
   // ——— This week resolution ———
 
   /**
@@ -1575,6 +1754,11 @@
       $("member-pick").hidden = true;
       const roster = $("shared-checkins");
       if (roster) roster.hidden = true;
+      const feedPanel = $("checkin-feed-panel");
+      if (feedPanel) feedPanel.hidden = true;
+      const feedBtn = $("btn-checkin-feed");
+      if (feedBtn) feedBtn.hidden = true;
+      checkinFeedOpen = false;
       return;
     }
     $("member-empty").hidden = true;
@@ -1604,6 +1788,7 @@
       }
     });
     window.EddysHellAuth.watchCheckinsForPick(tw.id);
+    setupCheckinFeedForWeek(tw);
   }
 
   function syncHintText() {
@@ -2663,6 +2848,8 @@
         }, 2500);
         renderMemberCheckin(tw);
         paintSharedCheckinsList(tw);
+        handleCheckinFeedChange();
+        updateCheckinFeedBadge(tw);
       } catch (err) {
         alert("Check-in failed: " + (err.message || err));
         btn.classList.remove("checking");
@@ -2932,6 +3119,12 @@
         paintSharedCheckinsList(tw);
       }
     });
+    if (window.EddysHellAuth.onCheckinFeedChange) {
+      window.EddysHellAuth.onCheckinFeedChange(() => {
+        handleCheckinFeedChange();
+      });
+    }
+    bindCheckinFeedControls();
 
     window.EddysHell = {
       pick,

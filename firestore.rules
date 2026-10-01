@@ -52,5 +52,25 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+
+    // Member-facing check-in notification feed (this week).
+    // Writers may only create/update their own email’s docs; all signed-in can read.
+    match /checkinFeed/{docId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.email is string
+        && request.resource.data.email == emailLower()
+        && request.resource.data.pickId is string
+        && request.resource.data.uid is string
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasAll(['email', 'displayName', 'pickId', 'at', 'uid', 'difficulty']);
+      allow delete: if false;
+    }
+    // Per-user prefs (e.g. check-in feed lastSeenAt). Own uid only.
+    match /userPrefs/{uid} {
+      allow read, create, update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
   }
 }

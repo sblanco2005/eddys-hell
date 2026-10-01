@@ -3,3 +3,6 @@ out/
 *.tgz
 secrets/
 token.json
+
+.firebase/
+firebase-debug.log

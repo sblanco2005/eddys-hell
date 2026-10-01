@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#0b0f14" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-auth-ready-gate-20261001" />
+  <meta name="eddys-hell-build" content="beta-checkin-feed-20261001" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css?v=20261001-activity-log" />
+  <link rel="stylesheet" href="styles.css?v=20261001-checkin-feed" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -114,6 +114,11 @@
             <h2>This week’s workout</h2>
             <span class="badge accent" id="member-type">—</span>
             <span class="badge live-badge" id="member-live-badge" hidden>LIVE</span>
+            <button type="button" class="btn ghost btn-sm checkin-feed-bell" id="btn-checkin-feed" hidden aria-label="Who checked in" title="Who checked in">
+              <span aria-hidden="true">🔔</span>
+              <span class="checkin-feed-bell-label">Check-ins</span>
+              <span class="checkin-feed-badge" id="checkin-feed-badge" hidden>0</span>
+            </button>
           </header>
           <p class="hint member-staged-note" id="member-staged-note" hidden></p>
           <h3 class="pick-name" id="member-filename">—</h3>
@@ -151,6 +156,19 @@
             <p class="hint checkin-sync" id="checkin-sync-hint" hidden></p>
           </div>
         </article>
+
+        <article class="card checkin-feed-card" id="checkin-feed-panel" hidden>
+          <header class="card-head">
+            <h2>Notifications · Who checked in</h2>
+            <button type="button" class="btn ghost btn-sm" id="btn-checkin-feed-close" aria-label="Close check-in feed">Close</button>
+          </header>
+          <p class="hint" id="checkin-feed-hint">This week’s check-ins — newest first.</p>
+          <ul class="checkin-feed-list" id="checkin-feed-list">
+            <li class="hint">Nobody checked in yet this week.</li>
+          </ul>
+        </article>
+
+        <p class="toast checkin-feed-live-toast" id="checkin-feed-live-toast" hidden></p>
 
         <article class="card checkins-card" id="shared-checkins" hidden>
           <header class="card-head">
@@ -406,7 +424,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20261001-activity-log"></script>
-  <script src="app.js?v=20261001-activity-log"></script>
+  <script src="auth.js?v=20261001-checkin-feed"></script>
+  <script src="app.js?v=20261001-checkin-feed"></script>
 </body>
 </html>

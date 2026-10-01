@@ -239,3 +239,12 @@ Stores `difficulty` on Firestore checkins docs. Shown as badge in
 Who checked in this week (admin uses same shared list). Stable untouched.
 Cache-bust: difficulty-20260927-1355.
 No Slack check-in alert path in app (still out of scope / separate).
+
+## 2026-10-01 ~5:18 PM ET — beta only (in-app check-in feed + badge)
+Member-facing Notifications / Who checked in feed on beta Hosting only.
+- Firestore `checkinFeed` (doc id pickId__email) written on successful check-in
+- Badge via localStorage lastSeenAt (+ best-effort userPrefs/{uid})
+- Subtle live toast via feed onSnapshot; no Web Push/FCM/SW in this pass
+- Rules additive: checkinFeed + userPrefs (REST rules deploy; CLI Premature close)
+- Hosting: REST deploy to eddy-s-hell-beta only. Stable untouched.
+Cache-bust ?v=20261001-checkin-feed. Build meta beta-checkin-feed-20261001.

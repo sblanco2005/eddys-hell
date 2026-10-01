@@ -6,6 +6,8 @@
   "use strict";
 
   const CHECKINS_KEY = "eddys-hell-checkins-v1";
+  const CHECKIN_FEED_KEY = "eddys-hell-checkin-feed-v1";
+  const CHECKIN_FEED_SEEN_KEY = "eddys-hell-checkin-feed-seen-v1";
   const MOCK_SESSION_KEY = "eddys-hell-mock-user-v1";
   const MEMBERS_KEY = "eddys-hell-members-v1";
 
@@ -440,6 +442,12 @@
   let checkinsWatchPickId = null;
   /** @type {Array<() => void>} */
   const checkinListeners = [];
+  /** @type {(() => void)|null} */
+  let checkinFeedUnsub = null;
+  /** @type {string|null} */
+  let checkinFeedWatchPickId = null;
+  /** @type {Array<() => void>} */
+  const checkinFeedListeners = [];
 
   function loadCheckins() {
     try {
@@ -544,6 +552,19 @@
         firestoreStatus = "error";
       }
     }
+    // Also append/update member-facing notification feed (best-effort).
+    try {
+      await writeCheckinFeedEntry({
+        email: row.email,
+        displayName: row.displayName,
+        pickId: row.pickId,
+        difficulty: row.difficulty,
+        at: row.at,
+        uid: currentUser && currentUser.uid,
+      });
+    } catch (feedErr) {
+      console.warn("checkinFeed write after check-in failed:", feedErr);
+    }
     notifyCheckins();
     return row;
   }
@@ -630,6 +651,249 @@
       );
     } catch (err) {
       console.warn("Firestore check-in watch setup failed:", err);
+      firestoreStatus = "error";
+    }
+  }
+
+
+  // ——— Check-in notification feed (member-facing) ———
+
+  /** First name / short label — never show full email in the feed UI. */
+  function shortMemberLabel(displayName, email) {
+    const name = String(displayName || "").trim();
+    if (name) {
+      const first = name.split(/\s+/)[0];
+      if (first && first.indexOf("@") < 0) return first;
+    }
+    const e = String(email || "");
+    const local = (e.split("@")[0] || "").trim();
+    if (!local) return "Member";
+    return local.charAt(0).toUpperCase() + local.slice(1);
+  }
+
+  function loadCheckinFeed() {
+    try {
+      const raw = localStorage.getItem(CHECKIN_FEED_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveCheckinFeed(list) {
+    localStorage.setItem(CHECKIN_FEED_KEY, JSON.stringify(list));
+  }
+
+  function mergeFeedRow(list, row) {
+    const e = normalizeEmail(row.email);
+    const idx = list.findIndex(
+      (c) => normalizeEmail(c.email) === e && c.pickId === row.pickId
+    );
+    if (idx >= 0) {
+      const prev = list[idx];
+      const prevTs = Date.parse(prev.at || 0) || 0;
+      const nextTs = Date.parse(row.at || 0) || 0;
+      if (nextTs >= prevTs) list[idx] = { ...prev, ...row, email: e };
+    } else {
+      list.push({ ...row, email: e });
+    }
+    return list;
+  }
+
+  function notifyCheckinFeed() {
+    for (const fn of checkinFeedListeners) {
+      try {
+        fn();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
+  function onCheckinFeedChange(fn) {
+    checkinFeedListeners.push(fn);
+    return () => {
+      const i = checkinFeedListeners.indexOf(fn);
+      if (i >= 0) checkinFeedListeners.splice(i, 1);
+    };
+  }
+
+  function checkinFeedDocId(pickId, email) {
+    return checkinDocId(pickId, email);
+  }
+
+  function feedForPick(pickId) {
+    return loadCheckinFeed()
+      .filter((c) => c.pickId === pickId)
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  }
+
+  function loadFeedSeenMap() {
+    try {
+      const raw = localStorage.getItem(CHECKIN_FEED_SEEN_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === "object" ? obj : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveFeedSeenMap(map) {
+    localStorage.setItem(CHECKIN_FEED_SEEN_KEY, JSON.stringify(map || {}));
+  }
+
+  function getFeedLastSeenAt(pickId) {
+    if (!pickId) return null;
+    const map = loadFeedSeenMap();
+    return map[pickId] || null;
+  }
+
+  function markFeedSeen(pickId, atIso) {
+    if (!pickId) return null;
+    const map = loadFeedSeenMap();
+    const next = atIso || new Date().toISOString();
+    const prev = map[pickId];
+    const prevTs = Date.parse(prev || 0) || 0;
+    const nextTs = Date.parse(next) || 0;
+    if (nextTs >= prevTs) map[pickId] = next;
+    saveFeedSeenMap(map);
+    // Best-effort cloud prefs (own uid)
+    syncFeedSeenToCloud(pickId, map[pickId]).catch(() => {});
+    notifyCheckinFeed();
+    return map[pickId];
+  }
+
+  async function syncFeedSeenToCloud(pickId, lastSeenAt) {
+    if (!firestoreReady || !fbDb || !firestoreSetDoc || !firestoreDoc) return;
+    if (!currentUser || !currentUser.uid) return;
+    try {
+      await firestoreSetDoc(
+        firestoreDoc(fbDb, "userPrefs", currentUser.uid),
+        scrubUndefined({
+          checkinFeedSeen: { [pickId]: lastSeenAt },
+          updatedAt: new Date().toISOString(),
+        }),
+        { merge: true }
+      );
+    } catch (err) {
+      console.warn("userPrefs feed seen write failed:", err);
+    }
+  }
+
+  function unseenFeedCount(pickId, viewerEmail) {
+    const last = getFeedLastSeenAt(pickId);
+    const lastTs = Date.parse(last || 0) || 0;
+    const me = normalizeEmail(viewerEmail || (currentUser && currentUser.email) || "");
+    return feedForPick(pickId).filter((row) => {
+      if (me && normalizeEmail(row.email) === me) return false;
+      const ts = Date.parse(row.at || 0) || 0;
+      return ts > lastTs;
+    }).length;
+  }
+
+  async function writeCheckinFeedEntry({ email, displayName, pickId, difficulty, at, uid }) {
+    const e = normalizeEmail(email);
+    const diff = String(difficulty || "").toLowerCase();
+    const row = {
+      email: e,
+      displayName: shortMemberLabel(displayName, e),
+      pickId,
+      at: at || new Date().toISOString(),
+      difficulty: ["easy", "okay", "hard"].includes(diff) ? diff : "okay",
+      uid: uid || (currentUser && currentUser.uid) || "",
+    };
+    const list = loadCheckinFeed();
+    mergeFeedRow(list, row);
+    saveCheckinFeed(list);
+    notifyCheckinFeed();
+
+    if (firestoreReady && fbDb && firestoreSetDoc && firestoreDoc && row.uid) {
+      try {
+        const id = checkinFeedDocId(pickId, row.email);
+        await firestoreSetDoc(
+          firestoreDoc(fbDb, "checkinFeed", id),
+          scrubUndefined(row),
+          { merge: true }
+        );
+        firestoreStatus = "cloud";
+      } catch (err) {
+        console.warn("Firestore checkinFeed write failed:", err);
+        firestoreStatus = "error";
+      }
+    }
+    notifyCheckinFeed();
+    return row;
+  }
+
+  async function refreshCheckinFeedForPick(pickId) {
+    if (!pickId) return feedForPick(pickId);
+    if (!firestoreReady || !fbDb || !firestoreGetDocs) {
+      return feedForPick(pickId);
+    }
+    try {
+      const q = firestoreQuery(
+        firestoreCollection(fbDb, "checkinFeed"),
+        firestoreWhere("pickId", "==", pickId)
+      );
+      const snap = await firestoreGetDocs(q);
+      const list = loadCheckinFeed();
+      snap.forEach((d) => {
+        const data = d.data();
+        if (data && data.pickId && data.email) mergeFeedRow(list, data);
+      });
+      saveCheckinFeed(list);
+      firestoreStatus = "cloud";
+      notifyCheckinFeed();
+    } catch (err) {
+      console.warn("Firestore checkinFeed read failed:", err);
+      firestoreStatus = "error";
+      notifyCheckinFeed();
+    }
+    return feedForPick(pickId);
+  }
+
+  function watchCheckinFeedForPick(pickId) {
+    if (checkinFeedUnsub) {
+      try {
+        checkinFeedUnsub();
+      } catch (_) {
+        /* ok */
+      }
+      checkinFeedUnsub = null;
+      checkinFeedWatchPickId = null;
+    }
+    if (!pickId || !firestoreReady || !fbDb || !firestoreOnSnapshot) {
+      return;
+    }
+    checkinFeedWatchPickId = pickId;
+    try {
+      const q = firestoreQuery(
+        firestoreCollection(fbDb, "checkinFeed"),
+        firestoreWhere("pickId", "==", pickId)
+      );
+      checkinFeedUnsub = firestoreOnSnapshot(
+        q,
+        (snap) => {
+          const list = loadCheckinFeed();
+          snap.forEach((d) => {
+            const data = d.data();
+            if (data && data.pickId && data.email) mergeFeedRow(list, data);
+          });
+          saveCheckinFeed(list);
+          firestoreStatus = "cloud";
+          notifyCheckinFeed();
+        },
+        (err) => {
+          console.warn("Firestore checkinFeed watch failed:", err);
+          firestoreStatus = "error";
+          notifyCheckinFeed();
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore checkinFeed watch setup failed:", err);
       firestoreStatus = "error";
     }
   }
@@ -1541,6 +1805,17 @@
     watchCheckinsForPick,
     onCheckinsChange,
     getCheckinSyncMode,
+    shortMemberLabel,
+    feedForPick,
+    refreshCheckinFeedForPick,
+    watchCheckinFeedForPick,
+    onCheckinFeedChange,
+    getFeedLastSeenAt,
+    markFeedSeen,
+    unseenFeedCount,
+    writeCheckinFeedEntry,
+    CHECKIN_FEED_KEY,
+    CHECKIN_FEED_SEEN_KEY,
     isFirestoreReady: () => firestoreReady,
     publishThisWeek,
     loadThisWeekFromCloud,

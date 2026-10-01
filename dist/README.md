@@ -143,6 +143,23 @@ Admin → **This week’s pick** → **Who checked in this week** lists emails +
 
 Until Firestore is enabled, check-ins still work on each friend’s device, but Santiago only sees them on that same browser.
 
+
+## In-app check-in feed (beta)
+
+On **beta** (`eddy-s-hell-beta.web.app`), signed-in members see a **Check-ins** bell on This week’s workout:
+
+- **Feed** — “Notifications · Who checked in” for the live week (newest first), e.g. `Arianna · Okay · 5:12 PM` (first name / member label — not full email).
+- **Badge** — count of unseen check-ins from others; clears when you open the feed (tracked via `localStorage` `eddys-hell-checkin-feed-seen-v1`, best-effort mirrored to Firestore `userPrefs/{uid}`).
+- **Live toast** — subtle toast if the app is already open and someone else checks in (Firestore `onSnapshot` on the feed).
+
+**Storage:** Firestore collection `checkinFeed` (doc id `pickId__email`), written on successful check-in alongside `checkins`. Shape: `{ email, displayName, pickId, difficulty, at, uid }`. Members can read the current week’s feed; each user may only write their own email/uid.
+
+Admin Slack self-DM check-in alerts (if any) stay separate — this path is member-facing in-app only.
+
+### Next step (not in this pass)
+
+**Web Push / FCM / service worker** — progressive path after the in-app feed is solid. Do not implement push here; keep using the in-app feed + badge until a dedicated push pass.
+
 ### PT email
 
 `data/pt.json` holds the summary destination (`eddy_pazmino@yahoo.com`). Automatic Thursday email to the PT is **not wired yet** (manual / deferred). Check-in recording in the app works independently.
@@ -165,7 +182,7 @@ Until Firestore is enabled, check-ins still work on each friend’s device, but 
 - `data/members.json` — member email allowlist (empty = admins only)
 - `data/pt.json` — editable PT summary email destination
 - `data/firebase-config.json` — Firebase web config (Auth configured; enable Firestore for check-in sync)
-- `firestore.rules` — check-ins + admin-only write to `config/thisWeek` / `config/nextWeek` / `config/rule` + admin `activityLog`
+- `firestore.rules` — check-ins + `checkinFeed` + `userPrefs` + admin-only write to `config/thisWeek` / `config/nextWeek` / `config/rule` + admin `activityLog`
 
 ## Publish
 
