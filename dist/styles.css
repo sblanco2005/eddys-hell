@@ -1078,9 +1078,16 @@ input:focus {
   align-items: center;
   gap: 6px;
   position: relative;
+  z-index: 5;
   padding: 4px 10px;
   font-size: 0.82rem;
   font-weight: 600;
+  pointer-events: auto;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.card-head .checkin-feed-bell[hidden] {
+  display: none !important;
 }
 .checkin-feed-bell-label {
   letter-spacing: 0.01em;
@@ -1096,17 +1103,38 @@ input:focus {
   font-weight: 700;
   line-height: 1.15rem;
   text-align: center;
+  pointer-events: none;
 }
 .checkin-feed-badge[hidden] {
   display: none !important;
 }
+/* Nested under member-pick header so toggle is visible without scrolling past YT */
+#member-pick > .checkin-feed-card {
+  margin: 0 0 14px;
+  padding: 12px 12px 14px;
+  background: var(--bg-elev, #121820);
+  border: 1px solid var(--border-strong, #334155);
+  border-radius: var(--radius-sm, 10px);
+  box-shadow: none;
+  position: relative;
+  z-index: 4;
+}
 .checkin-feed-card {
   margin-top: 12px;
+}
+.checkin-feed-card[hidden] {
+  display: none !important;
+}
+.checkin-feed-card.is-open:not([hidden]) {
+  display: block;
 }
 .checkin-feed-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  max-height: min(42vh, 280px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .checkin-feed-list li {
   padding: 10px 0;
@@ -1125,6 +1153,15 @@ input:focus {
 .checkin-feed-list .feed-time {
   color: var(--text-mute);
   font-size: 0.85rem;
+}
+.checkin-feed-list .checkin-feed-empty {
+  border-bottom: none;
+  padding: 6px 0 2px;
+}
+#checkin-feed-error:not([hidden]) {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--warn, #f5b942);
 }
 .checkin-feed-live-toast {
   position: sticky;

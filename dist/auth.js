@@ -448,6 +448,8 @@
   let checkinFeedWatchPickId = null;
   /** @type {Array<() => void>} */
   const checkinFeedListeners = [];
+  /** @type {string|null} last checkinFeed read/watch error message */
+  let checkinFeedLastError = null;
 
   function loadCheckins() {
     try {
@@ -846,10 +848,12 @@
       });
       saveCheckinFeed(list);
       firestoreStatus = "cloud";
+      checkinFeedLastError = null;
       notifyCheckinFeed();
     } catch (err) {
       console.warn("Firestore checkinFeed read failed:", err);
       firestoreStatus = "error";
+      checkinFeedLastError = (err && err.message) || String(err);
       notifyCheckinFeed();
     }
     return feedForPick(pickId);
@@ -884,18 +888,25 @@
           });
           saveCheckinFeed(list);
           firestoreStatus = "cloud";
+          checkinFeedLastError = null;
           notifyCheckinFeed();
         },
         (err) => {
           console.warn("Firestore checkinFeed watch failed:", err);
           firestoreStatus = "error";
+          checkinFeedLastError = (err && err.message) || String(err);
           notifyCheckinFeed();
         }
       );
     } catch (err) {
       console.warn("Firestore checkinFeed watch setup failed:", err);
       firestoreStatus = "error";
+      checkinFeedLastError = (err && err.message) || String(err);
     }
+  }
+
+  function getCheckinFeedLastError() {
+    return checkinFeedLastError;
   }
 
   // ——— Config: this-week + rule (Firestore live source of truth) ———
@@ -1810,6 +1821,7 @@
     refreshCheckinFeedForPick,
     watchCheckinFeedForPick,
     onCheckinFeedChange,
+    getCheckinFeedLastError,
     getFeedLastSeenAt,
     markFeedSeen,
     unseenFeedCount,

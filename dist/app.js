@@ -266,6 +266,9 @@
   /** @type {Set<string>} */
   let checkinFeedKnownKeys = new Set();
   let checkinFeedHydrated = false;
+  let checkinFeedControlsBound = false;
+  /** @type {string|null} last pickId we hydrated for (avoid wiping keys on every paint) */
+  let checkinFeedHydratedPickId = null;
 
   function isCheckinFeedEnabled() {
     const Auth = window.EddysHellAuth;
@@ -282,10 +285,13 @@
     if (!btn || !badge) return;
     if (!isCheckinFeedEnabled() || !tw || !authUser) {
       btn.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
       badge.hidden = true;
       return;
     }
     btn.hidden = false;
+    btn.removeAttribute("hidden");
+    btn.setAttribute("aria-expanded", checkinFeedOpen ? "true" : "false");
     const Auth = window.EddysHellAuth;
     const n = Auth.unseenFeedCount ? Auth.unseenFeedCount(tw.id, authUser.email) : 0;
     if (n > 0 && !checkinFeedOpen) {
@@ -296,15 +302,37 @@
     }
   }
 
+  function paintCheckinFeedErrorHint() {
+    const errEl = $("checkin-feed-error");
+    const hint = $("checkin-feed-hint");
+    if (!errEl) return;
+    const Auth = window.EddysHellAuth;
+    const mode = Auth && Auth.getCheckinSyncMode ? Auth.getCheckinSyncMode() : null;
+    const feedErr =
+      Auth && Auth.getCheckinFeedLastError ? Auth.getCheckinFeedLastError() : null;
+    if (feedErr || mode === "local-error") {
+      errEl.hidden = false;
+      errEl.textContent = feedErr
+        ? "Couldn’t refresh check-ins from the cloud — showing what’s saved on this device."
+        : "Cloud sync isn’t available — showing what’s saved on this device.";
+      if (hint) hint.textContent = "This week’s check-ins — newest first (may be incomplete).";
+    } else {
+      errEl.hidden = true;
+      errEl.textContent = "";
+      if (hint) hint.textContent = "This week’s check-ins — newest first.";
+    }
+  }
+
   function paintCheckinFeedList(tw) {
     const ul = $("checkin-feed-list");
     if (!ul || !tw) return;
     const Auth = window.EddysHellAuth;
     const list = Auth.feedForPick ? Auth.feedForPick(tw.id) : [];
     ul.innerHTML = "";
+    paintCheckinFeedErrorHint();
     if (!list.length) {
       const li = document.createElement("li");
-      li.className = "hint";
+      li.className = "hint checkin-feed-empty";
       li.textContent = "Nobody checked in yet this week.";
       ul.appendChild(li);
       return;
@@ -326,17 +354,41 @@
   }
 
   function setCheckinFeedOpen(open) {
+    if (open && !isCheckinFeedEnabled()) open = false;
     checkinFeedOpen = !!open;
     const panel = $("checkin-feed-panel");
-    if (panel) panel.hidden = !checkinFeedOpen || !isCheckinFeedEnabled();
+    const btn = $("btn-checkin-feed");
+    if (panel) {
+      if (checkinFeedOpen) {
+        panel.hidden = false;
+        panel.removeAttribute("hidden");
+        panel.classList.add("is-open");
+      } else {
+        panel.hidden = true;
+        panel.classList.remove("is-open");
+      }
+    }
+    if (btn) btn.setAttribute("aria-expanded", checkinFeedOpen ? "true" : "false");
     const tw = resolveThisWeek();
     if (checkinFeedOpen && tw && authUser) {
       paintCheckinFeedList(tw);
       const Auth = window.EddysHellAuth;
       const list = Auth.feedForPick ? Auth.feedForPick(tw.id) : [];
       const newest = list[0] && list[0].at ? list[0].at : new Date().toISOString();
-      if (Auth.markFeedSeen) Auth.markFeedSeen(tw.id, newest);
+      try {
+        if (Auth.markFeedSeen) Auth.markFeedSeen(tw.id, newest);
+      } catch (err) {
+        console.warn("markFeedSeen failed:", err);
+      }
       updateCheckinFeedBadge(tw);
+      // Panel sits under the bell — ensure it is on-screen after toggle.
+      try {
+        if (panel && typeof panel.scrollIntoView === "function") {
+          panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      } catch (_) {
+        /* ok */
+      }
     } else {
       updateCheckinFeedBadge(tw);
     }
@@ -368,9 +420,10 @@
     const Auth = window.EddysHellAuth;
     const list = Auth.feedForPick ? Auth.feedForPick(tw.id) : [];
     const me = String(authUser.email || "").toLowerCase();
-    if (!checkinFeedHydrated) {
+    if (!checkinFeedHydrated || checkinFeedHydratedPickId !== tw.id) {
       checkinFeedKnownKeys = new Set(list.map(feedRowKey));
       checkinFeedHydrated = true;
+      checkinFeedHydratedPickId = tw.id;
     } else {
       for (const row of list) {
         const key = feedRowKey(row);
@@ -385,43 +438,84 @@
     updateCheckinFeedBadge(tw);
   }
 
+  /**
+   * Belt-and-suspenders: document capture delegation so the bell always toggles
+   * even if a per-button listener was missed (init race / re-render).
+   */
   function bindCheckinFeedControls() {
+    if (!checkinFeedControlsBound) {
+      checkinFeedControlsBound = true;
+      document.addEventListener(
+        "click",
+        (ev) => {
+          const t = ev.target;
+          if (!t || !t.closest) return;
+          const openBtn = t.closest("#btn-checkin-feed");
+          if (openBtn) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            setCheckinFeedOpen(!checkinFeedOpen);
+            return;
+          }
+          const closeBtn = t.closest("#btn-checkin-feed-close");
+          if (closeBtn) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            setCheckinFeedOpen(false);
+          }
+        },
+        true
+      );
+    }
+    // Also mark elements for debugging / legacy direct binds.
     const openBtn = $("btn-checkin-feed");
     const closeBtn = $("btn-checkin-feed-close");
-    if (openBtn && !openBtn.dataset.bound) {
-      openBtn.dataset.bound = "1";
-      openBtn.addEventListener("click", () => {
-        setCheckinFeedOpen(!checkinFeedOpen);
-      });
-    }
-    if (closeBtn && !closeBtn.dataset.bound) {
-      closeBtn.dataset.bound = "1";
-      closeBtn.addEventListener("click", () => setCheckinFeedOpen(false));
-    }
+    if (openBtn) openBtn.dataset.bound = "1";
+    if (closeBtn) closeBtn.dataset.bound = "1";
   }
 
   function setupCheckinFeedForWeek(tw) {
     bindCheckinFeedControls();
     if (!isCheckinFeedEnabled() || !tw || !authUser) {
       const btn = $("btn-checkin-feed");
-      if (btn) btn.hidden = true;
+      if (btn) {
+        btn.hidden = true;
+        btn.setAttribute("aria-expanded", "false");
+      }
       const panel = $("checkin-feed-panel");
-      if (panel) panel.hidden = true;
+      if (panel) {
+        panel.hidden = true;
+        panel.classList.remove("is-open");
+      }
       const badge = $("checkin-feed-badge");
       if (badge) badge.hidden = true;
+      checkinFeedOpen = false;
       return;
     }
-    checkinFeedHydrated = false;
-    checkinFeedKnownKeys = new Set();
+    if (checkinFeedHydratedPickId !== tw.id) {
+      checkinFeedHydrated = false;
+      checkinFeedKnownKeys = new Set();
+      checkinFeedHydratedPickId = null;
+    }
     updateCheckinFeedBadge(tw);
     if (checkinFeedOpen) {
       paintCheckinFeedList(tw);
       const panel = $("checkin-feed-panel");
-      if (panel) panel.hidden = false;
+      if (panel) {
+        panel.hidden = false;
+        panel.removeAttribute("hidden");
+        panel.classList.add("is-open");
+      }
     }
     const Auth = window.EddysHellAuth;
     if (Auth.refreshCheckinFeedForPick) {
-      Auth.refreshCheckinFeedForPick(tw.id).then(() => handleCheckinFeedChange());
+      Auth.refreshCheckinFeedForPick(tw.id)
+        .then(() => handleCheckinFeedChange())
+        .catch((err) => {
+          console.warn("refreshCheckinFeedForPick:", err);
+          handleCheckinFeedChange();
+          if (checkinFeedOpen) paintCheckinFeedErrorHint();
+        });
     }
     if (Auth.watchCheckinFeedForPick) Auth.watchCheckinFeedForPick(tw.id);
   }
@@ -3046,6 +3140,8 @@
 
     // Paint Sign in immediately — never leave all views hidden while Firebase loads.
     paintGuestShellEarly();
+    // Bell toggle must work even if later init steps throw.
+    bindCheckinFeedControls();
 
     const AUTH_INIT_MS = 12000;
     try {

@@ -248,3 +248,12 @@ Member-facing Notifications / Who checked in feed on beta Hosting only.
 - Rules additive: checkinFeed + userPrefs (REST rules deploy; CLI Premature close)
 - Hosting: REST deploy to eddy-s-hell-beta only. Stable untouched.
 Cache-bust ?v=20261001-checkin-feed. Build meta beta-checkin-feed-20261001.
+
+## 2026-10-01 ~6:50 PM ET — beta only (Check-ins bell panel fix)
+Root cause: Notifications panel lived below the full pick card (YT + check-in),
+so toggling the bell looked like a no-op (content opened off-screen). Listener
+was only a one-shot per-button bind late in async init.
+Fix: panel moved under card-head inside #member-pick; document capture
+delegation for bell/close; scrollIntoView; empty + cloud-error hint;
+[hidden]/pointer-events CSS harden; cache-bust ?v=20261001-bell-fix.
+Stable Hosting untouched.
