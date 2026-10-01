@@ -50,22 +50,28 @@ Until those keys are filled, production Pages shows **“Auth not configured”*
 **Live source of truth (beta):** Cloud Firestore docs `config/thisWeek` and `config/rule`.
 Members see `config/thisWeek` (YouTube embed). Admin **Save rule** writes `config/rule`.
 
-**Stage vs live:**
+**Stage vs live (pick is always manual):**
+- **Pick again** (= dry-run) → **Reveal in Finder** → **Stage next week** — Santiago always does these himself. Never auto-picked by the scheduler.
 - **Stage next week** (candidate with no `youtubeId`) → Firestore `config/nextWeek` + localStorage `eddys-hell-next-week-v1`. Toast: *Staged — live week stays until YouTube upload.* Does **not** write `config/thisWeek`.
-- **Stage YouTube** (Admin, separate) pastes a URL/id onto staged `config/nextWeek` only. If nothing is staged yet but a dry-run candidate exists, that candidate is staged **with** the `youtubeId` in one `stageNextWeek` call. Never publishes. Toast: *YouTube staged — live week unchanged.*
-- **Swap live now** (Admin, separate) calls `promoteStagedToLive` using the staged `youtubeId` (argument optional — omitted/null uses `staged.youtubeId`). No upload in that step. Enabled only when staged next week already has a video id.
+- **Compress & Stage YouTube** (Admin, optional) pastes a URL/id onto staged `config/nextWeek` only (after Mac compress + unlisted upload done offline). If nothing is staged yet but a dry-run candidate exists, that candidate is staged **with** the `youtubeId` in one `stageNextWeek` call. Never publishes / never compresses in the browser. Toast: *YouTube staged on next week — live week unchanged.* API: `EddysHell.stageYoutubeOnly` / `saveYoutubeToStaged`.
+- **Swap live now** (Admin, optional) calls `promoteStagedToLive` using the staged `youtubeId` (argument optional — omitted/null uses `staged.youtubeId`). No upload in that step. Enabled only when staged next week already has a video id. API: `EddysHell.swapLiveNow`.
 - **Live `config/thisWeek`** updates only when the pick already has `youtubeId` (re-publish same pick, Swap live now, or `EddysHell.promoteAfterYoutubeUpload(youtubeId)` / `Auth.promoteStagedToLive`). Never writes `youtubeId: null` over a live doc.
 - Hosting `data/this-week.json` via `set-this-week.js` still requires `youtubeId`.
+- **`rotateWeeks`** applies to **Pick again** dry-run filtering only. Wednesday does **not** skip a whole run just because rotate says “off week.”
 
 Load order (live): **Firestore thisWeek → repo JSON → localStorage**. Staged is separate (`config/nextWeek`).
 
-1. Admin dry-runs a candidate → **Stage next week** → `config/nextWeek` (live unchanged).
-2. After Mac compress + unlisted YouTube upload, **Stage YouTube** saves the id on next week only (scheduler can promote later). **Swap live now** is a separate button — it does not upload.
-3. Wednesday/bot: compress + YouTube upload → `promoteAfterYoutubeUpload(id)` → live `config/thisWeek` with `youtubeId` (or omit id to use the staged one).
-4. **Save rule** → Firestore `config/rule`.
-5. Optional: sync Hosting JSON via Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap.
-
-Wednesday routine (Auto-pick OFF): upload the **staged** pick (`getStagedNextWeek()` / `config/nextWeek`); only then promote to live. Do not overwrite a live pick that still has video with a no-video candidate.
+1. Admin **Pick again** → **Reveal** → **Stage next week** → `config/nextWeek` (live unchanged).
+2. Optional: after Mac compress + unlisted YouTube upload, **Compress & Stage YouTube** saves the id on next week only. Optional: **Swap live now** promotes staged → live (no upload).
+3. **Wednesday scheduler** (beta Hosting only; never stable/production) — never auto-picks / never writes a new nextWeek from the rule:
+   - Compare staged `config/nextWeek` vs live `config/thisWeek` (by pickId/id).
+   - **No staged** OR staged same as live → **skip** (Slack FYI to Santiago).
+   - Staged ≠ live **and** staged already has `youtubeId` → **swap only** (promote to live). Do not re-upload.
+   - Staged ≠ live **and** no `youtubeId` → **compress + YouTube unlisted upload + stage youtubeId on nextWeek, then promote/swap**.
+   - Hard rule: never write `youtubeId: null` over live; never change live without a real `youtubeId`.
+   - After successful YouTube upload, delete Mac media under `eddys-hell-app/out` (`week.mp4`, `source-week.mov`, `source.mov`).
+4. **Save rule** → Firestore `config/rule` (forces `autoPick: false`; Auto-pick UI is hidden/deprecated).
+5. Optional: sync Hosting JSON via Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap (beta only for experiments).
 
 Seeded bootstrap sample may change with deploys; trust Firestore on beta after Publish.
 
@@ -135,6 +141,6 @@ touch dist/.nojekyll
 
 ## Default rule
 
-Rotate · Prefer recent · Full body · HR > 120 · last 8 weeks avoided · **Auto-pick ON**.
+Rotate · Prefer recent · Full body · HR > 120 · last 8 weeks avoided · **pick always manual** (`autoPick: false`, deprecated).
 
-`autoPick` lives on Firestore `config/rule` (preferred), then `data/default-rule.json` / `data/state.json` → `rule.autoPick` (also `localStorage` key `eddys-hell-admin-v2`). Wednesday routine should read it: **ON** = auto dry-run/set pick; **OFF** = keep this week’s pick from Firestore when present, still upload if YouTube is missing. Admin **Save rule** publishes to Firestore and clears the local pending key.
+`autoPick` still exists on Firestore `config/rule` / `data/default-rule.json` / `data/state.json` / `localStorage` (`eddys-hell-admin-v2`) for schema compatibility, but it is **ignored**. Admin UI hides the Auto-pick checkbox; **Save rule** always writes `autoPick: false`. Wednesday **never** auto-picks — it only compares staged `nextWeek` vs live `thisWeek` (see Stage vs live above). `rotateWeeks` still filters **Pick again** dry-runs only.

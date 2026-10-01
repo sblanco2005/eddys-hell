@@ -12,7 +12,7 @@
     "rotate": true,
     "rotateWeeks": 8,
     "tagContains": "",
-    "autoPick": true,
+    "autoPick": false,
     "version": 3
   },
   "usedHistory": [],

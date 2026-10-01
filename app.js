@@ -58,7 +58,7 @@
       folderTypes: ["Full", "Upper", "Pull", "CrossFit"],
       minHR: 120,
       requireHR: true,
-      autoPick: true,
+      autoPick: false,
       recency: "recent",
       rotate: true,
       rotateWeeks: 8,
@@ -699,7 +699,7 @@
           " — YouTube saved. Live week unchanged until Swap live now or the scheduler."
         : "Staged next: " +
           name +
-          " — live week unchanged. Stage YouTube does not publish.";
+          " — live week unchanged. Compress & Stage YouTube does not publish.";
     }
     if (card) card.hidden = false;
     if (nameEl) nameEl.textContent = name;
@@ -783,8 +783,9 @@
     );
   }
 
-  /** Enable Stage YouTube when a staged pick or dry-run candidate exists.
-   *  Swap live now only when staged nextWeek already has a youtubeId. */
+  /** Enable Compress & Stage YouTube when a staged pick or dry-run candidate exists.
+   *  Swap live now only when staged nextWeek already has a youtubeId.
+   *  Browser path only pastes/saves the id onto staged nextWeek — Mac ffmpeg/YT is offline. */
   function updateYoutubeStageControls() {
     const btnStage = $("btn-stage-youtube");
     const btnSwap = $("btn-swap-live");
@@ -792,7 +793,7 @@
     const canStage = !!(staged || hasDryRunCandidate());
     if (btnStage && btnStage.dataset.busy !== "1") {
       btnStage.disabled = !canStage;
-      btnStage.textContent = "Stage YouTube";
+      btnStage.textContent = "Compress & Stage YouTube";
     }
     if (btnSwap && btnSwap.dataset.busy !== "1") {
       btnSwap.disabled = !(staged && staged.youtubeId);
@@ -885,13 +886,13 @@
         renderHistory();
       }
       if (input) input.value = "";
-      showAcceptToast("YouTube staged — live week unchanged.", { ms: 6000 });
+      showAcceptToast("YouTube staged on next week — live week unchanged.", { ms: 6000 });
       renderLiveWeekCard();
       updatePickActions();
     } catch (err) {
-      console.warn("stage YouTube failed:", err);
+      console.warn("Compress & Stage YouTube failed:", err);
       showAcceptToast(
-        "Stage YouTube failed: " + ((err && err.message) || String(err)),
+        "Compress & Stage YouTube failed: " + ((err && err.message) || String(err)),
         { error: true, ms: 8000 }
       );
     } finally {
@@ -1808,13 +1809,14 @@
 
   function readRuleFromForm() {
     const recencyEl = document.querySelector('input[name="recency"]:checked');
-    const autoEl = $("auto-pick");
+    // autoPick deprecated/ignored: pick is always manual; Wednesday never auto-picks.
+    // Keep writing false so Firestore rule docs stay valid if the field still exists.
     return {
       version: (state.rule && state.rule.version) || RULE_VERSION,
       folderTypes: [...(state.rule.folderTypes || [])],
       minHR: Number($("min-hr").value) || 0,
       requireHR: $("require-hr").checked,
-      autoPick: autoEl ? !!autoEl.checked : true,
+      autoPick: false,
       recency: recencyEl ? recencyEl.value : "recent",
       rotate: $("rotate").checked,
       rotateWeeks: Math.max(1, Number($("rotate-weeks").value) || 8),
@@ -1827,7 +1829,8 @@
     $("min-hr").value = state.rule.minHR;
     $("require-hr").checked = !!state.rule.requireHR;
     const autoEl = $("auto-pick");
-    if (autoEl) autoEl.checked = state.rule.autoPick !== false;
+    // Deprecated UI is hidden; keep checkbox unchecked so any leftover listener sees false.
+    if (autoEl) autoEl.checked = false;
     $("rotate").checked = !!state.rule.rotate;
     $("rotate-weeks").value = state.rule.rotateWeeks;
     $("tag-contains").value = state.rule.tagContains || "";
@@ -2649,7 +2652,7 @@
               folderTypes: state.rule.folderTypes,
               minHR: state.rule.minHR,
               requireHR: state.rule.requireHR,
-              autoPick: state.rule.autoPick !== false,
+              autoPick: false,
               recency: state.rule.recency,
               rotate: state.rule.rotate,
               rotateWeeks: state.rule.rotateWeeks,
@@ -2681,9 +2684,7 @@
         } else {
           toast.hidden = false;
           toast.textContent =
-            "Rule saved locally (cloud not ready). Auto-pick " +
-            (state.rule.autoPick !== false ? "ON" : "OFF") +
-            ".";
+            "Rule saved locally (cloud not ready). Pick stays manual.";
         }
       } catch (err) {
         console.warn("publishRule failed:", err);
@@ -2812,13 +2813,10 @@
       defaultRule,
       catalog,
       getState: () => state,
-      /** Wednesday routine: true = auto dry-run/accept; false = keep this week.
-       *  Live thisWeek publish still requires youtubeId (see canPublishThisWeek).
-       *  Candidates without video → stageNextWeek / Stage next week button. */
-      isAutoPickEnabled: () => {
-        const r = (state && state.rule) || {};
-        return r.autoPick !== false;
-      },
+      /** Deprecated: always false. Pick is always manual; Wednesday never auto-picks.
+       *  Scheduler compares staged nextWeek vs live thisWeek instead. */
+      isAutoPickEnabled: () => false,
+
       /** Bot/admin: true only when the pick already has youtubeId — required to publish live thisWeek. */
       canPublishThisWeek: (tw) => {
         const pick = tw || resolveThisWeek();
@@ -2829,7 +2827,11 @@
       /**
        * Wednesday/bot after compress+YouTube upload: promote staged → live thisWeek
        * with youtubeId. Leaves live alone if no staged doc or no id.
+       * Scheduler: never auto-pick; if staged≠live + youtubeId → swap only;
+       * if staged≠live + no youtubeId → compress+upload+stage then promote;
+       * if no staged or same as live → skip. Never write youtubeId null over live.
        */
+
       promoteAfterYoutubeUpload: async (youtubeId, youtubeUrl) => {
         const Auth = window.EddysHellAuth;
         if (!Auth || !Auth.promoteStagedToLive) {
@@ -2843,7 +2845,7 @@
         updatePickActions();
         return live;
       },
-      /** Admin: attach YouTube to staged next week only. Never publishes. */
+      /** Admin: paste/save YouTube id onto staged next week only (Compress & Stage YouTube). Never publishes. */
       stageYoutubeOnly: saveYoutubeToStaged,
       /** Admin: promote staged next week (must already have youtubeId) to live. */
       swapLiveNow: swapStagedToLiveNow,

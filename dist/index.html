@@ -8,7 +8,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta name="eddys-hell-build" content="beta-auth-ready-gate-20261001" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css?v=20261001-auth-ready-gate" />
+  <link rel="stylesheet" href="styles.css?v=20261001-manual-pick-wed" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -192,14 +192,16 @@
             </div>
           </div>
 
-          <div class="field toggle-field">
+          <!-- Auto-pick deprecated: pick is always manual; Wednesday never auto-picks. Keep #auto-pick hidden for form compat; save forces false. -->
+          <div class="field toggle-field" id="auto-pick-field" hidden>
             <label class="toggle">
-              <input type="checkbox" id="auto-pick" checked />
+              <input type="checkbox" id="auto-pick" />
               <span class="toggle-ui"></span>
-              <span>Auto-pick</span>
+              <span>Auto-pick (deprecated)</span>
             </label>
-            <p class="hint">Off = keep this week’s pick; still upload if YouTube missing</p>
+            <p class="hint">Pick is always manual; Wednesday never auto-picks. Ignored by scheduler.</p>
           </div>
+          <p class="hint">Pick is always manual (Pick again / Stage). Wednesday never auto-picks — it only compares staged vs live.</p>
 
           <div class="field">
             <label>Recency</label>
@@ -220,6 +222,7 @@
               <input type="number" id="rotate-weeks" min="1" max="104" value="8" />
               <span class="unit">weeks</span>
             </div>
+            <p class="hint">Applies to <strong>Pick again</strong> dry-run filter only. Wednesday does not skip a run for “off week” — it only cares staged ≠ live.</p>
             <div class="history-box" id="used-history">
               <p class="hint">No used history yet.</p>
             </div>
@@ -265,7 +268,7 @@
             <h2>Next week staged</h2>
             <span class="badge">Not live</span>
           </header>
-          <p class="hint">Pick again (= dry-run), reveal the Mac path, then <strong>Stage next week</strong>. Two actions stay separate: <strong>Stage YouTube</strong> only saves an unlisted URL onto next week (wait for the scheduler — friends keep seeing <strong>Candidate pick (LIVE)</strong>). <strong>Swap live now</strong> replaces the live week with the already-staged pick and its YouTube id — no upload in that step. Dry-run never lives on the Rule or LIVE cards.</p>
+          <p class="hint"><strong>Always manual:</strong> <strong>Pick again</strong> (= dry-run) → <strong>Reveal in Finder</strong> → <strong>Stage next week</strong>. Optional after that: <strong>Compress &amp; Stage YouTube</strong> (paste URL/id after Mac compress + unlisted upload — saves onto staged next week only, no promote) and <strong>Swap live now</strong> (promote staged → live when it already has a youtubeId; no upload). <strong>Wednesday:</strong> never auto-picks. If staged ≠ live and already has YT → swap only; if staged ≠ live and no YT → compress + upload + stage youtubeId + swap; if nothing new (no staged or same as live) → skip. Friends keep seeing <strong>Candidate pick (LIVE)</strong> until swap/promote. Dry-run never lives on the Rule or LIVE cards.</p>
 
           <div class="actions nonlive-always-actions" id="nonlive-always-actions">
             <button type="button" class="btn accent" id="btn-dryrun">Pick again</button>
@@ -288,16 +291,16 @@
           </div>
 
           <div class="stage-yt-block" id="stage-yt-block">
-            <h3 class="stage-yt-title">Stage YouTube (upload only)</h3>
-            <p class="hint">After Mac compress + YouTube unlisted upload, paste the URL/id here. Saves to staged next week only — does <strong>not</strong> change what friends see.</p>
+            <h3 class="stage-yt-title">Compress &amp; Stage YouTube</h3>
+            <p class="hint">Paste the YouTube URL/id <em>after</em> Mac compress + unlisted upload (done offline, or by the Wednesday job if still missing). This browser step only saves the id onto staged <code>config/nextWeek</code> — it does <strong>not</strong> compress, upload, or change what friends see.</p>
             <label class="reveal-path-label" for="yt-url-input">YouTube URL or video id</label>
             <input type="url" id="yt-url-input" inputmode="url" placeholder="https://youtu.be/… or 11-character id" autocomplete="off" spellcheck="false" />
             <div class="actions nonlive-always-actions">
-              <button type="button" class="btn accent" id="btn-stage-youtube" disabled>Stage YouTube</button>
+              <button type="button" class="btn accent" id="btn-stage-youtube" disabled>Compress &amp; Stage YouTube</button>
             </div>
             <div class="swap-live-row">
               <button type="button" class="btn primary" id="btn-swap-live" disabled>Swap live now</button>
-              <p class="hint">Swap live now uses the YouTube id already on staged next week. It does not upload or ask you to paste again.</p>
+              <p class="hint">Swap live now promotes staged next week (must already have youtubeId) to live this week. No upload in that step.</p>
             </div>
           </div>
 
@@ -394,7 +397,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20261001-auth-ready-gate"></script>
-  <script src="app.js?v=20261001-auth-ready-gate"></script>
+  <script src="auth.js?v=20261001-manual-pick-wed"></script>
+  <script src="app.js?v=20261001-manual-pick-wed"></script>
 </body>
 </html>
