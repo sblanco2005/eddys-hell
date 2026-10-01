@@ -1381,8 +1381,22 @@
     }
 
     // Hide Google button in in-app browsers — popup/redirect will fail.
-    $("btn-google").hidden = !configured || inApp;
-    $("mock-signin").hidden = !(!configured && local);
+    // Clear Loading… from early paint once Auth.init has settled.
+    const btnGoogle = $("btn-google");
+    if (btnGoogle) {
+      const stillPending = Auth.isInitPending && Auth.isInitPending();
+      btnGoogle.hidden = (!configured && !stillPending) || inApp;
+      if (stillPending && !inApp) {
+        btnGoogle.hidden = false;
+        btnGoogle.disabled = true;
+        btnGoogle.textContent = "Loading…";
+      } else {
+        btnGoogle.disabled = false;
+        btnGoogle.textContent = "Sign in with Google";
+        btnGoogle.hidden = !configured || inApp;
+      }
+    }
+    $("mock-signin").hidden = !(!configured && local && !(Auth.isInitPending && Auth.isInitPending()));
 
     const deniedEl = $("auth-denied");
     const banner =
@@ -1678,11 +1692,17 @@
       const notCfg = $("auth-not-configured");
       if (notCfg) notCfg.hidden = true;
       const inApp = Auth && Auth.isInAppBrowser && Auth.isInAppBrowser();
+      const pending = Auth && Auth.isInitPending && Auth.isInitPending();
       const btn = $("btn-google");
       if (btn) {
         btn.hidden = !!inApp;
-        btn.disabled = false;
-        btn.textContent = "Sign in with Google";
+        if (pending && !inApp) {
+          btn.disabled = true;
+          btn.textContent = "Loading…";
+        } else {
+          btn.disabled = false;
+          btn.textContent = "Sign in with Google";
+        }
       }
       const mock = $("mock-signin");
       if (mock) mock.hidden = true;
@@ -2389,19 +2409,51 @@
     }
 
     $("btn-google").addEventListener("click", async () => {
+      const Auth = window.EddysHellAuth;
+      const btn = $("btn-google");
       try {
-        const result = await window.EddysHellAuth.signInWithGoogle();
+        // If Auth.init is still running, wait — never alert transient "not configured".
+        if (
+          (!Auth.isConfigured || !Auth.isConfigured()) &&
+          Auth.waitForInit
+        ) {
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = "Loading…";
+          }
+          try {
+            await Auth.waitForInit(20000);
+          } catch (_) {
+            /* signInWithGoogle will await / throw true misconfig */
+          }
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Sign in with Google";
+          }
+        }
+        const result = await Auth.signInWithGoogle();
         // Redirect navigates away; popup resolves via onAuthStateChanged.
         if (result && result.method === "redirect") return;
       } catch (err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Sign in with Google";
+        }
         // cancelled-popup-request / popup-closed are non-fatal (redirect retry).
         if (
-          window.EddysHellAuth.isBenignPopupError &&
-          window.EddysHellAuth.isBenignPopupError(err)
+          Auth.isBenignPopupError &&
+          Auth.isBenignPopupError(err)
         ) {
           return;
         }
-        const Auth = window.EddysHellAuth;
+        // Suppress transient not-configured if init somehow still pending.
+        if (
+          /Firebase Auth is not configured/i.test(String(err && err.message || "")) &&
+          Auth.isInitPending &&
+          Auth.isInitPending()
+        ) {
+          return;
+        }
         let msg =
           (Auth.friendlyAuthError && Auth.friendlyAuthError(err)) ||
           err.message ||

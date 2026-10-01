@@ -52,15 +52,18 @@ Members see `config/thisWeek` (YouTube embed). Admin **Save rule** writes `confi
 
 **Stage vs live:**
 - **Stage next week** (candidate with no `youtubeId`) → Firestore `config/nextWeek` + localStorage `eddys-hell-next-week-v1`. Toast: *Staged — live week stays until YouTube upload.* Does **not** write `config/thisWeek`.
-- **Live `config/thisWeek`** updates only when the pick already has `youtubeId` (re-publish same pick, or after upload via `EddysHell.promoteAfterYoutubeUpload(youtubeId)` / `Auth.promoteStagedToLive`). Never writes `youtubeId: null` over a live doc.
+- **Stage YouTube** (Admin, separate) pastes a URL/id onto staged `config/nextWeek` only. If nothing is staged yet but a dry-run candidate exists, that candidate is staged **with** the `youtubeId` in one `stageNextWeek` call. Never publishes. Toast: *YouTube staged — live week unchanged.*
+- **Swap live now** (Admin, separate) calls `promoteStagedToLive` using the staged `youtubeId` (argument optional — omitted/null uses `staged.youtubeId`). No upload in that step. Enabled only when staged next week already has a video id.
+- **Live `config/thisWeek`** updates only when the pick already has `youtubeId` (re-publish same pick, Swap live now, or `EddysHell.promoteAfterYoutubeUpload(youtubeId)` / `Auth.promoteStagedToLive`). Never writes `youtubeId: null` over a live doc.
 - Hosting `data/this-week.json` via `set-this-week.js` still requires `youtubeId`.
 
 Load order (live): **Firestore thisWeek → repo JSON → localStorage**. Staged is separate (`config/nextWeek`).
 
 1. Admin dry-runs a candidate → **Stage next week** → `config/nextWeek` (live unchanged).
-2. Wednesday/bot: compress + YouTube upload → `promoteAfterYoutubeUpload(id)` → live `config/thisWeek` with `youtubeId`.
-3. **Save rule** → Firestore `config/rule`.
-4. Optional: sync Hosting JSON via Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap.
+2. After Mac compress + unlisted YouTube upload, **Stage YouTube** saves the id on next week only (scheduler can promote later). **Swap live now** is a separate button — it does not upload.
+3. Wednesday/bot: compress + YouTube upload → `promoteAfterYoutubeUpload(id)` → live `config/thisWeek` with `youtubeId` (or omit id to use the staged one).
+4. **Save rule** → Firestore `config/rule`.
+5. Optional: sync Hosting JSON via Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap.
 
 Wednesday routine (Auto-pick OFF): upload the **staged** pick (`getStagedNextWeek()` / `config/nextWeek`); only then promote to live. Do not overwrite a live pick that still has video with a no-video candidate.
 

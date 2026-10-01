@@ -27,8 +27,57 @@
   let firebaseReady = false;
   /** @type {boolean} */
   let gating = false;
+  /** @type {boolean} */
+  let initSettled = false;
+  /** @type {((v?: void) => void)|null} */
+  let initResolve = null;
+  /** Resolves when Auth.init() finishes (success or failure). */
+  const initReadyPromise = new Promise((resolve) => {
+    initResolve = resolve;
+  });
   /** @type {Array<(u: object|null) => void>} */
   const listeners = [];
+
+  function markInitDone() {
+    if (initSettled) return;
+    initSettled = true;
+    if (initResolve) {
+      try {
+        initResolve();
+      } catch (_) {
+        /* ok */
+      }
+      initResolve = null;
+    }
+  }
+
+  function isInitPending() {
+    return !initSettled;
+  }
+
+  /**
+   * Await Auth.init() completion. Resolves after success or failure.
+   * @param {number} [timeoutMs=20000]
+   */
+  async function waitForInit(timeoutMs) {
+    const ms = typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : 20000;
+    if (initSettled) return;
+    let timer = null;
+    try {
+      await Promise.race([
+        initReadyPromise,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            const err = new Error("Auth init timed out");
+            err.code = "auth-init-timeout";
+            reject(err);
+          }, ms);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
 
   function isLocalhost() {
     const h = location.hostname;
@@ -1228,7 +1277,18 @@
 
   async function signInWithGoogle() {
     if (!firebaseReady || !fbAuth) {
-      throw new Error("Firebase Auth is not configured");
+      // Race: guest shell paints Sign in before Auth.init() finishes.
+      // Await init instead of immediately throwing "not configured".
+      if (!initSettled) {
+        try {
+          await waitForInit(20000);
+        } catch (_) {
+          /* fall through — throw true misconfig below if still not ready */
+        }
+      }
+      if (!firebaseReady || !fbAuth) {
+        throw new Error("Firebase Auth is not configured");
+      }
     }
 
     // In-app browsers: do not attempt popup/redirect (broken → argument-error).
@@ -1304,59 +1364,66 @@
   }
 
   async function init() {
-    // Admins
     try {
-      const res = await fetch("data/admins.json", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        adminEmails = Array.isArray(data.emails)
-          ? data.emails.map(normalizeEmail).filter(Boolean)
-          : [];
-      }
-    } catch (_) {
-      adminEmails = [normalizeEmail("sblanco2005@gmail.com")];
-    }
-
-    // Members allowlist (repo then newer localStorage)
-    await loadMembers();
-
-    // Firebase config
-    try {
-      const res = await fetch("data/firebase-config.json", { cache: "no-store" });
-      if (res.ok) firebaseConfig = await res.json();
-    } catch (_) {
-      firebaseConfig = null;
-    }
-
-    if (configLooksReady(firebaseConfig)) {
+      // Admins
       try {
-        await initFirebase(firebaseConfig);
-      } catch (err) {
-        console.error("Firebase init failed:", err);
-        firebaseReady = false;
+        const res = await fetch("data/admins.json", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          adminEmails = Array.isArray(data.emails)
+            ? data.emails.map(normalizeEmail).filter(Boolean)
+            : [];
+        }
+      } catch (_) {
+        adminEmails = [normalizeEmail("sblanco2005@gmail.com")];
       }
-    }
 
-    // Mock restore on localhost when Firebase not ready
-    if (!firebaseReady && isLocalhost()) {
-      const mock = loadMockSession();
-      if (mock) await admitOrReject(mock);
-    }
+      // Members allowlist (repo then newer localStorage)
+      await loadMembers();
 
-    // admin bypass: synthesize a session for UI without persisting
-    if (adminBypassEnabled() && !currentUser) {
-      setUser({
-        email: adminEmails[0] || "sblanco2005@gmail.com",
-        displayName: "Local admin bypass",
-        photoURL: null,
-        uid: "bypass-admin",
-        provider: "bypass",
-      });
+      // Firebase config
+      try {
+        const res = await fetch("data/firebase-config.json", { cache: "no-store" });
+        if (res.ok) firebaseConfig = await res.json();
+      } catch (_) {
+        firebaseConfig = null;
+      }
+
+      if (configLooksReady(firebaseConfig)) {
+        try {
+          await initFirebase(firebaseConfig);
+        } catch (err) {
+          console.error("Firebase init failed:", err);
+          firebaseReady = false;
+        }
+      }
+
+      // Mock restore on localhost when Firebase not ready
+      if (!firebaseReady && isLocalhost()) {
+        const mock = loadMockSession();
+        if (mock) await admitOrReject(mock);
+      }
+
+      // admin bypass: synthesize a session for UI without persisting
+      if (adminBypassEnabled() && !currentUser) {
+        setUser({
+          email: adminEmails[0] || "sblanco2005@gmail.com",
+          displayName: "Local admin bypass",
+          photoURL: null,
+          uid: "bypass-admin",
+          provider: "bypass",
+        });
+      }
+    } finally {
+      markInitDone();
     }
   }
 
   window.EddysHellAuth = {
     init,
+    waitForInit,
+    whenReady: waitForInit,
+    isInitPending,
     onAuthChange,
     getUser: () =>
       currentUser ? { ...currentUser, role: getRole(currentUser) } : null,

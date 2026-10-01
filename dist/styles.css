@@ -1010,3 +1010,24 @@ input:focus {
   background: rgba(245, 158, 11, 0.08);
   border: 1px solid rgba(245, 158, 11, 0.3);
 }
+
+.stage-yt-block {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(245, 158, 11, 0.28);
+}
+.stage-yt-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+.swap-live-row {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed rgba(245, 158, 11, 0.28);
+}
+#btn-stage-youtube:disabled,
+#btn-swap-live:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
