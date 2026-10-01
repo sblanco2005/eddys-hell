@@ -46,5 +46,11 @@ service cloud.firestore {
       allow create, update: if isAdmin();
       allow delete: if false;
     }
+    // Admin ops activity log (compress/stage/swap/skip). Admin R/W only.
+    match /activityLog/{entryId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
   }
 }

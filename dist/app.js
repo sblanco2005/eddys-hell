@@ -842,6 +842,86 @@
    * If nothing is staged yet, stages the dry-run candidate WITH the youtubeId
    * in one stageNextWeek call.
    */
+
+  /** Best-effort activity log write via Auth; never blocks the main action. */
+  async function logAdminActivity(entry) {
+    try {
+      const Auth = window.EddysHellAuth;
+      if (!Auth) return null;
+      const fn = Auth.bestEffortLogActivity || Auth.logActivity;
+      if (!fn) return null;
+      return await fn(entry);
+    } catch (err) {
+      console.warn("logAdminActivity failed:", err);
+      return null;
+    }
+  }
+
+  function formatActivityLine(entry) {
+    if (!entry) return "";
+    const atRaw = entry.at || "";
+    let when = atRaw;
+    try {
+      const d = new Date(atRaw);
+      if (!Number.isNaN(d.getTime())) {
+        when = d.toLocaleString("en-US", {
+          timeZone: "America/New_York",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        });
+      }
+    } catch (_) { /* keep raw */ }
+    const src = entry.source === "scheduler" ? "scheduler" : "manual";
+    const action = entry.action || "?";
+    const who = entry.actor ? " · " + entry.actor : "";
+    const pick =
+      entry.pickId ||
+      entry.filename ||
+      entry.title ||
+      "";
+    const yt = entry.youtubeId ? " yt:" + entry.youtubeId : "";
+    const detail = entry.detail ? " — " + entry.detail : "";
+    const pickBit = pick ? " · " + pick : "";
+    return when + " · " + action + " · " + src + who + pickBit + yt + detail;
+  }
+
+  async function refreshActivityLog() {
+    const list = $("activity-log-list");
+    if (!list) return;
+    if (!authUser || authUser.role !== "admin") {
+      list.innerHTML = '<li class="hint">Sign in as admin to see the ops log.</li>';
+      return;
+    }
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.loadActivityLog) {
+      list.innerHTML = '<li class="hint">Activity log API unavailable.</li>';
+      return;
+    }
+    list.innerHTML = '<li class="hint">Loading…</li>';
+    try {
+      const rows = await Auth.loadActivityLog(30);
+      if (!rows || !rows.length) {
+        list.innerHTML = '<li class="hint">No activity yet.</li>';
+        return;
+      }
+      list.innerHTML = "";
+      for (const row of rows) {
+        const li = document.createElement("li");
+        li.className = "activity-log-item";
+        li.textContent = formatActivityLine(row);
+        list.appendChild(li);
+      }
+    } catch (err) {
+      console.warn("refreshActivityLog:", err);
+      list.innerHTML =
+        '<li class="hint">Could not load log: ' +
+        ((err && err.message) || String(err)) +
+        "</li>";
+    }
+  }
+
   async function saveYoutubeToStaged() {
     const input = $("yt-url-input");
     const raw = input ? input.value : "";
@@ -889,12 +969,33 @@
       showAcceptToast("YouTube staged on next week — live week unchanged.", { ms: 6000 });
       renderLiveWeekCard();
       updatePickActions();
+      await logAdminActivity({
+        action: "stage_youtube",
+        source: "manual",
+        pickId: payload.pickId || payload.id || null,
+        filename: payload.filename || null,
+        youtubeId: id,
+        detail: hadStaged
+          ? "YouTube staged only"
+          : "Dry-run staged with YouTube",
+      });
+      refreshActivityLog();
     } catch (err) {
       console.warn("Compress & Stage YouTube failed:", err);
       showAcceptToast(
         "Compress & Stage YouTube failed: " + ((err && err.message) || String(err)),
         { error: true, ms: 8000 }
       );
+      const failBase = payloadForYoutubeStage() || {};
+      await logAdminActivity({
+        action: "fail",
+        source: "manual",
+        pickId: failBase.pickId || failBase.id || null,
+        filename: failBase.filename || null,
+        youtubeId: id || null,
+        detail: "stage_youtube failed: " + ((err && err.message) || String(err)),
+      });
+      refreshActivityLog();
     } finally {
       if (btn) btn.dataset.busy = "";
       updateYoutubeStageControls();
@@ -949,12 +1050,31 @@
       }
       renderSharedCheckins(resolveThisWeek());
       showAcceptToast("Live week swapped.", { ms: 5000 });
+      await logAdminActivity({
+        action: "swap_live",
+        source: "manual",
+        pickId: (live && (live.pickId || live.id)) || staged.pickId || staged.id || null,
+        filename: (live && live.filename) || staged.filename || null,
+        youtubeId: staged.youtubeId || null,
+        detail: "promoted " + ((live && (live.pickId || live.id)) || staged.pickId || staged.id || "staged"),
+      });
+      refreshActivityLog();
     } catch (err) {
       console.warn("swap live failed:", err);
       showAcceptToast(
         "Swap failed: " + ((err && err.message) || String(err)),
         { error: true, ms: 8000 }
       );
+      const st = resolveStagedNext() || {};
+      await logAdminActivity({
+        action: "fail",
+        source: "manual",
+        pickId: st.pickId || st.id || null,
+        filename: st.filename || null,
+        youtubeId: st.youtubeId || null,
+        detail: "swap_live failed: " + ((err && err.message) || String(err)),
+      });
+      refreshActivityLog();
     } finally {
       if (btn) btn.dataset.busy = "";
       updateYoutubeStageControls();
@@ -2793,7 +2913,13 @@
       authUser = user;
       safeApplyRoleUI();
       if (user) {
-        loadCloudConfig().catch((err) => console.warn(err));
+        loadCloudConfig()
+          .catch((err) => console.warn(err))
+          .finally(() => {
+            if (user.role === "admin") refreshActivityLog();
+          });
+      } else {
+        refreshActivityLog();
       }
     });
     window.EddysHellAuth.onCheckinsChange(() => {
@@ -2837,13 +2963,45 @@
         if (!Auth || !Auth.promoteStagedToLive) {
           throw new Error("Auth promoteStagedToLive API missing");
         }
-        const live = await Auth.promoteStagedToLive(youtubeId, youtubeUrl);
-        thisWeekFile = { ...live, _source: "cloud" };
-        persistStagedLocal(null);
-        ensurePickViewFromPublished();
-        renderYoutubeAdminControls();
-        updatePickActions();
-        return live;
+        try {
+          const live = await Auth.promoteStagedToLive(youtubeId, youtubeUrl);
+          thisWeekFile = { ...live, _source: "cloud" };
+          persistStagedLocal(null);
+          ensurePickViewFromPublished();
+          renderYoutubeAdminControls();
+          updatePickActions();
+          await logAdminActivity({
+            action: "swap_live",
+            source: "scheduler",
+            actor: "wednesday-job",
+            pickId: (live && (live.pickId || live.id)) || null,
+            filename: (live && live.filename) || null,
+            youtubeId: youtubeId || (live && live.youtubeId) || null,
+            detail: "promoted " + ((live && (live.pickId || live.id)) || "staged"),
+          });
+          refreshActivityLog();
+          return live;
+        } catch (err) {
+          await logAdminActivity({
+            action: "fail",
+            source: "scheduler",
+            actor: "wednesday-job",
+            youtubeId: youtubeId || null,
+            detail: "promoteAfterYoutubeUpload failed: " + ((err && err.message) || String(err)),
+          });
+          refreshActivityLog();
+          throw err;
+        }
+      },
+      /** Append ops activity log (scheduler/manual). Same shape as Admin Activity UI. */
+      logActivity: async (entry) => {
+        const Auth = window.EddysHellAuth;
+        if (!Auth || !Auth.logActivity) {
+          throw new Error("Auth logActivity API missing");
+        }
+        const saved = await Auth.logActivity(entry || {});
+        refreshActivityLog();
+        return saved;
       },
       /** Admin: paste/save YouTube id onto staged next week only (Compress & Stage YouTube). Never publishes. */
       stageYoutubeOnly: saveYoutubeToStaged,

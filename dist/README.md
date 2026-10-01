@@ -57,6 +57,7 @@ Members see `config/thisWeek` (YouTube embed). Admin **Save rule** writes `confi
 - **Swap live now** (Admin, optional) calls `promoteStagedToLive` using the staged `youtubeId` (argument optional — omitted/null uses `staged.youtubeId`). No upload in that step. Enabled only when staged next week already has a video id. API: `EddysHell.swapLiveNow`.
 - **Live `config/thisWeek`** updates only when the pick already has `youtubeId` (re-publish same pick, Swap live now, or `EddysHell.promoteAfterYoutubeUpload(youtubeId)` / `Auth.promoteStagedToLive`). Never writes `youtubeId: null` over a live doc.
 - Hosting `data/this-week.json` via `set-this-week.js` still requires `youtubeId`.
+- **Activity log** — Admin Non-live **Activity** list + Firestore `activityLog`. Manual stage/swap and Wednesday scheduler append the same shape (`source: manual|scheduler`). See below.
 - **`rotateWeeks`** applies to **Pick again** dry-run filtering only. Wednesday does **not** skip a whole run just because rotate says “off week.”
 
 Load order (live): **Firestore thisWeek → repo JSON → localStorage**. Staged is separate (`config/nextWeek`).
@@ -70,6 +71,44 @@ Load order (live): **Firestore thisWeek → repo JSON → localStorage**. Staged
    - Staged ≠ live **and** no `youtubeId` → **compress + YouTube unlisted upload + stage youtubeId on nextWeek, then promote/swap**.
    - Hard rule: never write `youtubeId: null` over live; never change live without a real `youtubeId`.
    - After successful YouTube upload, delete Mac media under `eddys-hell-app/out` (`week.mp4`, `source-week.mov`, `source.mov`).
+
+### Activity log (Admin + Wednesday)
+
+Firestore collection **`activityLog`** (admin read/create only). Each entry:
+
+| field | notes |
+|---|---|
+| `at` | ISO timestamp (ET-ish / UTC ISO) |
+| `action` | `compress_stage_youtube` \| `stage_youtube` \| `swap_live` \| `skip` \| `fail` |
+| `source` | `manual` \| `scheduler` |
+| `pickId` / `filename` / `title` | optional |
+| `youtubeId` | optional |
+| `detail` | short human string (e.g. `drive not mounted`, `promoted HR149`) |
+| `actor` | email or `wednesday-job` |
+
+Admin UI (**Next week staged → Activity**) shows the last ~30 entries newest first; refreshes on load and after stage/swap.
+
+**Scheduler / agent** should append the same shape (best-effort; never block the main action):
+
+```js
+// From a signed-in admin browser session / console on beta:
+await EddysHell.logActivity({
+  action: "skip",            // or compress_stage_youtube | stage_youtube | swap_live | fail
+  source: "scheduler",
+  actor: "wednesday-job",
+  pickId: null,
+  detail: "drive not mounted", // when /Volumes/EddysHell is missing
+});
+```
+
+Also available as `EddysHellAuth.logActivity(entry)` / `EddysHellAuth.bestEffortLogActivity(entry)`.
+
+Wednesday should log:
+- **skip** when `/Volumes/EddysHell` is not connected, or nothing new (no staged / same as live)
+- **compress_stage_youtube** after compress + unlisted upload + stage youtubeId
+- **swap_live** after promote
+- **fail** on errors (include message in `detail`)
+
 4. **Save rule** → Firestore `config/rule` (forces `autoPick: false`; Auto-pick UI is hidden/deprecated).
 5. Optional: sync Hosting JSON via Mac routine / `scripts/deploy-hosting.sh` for offline bootstrap (beta only for experiments).
 
@@ -126,7 +165,7 @@ Until Firestore is enabled, check-ins still work on each friend’s device, but 
 - `data/members.json` — member email allowlist (empty = admins only)
 - `data/pt.json` — editable PT summary email destination
 - `data/firebase-config.json` — Firebase web config (Auth configured; enable Firestore for check-in sync)
-- `firestore.rules` — check-ins + admin-only write to `config/thisWeek` and `config/rule`
+- `firestore.rules` — check-ins + admin-only write to `config/thisWeek` / `config/nextWeek` / `config/rule` + admin `activityLog`
 
 ## Publish
 

@@ -918,6 +918,85 @@
     };
   }
 
+
+  /**
+   * Append an admin ops activity log entry (best-effort).
+   * Shape: { at, action, source, pickId?, filename?, title?, youtubeId?, detail?, actor? }
+   * action: compress_stage_youtube | stage_youtube | swap_live | skip | fail
+   * source: manual | scheduler
+   * Never throws to callers when used via bestEffortLogActivity — this one may throw.
+   */
+  async function logActivity(entry) {
+    if (!firestoreReady || !fbDb || !firestoreAddDoc || !firestoreCollection) {
+      const err = new Error("Firestore not ready — cannot write activity log.");
+      err.code = "firestore-not-ready";
+      throw err;
+    }
+    const base = entry && typeof entry === "object" ? entry : {};
+    const action = base.action || "fail";
+    const source = base.source === "scheduler" ? "scheduler" : "manual";
+    const actor =
+      base.actor ||
+      (source === "scheduler"
+        ? "wednesday-job"
+        : currentUser
+          ? normalizeEmail(currentUser.email)
+          : null);
+    const docPayload = scrubUndefined({
+      at: base.at || new Date().toISOString(),
+      action: String(action),
+      source,
+      pickId: base.pickId || base.id || null,
+      filename: base.filename || null,
+      title: base.title || null,
+      youtubeId: base.youtubeId || null,
+      detail: base.detail || null,
+      actor,
+    });
+    const ref = await firestoreAddDoc(
+      firestoreCollection(fbDb, "activityLog"),
+      docPayload
+    );
+    firestoreStatus = "cloud";
+    return { id: ref.id, ...docPayload };
+  }
+
+  /** Best-effort wrapper — never throws; logs to console on failure. */
+  async function bestEffortLogActivity(entry) {
+    try {
+      return await logActivity(entry);
+    } catch (err) {
+      console.warn("activityLog write failed:", err);
+      return null;
+    }
+  }
+
+  /** Load newest activity log entries (admin). Default limit 30. */
+  async function loadActivityLog(limitCount) {
+    if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection) {
+      return [];
+    }
+    const n = Math.min(Math.max(Number(limitCount) || 30, 1), 100);
+    try {
+      const q = firestoreQuery(
+        firestoreCollection(fbDb, "activityLog"),
+        firestoreOrderBy("at", "desc"),
+        firestoreLimit(n)
+      );
+      const snap = await firestoreGetDocs(q);
+      firestoreStatus = "cloud";
+      const rows = [];
+      snap.forEach((docSnap) => {
+        rows.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      return rows;
+    } catch (err) {
+      console.warn("activityLog read failed:", err);
+      firestoreStatus = "error";
+      return [];
+    }
+  }
+
   async function publishRule(rule) {
     requireFirestoreWrite();
     const base = rule && typeof rule === "object" ? rule : {};
@@ -1083,6 +1162,9 @@
       where: fsMod.where,
       getDocs: fsMod.getDocs,
       onSnapshot: fsMod.onSnapshot,
+      addDoc: fsMod.addDoc,
+      orderBy: fsMod.orderBy,
+      limit: fsMod.limit,
     };
   }
 
@@ -1112,6 +1194,12 @@
   let firestoreGetDocs = null;
   /** @type {any} */
   let firestoreOnSnapshot = null;
+  /** @type {any} */
+  let firestoreAddDoc = null;
+  /** @type {any} */
+  let firestoreOrderBy = null;
+  /** @type {any} */
+  let firestoreLimit = null;
 
   /**
    * Auth strategy:
@@ -1209,6 +1297,9 @@
     firestoreWhere = mod.where;
     firestoreGetDocs = mod.getDocs;
     firestoreOnSnapshot = mod.onSnapshot;
+    firestoreAddDoc = mod.addDoc;
+    firestoreOrderBy = mod.orderBy;
+    firestoreLimit = mod.limit;
     try {
       fbDb = mod.getFirestore(app);
       firestoreReady = true;
@@ -1457,6 +1548,9 @@
     stageNextWeek,
     loadNextWeekFromCloud,
     promoteStagedToLive,
+    logActivity,
+    bestEffortLogActivity,
+    loadActivityLog,
     publishRule,
     loadRuleFromCloud,
     CHECKINS_KEY,
