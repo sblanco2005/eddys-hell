@@ -778,7 +778,8 @@
    * staged nextWeek pick + youtubeId. Never promotes without a video id.
    */
   async function promoteStagedToLive(youtubeId, youtubeUrl) {
-    const id = youtubeId || null;
+    const staged = await loadNextWeekFromCloud();
+    const id = youtubeId || (staged && staged.youtubeId) || null;
     if (!id) {
       const err = new Error(
         "Upload YouTube first — won't replace this week without a video."
@@ -786,7 +787,6 @@
       err.code = "youtube-required";
       throw err;
     }
-    const staged = await loadNextWeekFromCloud();
     if (!staged) {
       throw new Error("No staged next week to promote — Stage next week first.");
     }

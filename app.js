@@ -681,21 +681,30 @@
       if (card) card.hidden = true;
       if (nameEl) nameEl.textContent = "—";
       if (metaEl) metaEl.textContent = "";
+      updateYoutubeStageControls();
       return;
     }
     const name = staged.filename || staged.pickId || "pick";
     const bits = [];
     if (staged.folderType) bits.push(staged.folderType);
     if (staged.hr != null) bits.push("HR " + staged.hr);
+    if (staged.youtubeId) bits.push("YouTube " + staged.youtubeId);
+    else bits.push("no YouTube yet");
     bits.push("not live — friends still see This week");
     if (el) {
       el.hidden = false;
-      el.textContent =
-        "Staged next: " + name + " — live week unchanged until YouTube upload.";
+      el.textContent = staged.youtubeId
+        ? "Staged next: " +
+          name +
+          " — YouTube saved. Live week unchanged until Swap live now or the scheduler."
+        : "Staged next: " +
+          name +
+          " — live week unchanged. Stage YouTube does not publish.";
     }
     if (card) card.hidden = false;
     if (nameEl) nameEl.textContent = name;
     if (metaEl) metaEl.textContent = bits.join(" · ");
+    updateYoutubeStageControls();
   }
 
   /** Live Candidate pick card — read-only thisWeek with youtubeId. No dry-run/reveal. */
@@ -763,6 +772,192 @@
     persistStagedLocal({ ...saved, _source: "cloud" });
     updateStagedHint();
     return saved;
+  }
+
+  function hasDryRunCandidate() {
+    return !!(
+      currentResult &&
+      pickIsCandidate &&
+      currentResult.pick &&
+      (currentResult.pick.id || currentResult.pick.pickId)
+    );
+  }
+
+  /** Enable Stage YouTube when a staged pick or dry-run candidate exists.
+   *  Swap live now only when staged nextWeek already has a youtubeId. */
+  function updateYoutubeStageControls() {
+    const btnStage = $("btn-stage-youtube");
+    const btnSwap = $("btn-swap-live");
+    const staged = resolveStagedNext();
+    const canStage = !!(staged || hasDryRunCandidate());
+    if (btnStage && btnStage.dataset.busy !== "1") {
+      btnStage.disabled = !canStage;
+      btnStage.textContent = "Stage YouTube";
+    }
+    if (btnSwap && btnSwap.dataset.busy !== "1") {
+      btnSwap.disabled = !(staged && staged.youtubeId);
+      btnSwap.textContent = "Swap live now";
+    }
+  }
+
+  function payloadFromCandidateFile(f, why, matchCount) {
+    return {
+      pickId: f.id || f.pickId,
+      filename: f.filename,
+      folderType: f.folderType,
+      hr: f.hr,
+      relPath: f.relPath,
+      sizeBytes: f.sizeBytes,
+      mtime: f.mtime,
+      rawTags: f.rawTags || [],
+      pickedAt: f.pickedAt || new Date().toISOString(),
+      why: why || f.why || "",
+      matchCount:
+        matchCount != null ? matchCount : f.matchCount != null ? f.matchCount : null,
+      archiveRoot: f.archiveRoot || ARCHIVE_ROOT,
+    };
+  }
+
+  /** Staged next week if present, otherwise the current dry-run candidate. */
+  function payloadForYoutubeStage() {
+    const staged = resolveStagedNext();
+    if (staged && (staged.pickId || staged.id)) {
+      return payloadFromThisWeek(staged);
+    }
+    if (hasDryRunCandidate()) {
+      const f = currentResult.pick;
+      const n =
+        currentResult.matches && currentResult.matches.length
+          ? currentResult.matches.length
+          : null;
+      return payloadFromCandidateFile(f, currentResult.why, n);
+    }
+    return null;
+  }
+
+  /**
+   * Paste a YouTube URL/id onto staged next week only.
+   * Does not publish or promote — live config/thisWeek stays untouched.
+   * If nothing is staged yet, stages the dry-run candidate WITH the youtubeId
+   * in one stageNextWeek call.
+   */
+  async function saveYoutubeToStaged() {
+    const input = $("yt-url-input");
+    const raw = input ? input.value : "";
+    const id = parseYoutubeId(raw);
+    if (!id) {
+      showAcceptToast("Paste a valid YouTube URL or 11-character video id.", {
+        error: true,
+        ms: 8000,
+      });
+      return;
+    }
+    const base = payloadForYoutubeStage();
+    if (!base || !(base.pickId || base.id)) {
+      showAcceptToast(
+        "Dry-run or stage a next-week pick before attaching YouTube.",
+        { error: true, ms: 8000 }
+      );
+      return;
+    }
+    const hadStaged = !!resolveStagedNext();
+    const payload = {
+      ...base,
+      pickId: base.pickId || base.id,
+      youtubeId: id,
+      youtubeUrl: youtubeWatchUrl(id),
+    };
+    const btn = $("btn-stage-youtube");
+    if (btn) {
+      btn.dataset.busy = "1";
+      btn.disabled = true;
+      btn.textContent = "Staging…";
+    }
+    try {
+      await stagePayloadToCloud(payload);
+      if (!hadStaged && currentResult && currentResult.pick) {
+        const f = currentResult.pick;
+        state.usedHistory = [
+          ...(state.usedHistory || []),
+          { id: f.id, pickedAt: payload.pickedAt || new Date().toISOString() },
+        ];
+        saveState();
+        renderHistory();
+      }
+      if (input) input.value = "";
+      showAcceptToast("YouTube staged — live week unchanged.", { ms: 6000 });
+      renderLiveWeekCard();
+      updatePickActions();
+    } catch (err) {
+      console.warn("stage YouTube failed:", err);
+      showAcceptToast(
+        "Stage YouTube failed: " + ((err && err.message) || String(err)),
+        { error: true, ms: 8000 }
+      );
+    } finally {
+      if (btn) btn.dataset.busy = "";
+      updateYoutubeStageControls();
+    }
+  }
+
+  /**
+   * Replace live this week with the already-staged pick + its youtubeId.
+   * Does not upload or read the paste field.
+   */
+  async function swapStagedToLiveNow() {
+    const staged = resolveStagedNext();
+    if (!staged || !staged.youtubeId) {
+      showAcceptToast(
+        "Stage a YouTube id on next week before swapping live.",
+        { error: true, ms: 8000 }
+      );
+      return;
+    }
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.promoteStagedToLive) {
+      showAcceptToast("Auth promoteStagedToLive API missing", {
+        error: true,
+        ms: 8000,
+      });
+      return;
+    }
+    const btn = $("btn-swap-live");
+    if (btn) {
+      btn.dataset.busy = "1";
+      btn.disabled = true;
+      btn.textContent = "Swapping…";
+    }
+    try {
+      const live = await Auth.promoteStagedToLive(
+        staged.youtubeId,
+        staged.youtubeUrl || youtubeWatchUrl(staged.youtubeId)
+      );
+      thisWeekFile = { ...live, _source: "cloud" };
+      persistStagedLocal(null);
+      // Promoted pick is live now — don't leave it sitting as the next-week dry-run.
+      currentResult = null;
+      pickIsCandidate = false;
+      renderLiveWeekCard();
+      renderYoutubeAdminControls();
+      updatePickActions();
+      updateStagedHint();
+      ensurePickViewFromPublished();
+      const memberView = $("view-member");
+      if (memberView && !memberView.hidden && authUser) {
+        renderMemberView({ asAdmin: authUser.role === "admin" });
+      }
+      renderSharedCheckins(resolveThisWeek());
+      showAcceptToast("Live week swapped.", { ms: 5000 });
+    } catch (err) {
+      console.warn("swap live failed:", err);
+      showAcceptToast(
+        "Swap failed: " + ((err && err.message) || String(err)),
+        { error: true, ms: 8000 }
+      );
+    } finally {
+      if (btn) btn.dataset.busy = "";
+      updateYoutubeStageControls();
+    }
   }
 
   async function publishPayloadToCloud(payload) {
@@ -849,6 +1044,7 @@
     updateRevealFinderButton();
     updatePublishPendingHint();
     updateStagedHint();
+    updateYoutubeStageControls();
     updateDryRunButtonLabel();
     renderLiveWeekCard();
   }
@@ -2456,6 +2652,19 @@
 
     $("btn-dryrun").addEventListener("click", runDryRunOrAgain);
     $("btn-accept").addEventListener("click", acceptPick);
+    const btnStageYt = $("btn-stage-youtube");
+    if (btnStageYt) btnStageYt.addEventListener("click", saveYoutubeToStaged);
+    const btnSwapLive = $("btn-swap-live");
+    if (btnSwapLive) btnSwapLive.addEventListener("click", swapStagedToLiveNow);
+    const ytInput = $("yt-url-input");
+    if (ytInput) {
+      ytInput.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          saveYoutubeToStaged();
+        }
+      });
+    }
     const btnKeep = $("btn-keep");
     if (btnKeep) btnKeep.addEventListener("click", keepThisWeek);
     const btnReveal = $("btn-reveal-finder");
@@ -2582,6 +2791,10 @@
         updatePickActions();
         return live;
       },
+      /** Admin: attach YouTube to staged next week only. Never publishes. */
+      stageYoutubeOnly: saveYoutubeToStaged,
+      /** Admin: promote staged next week (must already have youtubeId) to live. */
+      swapLiveNow: swapStagedToLiveNow,
       YT_REQUIRED_TOAST,
       STAGED_TOAST,
       resolveThisWeek,

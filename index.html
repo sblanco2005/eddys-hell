@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#0b0f14" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="stable-no-beta-badge-20260927-1742" />
+  <meta name="eddys-hell-build" content="beta-stage-yt-swap-20261001" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css?v=20260927-1742-no-beta-badge" />
+  <link rel="stylesheet" href="styles.css?v=20261001-stage-yt-swap" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -265,7 +265,7 @@
             <h2>Next week staged</h2>
             <span class="badge">Not live</span>
           </header>
-          <p class="hint">Pick again (= dry-run), reveal the Mac path, then <strong>Stage next week</strong>. Friends keep seeing <strong>Candidate pick (LIVE)</strong> until YouTube upload → promote. Dry-run never lives on the Rule or LIVE cards.</p>
+          <p class="hint">Pick again (= dry-run), reveal the Mac path, then <strong>Stage next week</strong>. Two actions stay separate: <strong>Stage YouTube</strong> only saves an unlisted URL onto next week (wait for the scheduler — friends keep seeing <strong>Candidate pick (LIVE)</strong>). <strong>Swap live now</strong> replaces the live week with the already-staged pick and its YouTube id — no upload in that step. Dry-run never lives on the Rule or LIVE cards.</p>
 
           <div class="actions nonlive-always-actions" id="nonlive-always-actions">
             <button type="button" class="btn accent" id="btn-dryrun">Pick again</button>
@@ -285,6 +285,20 @@
             <h3 class="pick-name" id="staged-next-name">—</h3>
             <p class="hint" id="staged-next-meta"></p>
             <p class="hint">Already staged in cloud — live week unchanged.</p>
+          </div>
+
+          <div class="stage-yt-block" id="stage-yt-block">
+            <h3 class="stage-yt-title">Stage YouTube (upload only)</h3>
+            <p class="hint">After Mac compress + YouTube unlisted upload, paste the URL/id here. Saves to staged next week only — does <strong>not</strong> change what friends see.</p>
+            <label class="reveal-path-label" for="yt-url-input">YouTube URL or video id</label>
+            <input type="url" id="yt-url-input" inputmode="url" placeholder="https://youtu.be/… or 11-character id" autocomplete="off" spellcheck="false" />
+            <div class="actions nonlive-always-actions">
+              <button type="button" class="btn accent" id="btn-stage-youtube" disabled>Stage YouTube</button>
+            </div>
+            <div class="swap-live-row">
+              <button type="button" class="btn primary" id="btn-swap-live" disabled>Swap live now</button>
+              <p class="hint">Swap live now uses the YouTube id already on staged next week. It does not upload or ask you to paste again.</p>
+            </div>
           </div>
 
           <div class="nonlive-preview" id="pick-empty">
@@ -380,7 +394,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20260927-1742-no-beta-badge"></script>
-  <script src="app.js?v=20260927-1742-no-beta-badge"></script>
+  <script src="auth.js?v=20261001-stage-yt-swap"></script>
+  <script src="app.js?v=20261001-stage-yt-swap"></script>
 </body>
 </html>
