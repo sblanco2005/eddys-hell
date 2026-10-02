@@ -169,7 +169,13 @@ async function main() {
   const vapid = JSON.parse(fs.readFileSync(VAPID_PATH, "utf8"));
   webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
 
-  const feed = await listCollection(token, "checkinFeed");
+  // Prefer checkinFeed; fall back to checkins (older rows may predate feed).
+  let feed = await listCollection(token, "checkinFeed");
+  let feedSource = "checkinFeed";
+  if (!feed.length) {
+    feed = await listCollection(token, "checkins");
+    feedSource = "checkins";
+  }
   const subs = (await listCollection(token, "pushSubscriptions")).filter(
     (s) => s.enabled && s.endpoint && s.keys && s.keys.p256dh && s.keys.auth
   );
@@ -244,6 +250,7 @@ async function main() {
       alerts,
       subs: subs.length,
       feed: feed.length,
+      feedSource,
     })
   );
 }
