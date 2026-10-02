@@ -275,6 +275,112 @@
     return !!(Auth && Auth.isBetaHost && Auth.isBetaHost());
   }
 
+
+  let pushNotifyBound = false;
+  let pushNotifyBusy = false;
+
+  function isPushNotifyUiEnabled() {
+    return isCheckinFeedEnabled();
+  }
+
+  async function paintPushNotifyBox() {
+    const box = $("push-notify-box");
+    const toggle = $("push-notify-toggle");
+    const hint = $("push-notify-hint");
+    const iosHint = $("push-ios-hint");
+    const status = $("push-notify-status");
+    if (!box || !toggle) return;
+    if (!isPushNotifyUiEnabled() || !authUser) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    box.removeAttribute("hidden");
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.getCheckinPushStatus) {
+      box.hidden = true;
+      return;
+    }
+    let st;
+    try {
+      st = await Auth.getCheckinPushStatus();
+    } catch (err) {
+      st = { supported: false, enabled: false };
+    }
+    if (iosHint) {
+      iosHint.hidden = !(st.iosSafari && !st.standalone);
+    }
+    toggle.disabled = pushNotifyBusy || !st.supported || !st.vapidReady || (st.iosSafari && !st.standalone);
+    toggle.checked = !!st.enabled;
+    if (status) {
+      status.hidden = true;
+      status.textContent = "";
+    }
+    if (hint) {
+      if (!st.supported) {
+        hint.textContent = "This browser doesn’t support Web Push.";
+      } else if (!st.vapidReady) {
+        hint.textContent = "Push isn’t configured on the server yet — ask Santiago.";
+      } else if (st.iosSafari && !st.standalone) {
+        hint.textContent = "Add to Home Screen first, then enable (iOS 16.4+).";
+      } else if (st.permission === "denied") {
+        hint.textContent = "Notifications are blocked for this site — enable them in browser Settings.";
+      } else {
+        hint.textContent = "Phone / lock-screen alert even if the app is closed.";
+      }
+    }
+    if (status && !st.vapidReady) {
+      status.hidden = false;
+      status.textContent = "Push not configured yet (VAPID) — toggle stays off until Santiago finishes setup.";
+    }
+  }
+
+  function bindPushNotifyControls() {
+    if (pushNotifyBound) return;
+    pushNotifyBound = true;
+    document.addEventListener(
+      "change",
+      async (ev) => {
+        const t = ev.target;
+        if (!t || t.id !== "push-notify-toggle") return;
+        const Auth = window.EddysHellAuth;
+        const status = $("push-notify-status");
+        if (!Auth) return;
+        pushNotifyBusy = true;
+        t.disabled = true;
+        try {
+          if (t.checked) {
+            await Auth.enableCheckinPush();
+            if (status) {
+              status.hidden = false;
+              status.classList.remove("toast-warn");
+              status.textContent = "Notifications on — you’ll hear when someone else checks in.";
+            }
+          } else {
+            await Auth.disableCheckinPush();
+            if (status) {
+              status.hidden = false;
+              status.classList.remove("toast-warn");
+              status.textContent = "Notifications off on this device.";
+            }
+          }
+        } catch (err) {
+          t.checked = false;
+          if (status) {
+            status.hidden = false;
+            status.classList.add("toast-warn");
+            status.textContent = (err && err.message) || String(err);
+          }
+        } finally {
+          pushNotifyBusy = false;
+          paintPushNotifyBox();
+        }
+      },
+      true
+    );
+  }
+
+
   function feedRowKey(row) {
     return String(row.pickId || "") + "__" + String(row.email || "").toLowerCase() + "__" + String(row.at || "");
   }
@@ -1853,6 +1959,8 @@
       const feedBtn = $("btn-checkin-feed");
       if (feedBtn) feedBtn.hidden = true;
       checkinFeedOpen = false;
+      const pushBox = $("push-notify-box");
+      if (pushBox) pushBox.hidden = true;
       return;
     }
     $("member-empty").hidden = true;
@@ -1964,6 +2072,8 @@
       syncHint.hidden = false;
       syncHint.textContent = syncHintText();
     }
+    bindPushNotifyControls();
+    paintPushNotifyBox();
   }
 
   function renderAdminShell(preferredView) {

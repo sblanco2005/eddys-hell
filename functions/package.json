@@ -1,0 +1,12 @@
+{
+  "name": "eddys-hell-functions",
+  "description": "Eddy's Hell Cloud Functions — check-in Web Push",
+  "engines": { "node": "20" },
+  "main": "index.js",
+  "private": true,
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.1.1",
+    "web-push": "^3.6.7"
+  }
+}

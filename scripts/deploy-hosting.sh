@@ -23,8 +23,11 @@ fi
 sync_dist() {
   echo "Syncing root → dist/ ..."
   mkdir -p dist/data
-  cp -f app.js auth.js index.html styles.css dist/
+  cp -f app.js auth.js index.html styles.css sw.js manifest.webmanifest dist/
   cp -a data/. dist/data/
+  mkdir -p dist/icons
+  cp -a icons/. dist/icons/ 2>/dev/null || true
+  [[ -f firestore.rules ]] && cp -f firestore.rules dist/ || true
   touch dist/.nojekyll
   # Keep README/serve.sh in dist if present at root (Pages mirror parity)
   [[ -f README.md ]] && cp -f README.md dist/ || true

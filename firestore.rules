@@ -72,5 +72,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+
+    // Web Push subscriptions (beta). Own uid R/W; signed-in read so a trusted
+    // sender/poller (or future Cloud Function Admin SDK) can notify others.
+    // Endpoints are semi-sensitive — members-only allowlist app already gates access.
+    match /pushSubscriptions/{docId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && request.resource.data.uid is string
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email is string
+        && request.resource.data.email == emailLower()
+        && request.resource.data.endpoint is string
+        && request.resource.data.keys is map
+        && request.resource.data.enabled is bool
+        && request.resource.data.keys().hasAll(['uid', 'email', 'endpoint', 'keys', 'enabled', 'updatedAt']);
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid;
+    }
+
+
   }
 }

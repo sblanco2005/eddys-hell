@@ -4,11 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-bell-fix-20261001" />
+  <meta name="eddys-hell-build" content="beta-webpush-20261002" />
   <title>Eddy's Hell · Thursday</title>
-  <link rel="stylesheet" href="styles.css?v=20261001-bell-fix" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css?v=20261002-webpush" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -167,6 +172,19 @@
               ✓ You’re checked in for this week <span id="checkin-done-at"></span>
             </p>
             <p class="hint checkin-sync" id="checkin-sync-hint" hidden></p>
+            <div class="push-box" id="push-notify-box" hidden>
+              <label class="push-toggle-row" for="push-notify-toggle">
+                <input type="checkbox" id="push-notify-toggle" />
+                <span class="push-toggle-text">
+                  <strong>Notify me when someone checks in</strong>
+                  <span class="hint push-toggle-hint" id="push-notify-hint">Phone / lock-screen alert even if the app is closed.</span>
+                </span>
+              </label>
+              <p class="hint push-ios-hint" id="push-ios-hint" hidden>
+                iPhone: <strong>Add to Home Screen</strong> first (Share → Add to Home Screen), open from that icon, then enable. Needs <strong>iOS 16.4+</strong>.
+              </p>
+              <p class="hint toast-warn" id="push-notify-status" hidden></p>
+            </div>
           </div>
         </article>
 
@@ -426,7 +444,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20261001-bell-fix"></script>
-  <script src="app.js?v=20261001-bell-fix"></script>
+  <script src="auth.js?v=20261002-webpush"></script>
+  <script src="app.js?v=20261002-webpush"></script>
 </body>
 </html>

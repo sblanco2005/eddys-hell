@@ -909,6 +909,284 @@
     return checkinFeedLastError;
   }
 
+  // ——— Web Push subscriptions (beta) ———
+
+  const PUSH_PREF_KEY = "eddys-hell-push-pref-v1";
+  let vapidPublicKeyCache = null;
+  let vapidPublicKeyPromise = null;
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(base64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  function pushSupported() {
+    return (
+      typeof window !== "undefined" &&
+      "serviceWorker" in navigator &&
+      "PushManager" in window &&
+      "Notification" in window
+    );
+  }
+
+  function isIosSafari() {
+    const ua = navigator.userAgent || "";
+    const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const webkit = /WebKit/i.test(ua);
+    const notOther = !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Android/i.test(ua);
+    return iOS && webkit && (notOther || /Safari/i.test(ua));
+  }
+
+  function isStandalonePwa() {
+    try {
+      if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
+      if (typeof navigator.standalone === "boolean" && navigator.standalone) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  async function loadVapidPublicKey() {
+    if (vapidPublicKeyCache) return vapidPublicKeyCache;
+    if (vapidPublicKeyPromise) return vapidPublicKeyPromise;
+    vapidPublicKeyPromise = (async () => {
+      try {
+        const res = await fetch("data/vapid-public.json", { cache: "no-store" });
+        if (!res.ok) throw new Error("vapid-public.json HTTP " + res.status);
+        const j = await res.json();
+        const key = (j && j.publicKey) || "";
+        if (!key) throw new Error("missing publicKey");
+        vapidPublicKeyCache = key;
+        return key;
+      } catch (err) {
+        console.warn("VAPID public key load failed:", err);
+        vapidPublicKeyCache = null;
+        return null;
+      } finally {
+        vapidPublicKeyPromise = null;
+      }
+    })();
+    return vapidPublicKeyPromise;
+  }
+
+  function pushSubDocId(uid, endpoint) {
+    let h = 0;
+    const s = String(endpoint || "");
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    const hex = (h >>> 0).toString(16);
+    return `${uid}__${hex}`;
+  }
+
+  function arrayBufferToBase64Url(buf) {
+    const bytes = new Uint8Array(buf);
+    let str = "";
+    for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+    return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  }
+
+  function getLocalPushPref() {
+    try {
+      const raw = localStorage.getItem(PUSH_PREF_KEY);
+      if (!raw) return { enabled: false };
+      const j = JSON.parse(raw);
+      return j && typeof j === "object" ? j : { enabled: false };
+    } catch (_) {
+      return { enabled: false };
+    }
+  }
+
+  function setLocalPushPref(pref) {
+    try {
+      localStorage.setItem(PUSH_PREF_KEY, JSON.stringify(pref || { enabled: false }));
+    } catch (_) {
+      /* ok */
+    }
+  }
+
+  async function ensurePushServiceWorker() {
+    if (!pushSupported()) {
+      const err = new Error("Web Push is not supported in this browser.");
+      err.code = "push-unsupported";
+      throw err;
+    }
+    const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    await navigator.serviceWorker.ready;
+    return reg;
+  }
+
+  async function savePushSubscriptionToCloud(subscription) {
+    if (!currentUser || !currentUser.uid) {
+      const err = new Error("Sign in required for push.");
+      err.code = "push-auth";
+      throw err;
+    }
+    if (!firestoreReady || !fbDb || !firestoreSetDoc || !firestoreDoc) {
+      const err = new Error("Firestore not ready — cannot save push subscription.");
+      err.code = "firestore-not-ready";
+      throw err;
+    }
+    const json = subscription.toJSON ? subscription.toJSON() : subscription;
+    const endpoint = json.endpoint;
+    const keys = json.keys || {};
+    if (!endpoint || !keys.p256dh || !keys.auth) {
+      const err = new Error("Incomplete push subscription.");
+      err.code = "push-incomplete";
+      throw err;
+    }
+    const id = pushSubDocId(currentUser.uid, endpoint);
+    const payload = {
+      uid: currentUser.uid,
+      email: normalizeEmail(currentUser.email),
+      endpoint,
+      keys: { p256dh: keys.p256dh, auth: keys.auth },
+      enabled: true,
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || "",
+      host: (typeof location !== "undefined" && location.hostname) || "",
+    };
+    await firestoreSetDoc(firestoreDoc(fbDb, "pushSubscriptions", id), payload, { merge: true });
+    setLocalPushPref({ enabled: true, endpoint, updatedAt: payload.updatedAt });
+    return payload;
+  }
+
+  async function disablePushSubscriptionInCloud(subscription) {
+    if (!currentUser || !currentUser.uid) return;
+    if (!firestoreReady || !fbDb || !firestoreSetDoc || !firestoreDoc) return;
+    try {
+      const json = subscription && (subscription.toJSON ? subscription.toJSON() : subscription);
+      const endpoint = json && json.endpoint;
+      if (!endpoint) return;
+      const id = pushSubDocId(currentUser.uid, endpoint);
+      await firestoreSetDoc(
+        firestoreDoc(fbDb, "pushSubscriptions", id),
+        {
+          uid: currentUser.uid,
+          email: normalizeEmail(currentUser.email),
+          endpoint,
+          keys: (json && json.keys) || { p256dh: "", auth: "" },
+          enabled: false,
+          updatedAt: new Date().toISOString(),
+          disabledAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.warn("disable push cloud failed:", err);
+    }
+  }
+
+  /**
+   * Enable Web Push for the signed-in user (prompts Allow once).
+   * @returns {Promise<{enabled:boolean, permission:string}>}
+   */
+  async function enableCheckinPush() {
+    if (!isBetaHost()) {
+      const err = new Error("Check-in push is beta-only.");
+      err.code = "push-beta-only";
+      throw err;
+    }
+    if (!pushSupported()) {
+      const err = new Error("Web Push is not supported here.");
+      err.code = "push-unsupported";
+      throw err;
+    }
+    if (isIosSafari() && !isStandalonePwa()) {
+      const err = new Error(
+        "On iPhone: Add to Home Screen first (Share → Add to Home Screen), then open the app icon and enable notifications. Needs iOS 16.4+."
+      );
+      err.code = "push-ios-pwa";
+      throw err;
+    }
+    const vapidKey = await loadVapidPublicKey();
+    if (!vapidKey) {
+      const err = new Error("Push is not configured yet (missing VAPID public key). Ask Santiago.");
+      err.code = "push-no-vapid";
+      throw err;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      const err = new Error("Notifications permission denied.");
+      err.code = "push-denied";
+      err.permission = permission;
+      throw err;
+    }
+    const reg = await ensurePushServiceWorker();
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+    }
+    await savePushSubscriptionToCloud(sub);
+    return { enabled: true, permission };
+  }
+
+  /** Disable Web Push for this device. */
+  async function disableCheckinPush() {
+    if (!pushSupported()) {
+      setLocalPushPref({ enabled: false });
+      return { enabled: false };
+    }
+    try {
+      const reg = await navigator.serviceWorker.getRegistration("/");
+      const sub = reg && (await reg.pushManager.getSubscription());
+      if (sub) {
+        await disablePushSubscriptionInCloud(sub);
+        try {
+          await sub.unsubscribe();
+        } catch (_) {
+          /* ok */
+        }
+      }
+    } catch (err) {
+      console.warn("disableCheckinPush:", err);
+    }
+    setLocalPushPref({ enabled: false });
+    return { enabled: false };
+  }
+
+  /**
+   * Current push status for UI.
+   * @returns {Promise<object>}
+   */
+  async function getCheckinPushStatus() {
+    const local = getLocalPushPref();
+    const status = {
+      beta: isBetaHost(),
+      supported: pushSupported(),
+      iosSafari: isIosSafari(),
+      standalone: isStandalonePwa(),
+      permission: typeof Notification !== "undefined" ? Notification.permission : "default",
+      enabled: false,
+      vapidReady: false,
+      localEnabled: !!local.enabled,
+    };
+    try {
+      status.vapidReady = !!(await loadVapidPublicKey());
+    } catch (_) {
+      status.vapidReady = false;
+    }
+    if (!status.supported) return status;
+    try {
+      const reg = await navigator.serviceWorker.getRegistration("/");
+      const sub = reg && (await reg.pushManager.getSubscription());
+      status.enabled = !!(sub && status.permission === "granted" && local.enabled !== false && sub);
+      if (sub && local.enabled) status.enabled = status.permission === "granted";
+      // Prefer live subscription presence when permission granted
+      if (sub && status.permission === "granted") status.enabled = true;
+      if (!sub) status.enabled = false;
+    } catch (_) {
+      status.enabled = !!local.enabled && status.permission === "granted";
+    }
+    return status;
+  }
+
+
   // ——— Config: this-week + rule (Firestore live source of truth) ———
 
   /** Strip undefined so Firestore setDoc does not reject. */
@@ -1828,6 +2106,14 @@
     writeCheckinFeedEntry,
     CHECKIN_FEED_KEY,
     CHECKIN_FEED_SEEN_KEY,
+    pushSupported,
+    isIosSafari,
+    isStandalonePwa,
+    enableCheckinPush,
+    disableCheckinPush,
+    getCheckinPushStatus,
+    loadVapidPublicKey,
+    PUSH_PREF_KEY,
     isFirestoreReady: () => firestoreReady,
     publishThisWeek,
     loadThisWeekFromCloud,

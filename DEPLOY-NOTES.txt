@@ -257,3 +257,19 @@ Fix: panel moved under card-head inside #member-pick; document capture
 delegation for bell/close; scrollIntoView; empty + cloud-error hint;
 [hidden]/pointer-events CSS harden; cache-bust ?v=20261001-bell-fix.
 Stable Hosting untouched.
+
+## 2026-10-02 ~2:40 AM ET — beta only (Web Push check-in notifications)
+Goal: lock-screen notify other members when someone checks in (social pressure).
+Shipped (beta Hosting only; stable untouched):
+  - Toggle “Notify me when someone checks in” (prompt Allow once)
+  - sw.js + manifest.webmanifest + icons (iOS Add to Home Screen hint)
+  - Firestore pushSubscriptions + rules; VAPID public in data/vapid-public.json
+  - Cloud Function onCheckinFeedCreate ready under functions/ (needs Blaze)
+  - Pragmatic sender: scripts/notify-checkin-push.mjs until Functions deploy
+  - REST deploy helpers: scripts/deploy-beta-rest.mjs + deploy-rules-rest.mjs
+    (CLI Premature close workaround)
+FCM: APIs enabled; Console VAPID + Blaze still required for full FCM Functions path.
+  Current beta uses standard Web Push + own VAPID (no silent fail if unset —
+  toggle explains “not configured”).
+Cache-bust ?v=20261002-webpush. Build meta beta-webpush-20261002.
+Slack admin self-DM unchanged.

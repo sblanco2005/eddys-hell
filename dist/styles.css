@@ -1172,3 +1172,41 @@ input:focus {
   text-align: center;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
+
+/* ——— Web Push toggle (beta) ——— */
+.push-box {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.push-toggle-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.push-toggle-row input[type="checkbox"] {
+  margin-top: 0.35rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+  accent-color: #f5b942;
+}
+.push-toggle-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.95rem;
+}
+.push-toggle-hint,
+.push-ios-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  opacity: 0.85;
+}
+.push-ios-hint {
+  margin-top: 0.55rem;
+}
+#push-notify-status {
+  margin-top: 0.45rem;
+}

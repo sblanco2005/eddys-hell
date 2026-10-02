@@ -156,9 +156,27 @@ On **beta** (`eddy-s-hell-beta.web.app`), signed-in members see a **Check-ins** 
 
 Admin Slack self-DM check-in alerts (if any) stay separate — this path is member-facing in-app only.
 
-### Next step (not in this pass)
+### Web Push (beta only)
 
-**Web Push / FCM / service worker** — progressive path after the in-app feed is solid. Do not implement push here; keep using the in-app feed + badge until a dedicated push pass.
+Phone / lock-screen notifications when **someone else** checks in (social pressure). In-app feed + Slack admin self-DM stay as-is.
+
+**Enable on your phone (beta):**
+1. Open **https://eddy-s-hell-beta.web.app/** and sign in.
+2. **Android / desktop Chrome:** allow notifications when prompted; flip **Notify me when someone checks in**.
+3. **iPhone (Safari):** iOS **16.4+** required. Share → **Add to Home Screen**, open from that icon (standalone PWA), then enable the toggle. In-tab Safari cannot receive Web Push.
+4. Hard-refresh once after a beta deploy (`?v=` cache-bust).
+
+**How it works:** service worker `sw.js` + VAPID (`data/vapid-public.json`); subscriptions in Firestore `pushSubscriptions`. Ideal send path = Cloud Function `onCheckinFeedCreate` (needs **Blaze billing**). Until Blaze: pragmatic poller `scripts/notify-checkin-push.mjs` (box/agent) sends with the private key in `secrets/vapid.json` (gitignored).
+
+**FCM status:** FCM APIs are enabled on `eddy-s-hell`, but full FCM Web Push still needs a Console **Web Push certificate (VAPID)** generate/import (no public API) **and** Blaze for Cloud Functions. This beta ships **standard Web Push** (same lock-screen UX) with our own VAPID pair so subscribe works without Console clicks. To switch to FCM later: Console → Project settings → Cloud Messaging → Web Push certificates → Generate key pair (or import ours), put the public key in client `getToken`, and send via Admin `messaging().send`.
+
+**Santiago — unblock Cloud Function send (exact steps):**
+1. Firebase Console → project **eddy-s-hell** → upgrade to **Blaze** (billing account).
+2. `firebase deploy --only functions --project eddy-s-hell` (from repo; sets `functions/`).
+3. `firebase functions:config:set webpush.public_key="..." webpush.private_key="..." webpush.subject="mailto:sblanco2005@gmail.com"` using values from `secrets/vapid.json`, then redeploy functions.
+4. Optional FCM: Cloud Messaging → Web Push certificates → Generate/import; not required for the current Web Push path.
+
+Stable Hosting is untouched. Admin Slack self-DM check-in alerts stay separate.
 
 ### PT email
 
@@ -182,7 +200,9 @@ Admin Slack self-DM check-in alerts (if any) stay separate — this path is memb
 - `data/members.json` — member email allowlist (empty = admins only)
 - `data/pt.json` — editable PT summary email destination
 - `data/firebase-config.json` — Firebase web config (Auth configured; enable Firestore for check-in sync)
-- `firestore.rules` — check-ins + `checkinFeed` + `userPrefs` + admin-only write to `config/thisWeek` / `config/nextWeek` / `config/rule` + admin `activityLog`
+- `firestore.rules` — check-ins + `checkinFeed` + `userPrefs` + `pushSubscriptions` + admin-only write to `config/thisWeek` / `config/nextWeek` / `config/rule` + admin `activityLog`
+- `data/vapid-public.json` — Web Push VAPID public key (beta)
+- `sw.js` / `manifest.webmanifest` / `icons/` — PWA + push SW (beta)
 
 ## Publish
 
