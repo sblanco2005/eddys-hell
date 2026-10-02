@@ -3324,6 +3324,19 @@
         renderMemberCheckin(tw);
         paintSharedCheckinsList(tw);
       }
+      // Checkins may arrive before/without checkinFeed docs (pre-feed-era).
+      // Re-merge into the feed UI whenever the checkins store updates.
+      if (isCheckinFeedEnabled()) {
+        const Auth = window.EddysHellAuth;
+        if (Auth && Auth.mergeCheckinsIntoFeedLocal) {
+          try {
+            Auth.mergeCheckinsIntoFeedLocal(tw.id);
+          } catch (_) {
+            /* ok */
+          }
+        }
+        handleCheckinFeedChange();
+      }
     });
     if (window.EddysHellAuth.onCheckinFeedChange) {
       window.EddysHellAuth.onCheckinFeedChange(() => {
