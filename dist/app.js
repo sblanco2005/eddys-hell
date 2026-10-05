@@ -1164,7 +1164,9 @@
 
   /** Live compress-job snapshot from jobs/compressUpload. */
   let compressJobState = null;
-  let compressJobWatchStarted = false;
+  /** True only after a real onSnapshot subscription is active. */
+  let compressJobWatchActive = false;
+  let compressJobLoadInFlight = false;
 
   function stagedDiffersFromLive(staged, live) {
     if (!staged) return false;
@@ -1184,6 +1186,25 @@
     }
   }
 
+  function jobPickId(job) {
+    if (!job) return "";
+    return String(job.pickId || job.id || "");
+  }
+
+  function stagedPickId(staged) {
+    if (!staged) return "";
+    return String(staged.pickId || staged.id || "");
+  }
+
+  /** Job only counts when it targets the current staged pick. */
+  function effectiveCompressJob(staged) {
+    if (!compressJobState || !staged) return null;
+    const jid = jobPickId(compressJobState);
+    const sid = stagedPickId(staged);
+    if (!jid || !sid || jid !== sid) return null;
+    return compressJobState;
+  }
+
   function renderCompressJobStatus(job) {
     const el = $("compress-job-status");
     const retry = $("btn-compress-retry");
@@ -1196,20 +1217,18 @@
       return;
     }
     el.hidden = false;
+    const msg = (job && (job.message || job.error)) || "";
     if (status === "requested") {
-      el.textContent = "Queued — runs on the Mac within ~15 min";
+      el.textContent = msg ? "Queued — " + msg : "Queued";
     } else if (status === "running") {
-      el.textContent = "Compressing/uploading…";
+      el.textContent = msg ? "Uploading… — " + msg : "Uploading…";
     } else if (status === "done") {
-      const id = job.youtubeId || "";
-      el.textContent = id
-        ? "Uploaded ✓ (" + id + ")"
-        : "Uploaded ✓";
+      const id = (job && job.youtubeId) || "";
+      el.textContent = id ? "Video ready ✓ (" + id + ")" : "Video ready ✓";
     } else if (status === "failed") {
-      el.textContent =
-        "Failed: " + (job.message || job.error || "unknown error");
+      el.textContent = msg ? "Failed: " + msg : "Failed";
     } else {
-      el.textContent = "Status: " + status;
+      el.textContent = msg ? status + " — " + msg : "Status: " + status;
     }
     if (retry) retry.hidden = status !== "failed";
   }
@@ -1217,11 +1236,13 @@
   /**
    * Step enablement:
    * 3 Compress & Upload — nextWeek exists, differs from live, no youtubeId;
-   *   disabled while job requested/running.
+   *   disabled while job requested/running for this pick.
    * Paste save — staged or dry-run candidate.
    * 4 Swap — staged ≠ live and staged has youtubeId.
    */
   function updateYoutubeStageControls() {
+    // Re-subscribe once auth+Firestore are ready (no-op if already watching).
+    ensureCompressJobWatch();
     const btnStage = $("btn-stage-youtube");
     const btnCompress = $("btn-compress-upload");
     const btnSwap = $("btn-swap-live");
@@ -1229,10 +1250,8 @@
     const live = resolveThisWeek();
     const differs = stagedDiffersFromLive(staged, live);
     const canPaste = !!(staged || hasDryRunCandidate());
-    const jobStatus =
-      compressJobState && compressJobState.status
-        ? String(compressJobState.status)
-        : "";
+    const job = effectiveCompressJob(staged);
+    const jobStatus = job && job.status ? String(job.status) : "";
     const jobBusy = jobStatus === "requested" || jobStatus === "running";
 
     // Step 1 status
@@ -1263,7 +1282,7 @@
     // Step 3: Compress & Upload
     if (staged && staged.youtubeId) {
       setAdminStepState(3, {
-        statusText: "Video ready ✓ " + staged.youtubeId,
+        statusText: "Video ready ✓",
         state: "done",
       });
       const hint = $("compress-step-hint");
@@ -1275,10 +1294,11 @@
         btnCompress.disabled = true;
         btnCompress.textContent = "Compress & Upload";
       }
+      // Prefer live job when it matches this pick; else synthetic done.
       renderCompressJobStatus(
-        jobStatus === "done" || jobStatus === "failed" || jobStatus === "running" || jobStatus === "requested"
-          ? compressJobState
-          : { status: "done", youtubeId: staged.youtubeId }
+        job && (jobStatus === "done" || jobStatus === "failed" || jobBusy)
+          ? job
+          : { status: "done", youtubeId: staged.youtubeId, message: null }
       );
     } else {
       const hint = $("compress-step-hint");
@@ -1308,7 +1328,8 @@
       } else {
         setAdminStepState(3, { statusText: "Not started", state: "" });
       }
-      renderCompressJobStatus(compressJobState);
+      // Only show job UI when it matches the current staged pick.
+      renderCompressJobStatus(job);
     }
 
     if (btnStage && btnStage.dataset.busy !== "1") {
@@ -1339,11 +1360,22 @@
     }
   }
 
-  function ensureCompressJobWatch() {
-    if (compressJobWatchStarted) return;
+  /**
+   * Subscribe to jobs/compressUpload once auth+Firestore are ready.
+   * Re-subscribes when prior attempt was a noop (ready=false) or on force
+   * (visibility return / Admin re-render).
+   */
+  function ensureCompressJobWatch(opts) {
+    const force = !!(opts && opts.force);
     const Auth = window.EddysHellAuth;
     if (!Auth || !Auth.watchCompressJob) return;
-    compressJobWatchStarted = true;
+    if (!Auth.isFirestoreReady || !Auth.isFirestoreReady()) {
+      // Do not sticky-fail — allow retry after Auth.init / sign-in.
+      compressJobWatchActive = false;
+      return;
+    }
+    if (compressJobWatchActive && !force) return;
+    compressJobWatchActive = true;
     Auth.watchCompressJob((data) => {
       compressJobState = data;
       // When Mac finishes with youtubeId, refresh staged nextWeek so UI flips to ready.
@@ -1352,6 +1384,21 @@
       }
       updateYoutubeStageControls();
     });
+    // One-shot load so reopen paints immediately without waiting for snapshot.
+    if (Auth.loadCompressJob && !compressJobLoadInFlight) {
+      compressJobLoadInFlight = true;
+      Auth.loadCompressJob()
+        .then((data) => {
+          if (data) {
+            compressJobState = data;
+            updateYoutubeStageControls();
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          compressJobLoadInFlight = false;
+        });
+    }
   }
 
   async function requestCompressUploadNow() {
@@ -1371,10 +1418,9 @@
       });
       return;
     }
+    const activeJob = effectiveCompressJob(staged);
     const jobStatus =
-      compressJobState && compressJobState.status
-        ? String(compressJobState.status)
-        : "";
+      activeJob && activeJob.status ? String(activeJob.status) : "";
     if (jobStatus === "requested" || jobStatus === "running") {
       showAcceptToast("Compress already queued or running.", {
         error: true,
@@ -3583,11 +3629,24 @@
         loadCloudConfig()
           .catch((err) => console.warn(err))
           .finally(() => {
-            if (user.role === "admin") refreshActivityLog();
+            if (user.role === "admin") {
+              refreshActivityLog();
+              // Auth+Firestore now ready — subscribe (or re-subscribe) to compress job.
+              ensureCompressJobWatch({ force: true });
+              updateYoutubeStageControls();
+            }
           });
       } else {
+        compressJobWatchActive = false;
+        compressJobState = null;
         refreshActivityLog();
       }
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      if (!authUser || authUser.role !== "admin") return;
+      ensureCompressJobWatch({ force: true });
+      updateYoutubeStageControls();
     });
     window.EddysHellAuth.onCheckinsChange(() => {
       const tw = resolveThisWeek();

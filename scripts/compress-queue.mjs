@@ -8,7 +8,7 @@
  *   node scripts/compress-queue.mjs check
  *     → prints JSON of jobs/compressUpload if status==requested, else NONE (exit 0)
  *   node scripts/compress-queue.mjs set <status> [youtubeId] [message]
- *     → updates status (running|done|failed), optional youtubeId/message, updatedAt
+ *     → updates status (requested|running|done|failed), optional youtubeId/message, updatedAt
  */
 import path from "path";
 import https from "https";
@@ -131,9 +131,9 @@ async function cmdCheck(token) {
 }
 
 async function cmdSet(token, status, youtubeId, message) {
-  const allowed = new Set(["running", "done", "failed"]);
+  const allowed = new Set(["requested", "running", "done", "failed"]);
   if (!allowed.has(status)) {
-    throw new Error(`status must be one of: running|done|failed (got ${status})`);
+    throw new Error(`status must be one of: requested|running|done|failed (got ${status})`);
   }
   const fields = {
     status: encodeValue(status),
@@ -164,7 +164,7 @@ async function main() {
   const [, , cmd, ...rest] = process.argv;
   if (!cmd || !["check", "set"].includes(cmd)) {
     console.error(
-      "Usage:\n  node scripts/compress-queue.mjs check\n  node scripts/compress-queue.mjs set <running|done|failed> [youtubeId] [message]"
+      "Usage:\n  node scripts/compress-queue.mjs check\n  node scripts/compress-queue.mjs set <requested|running|done|failed> [youtubeId] [message]"
     );
     process.exit(2);
   }

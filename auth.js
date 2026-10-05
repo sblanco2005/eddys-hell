@@ -1310,6 +1310,9 @@
   /** Strip undefined so Firestore setDoc does not reject. */
   function scrubUndefined(obj) {
     if (!obj || typeof obj !== "object") return obj;
+    // Preserve FieldValue sentinels (serverTimestamp, deleteField, …).
+    // Recursing via Object.entries turns them into {_methodName: "…"} maps.
+    if (obj._methodName || typeof obj.isEqual === "function") return obj;
     const out = Array.isArray(obj) ? [] : {};
     for (const [k, v] of Object.entries(obj)) {
       if (v === undefined) continue;
@@ -1607,6 +1610,10 @@
       throw new Error("Staged pick already has a YouTube id — no compress needed.");
     }
     const email = currentUser ? normalizeEmail(currentUser.email) : null;
+    const ts = firestoreServerTimestamp
+      ? firestoreServerTimestamp()
+      : new Date().toISOString();
+    // Scrub first, then attach FieldValue sentinels directly (never clone/spread them).
     const docPayload = scrubUndefined({
       status: "requested",
       pickId,
@@ -1622,22 +1629,23 @@
       rawTags: Array.isArray(base.rawTags) ? base.rawTags : [],
       archiveRoot: base.archiveRoot || "/Volumes/EddysHell/",
       requestedBy: email,
-      requestedAt: firestoreServerTimestamp
-        ? firestoreServerTimestamp()
-        : new Date().toISOString(),
       youtubeId: null,
       message: null,
-      updatedAt: firestoreServerTimestamp
-        ? firestoreServerTimestamp()
-        : new Date().toISOString(),
     });
+    docPayload.requestedAt = ts;
+    docPayload.updatedAt = ts;
     await firestoreSetDoc(
       firestoreDoc(fbDb, "jobs", "compressUpload"),
       docPayload,
       { merge: false }
     );
     firestoreStatus = "cloud";
-    return docPayload;
+    // Return a UI-safe snapshot (no FieldValue sentinels).
+    return {
+      ...docPayload,
+      requestedAt: typeof ts === "string" ? ts : new Date().toISOString(),
+      updatedAt: typeof ts === "string" ? ts : new Date().toISOString(),
+    };
   }
 
   async function loadCompressJob() {
