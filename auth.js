@@ -1590,10 +1590,123 @@
   }
 
 
+  let compressJobUnsub = null;
+
+  /**
+   * Request Mac-side compress + YouTube upload for the staged next-week pick.
+   * Writes jobs/compressUpload. Does not touch config/thisWeek.
+   */
+  async function requestCompressUpload(stagedPayload) {
+    requireFirestoreWrite();
+    const base = stagedPayload && typeof stagedPayload === "object" ? stagedPayload : {};
+    const pickId = base.pickId || base.id;
+    if (!pickId) {
+      throw new Error("requestCompressUpload: missing pickId");
+    }
+    if (base.youtubeId) {
+      throw new Error("Staged pick already has a YouTube id — no compress needed.");
+    }
+    const email = currentUser ? normalizeEmail(currentUser.email) : null;
+    const docPayload = scrubUndefined({
+      status: "requested",
+      pickId,
+      id: pickId,
+      filename: base.filename || "",
+      file: base.filename || "",
+      folderType: base.folderType || null,
+      hr: typeof base.hr === "number" ? base.hr : base.hr ?? null,
+      relPath: base.relPath || "",
+      path: base.relPath || "",
+      sizeBytes: base.sizeBytes ?? null,
+      mtime: base.mtime || null,
+      rawTags: Array.isArray(base.rawTags) ? base.rawTags : [],
+      archiveRoot: base.archiveRoot || "/Volumes/EddysHell/",
+      requestedBy: email,
+      requestedAt: firestoreServerTimestamp
+        ? firestoreServerTimestamp()
+        : new Date().toISOString(),
+      youtubeId: null,
+      message: null,
+      updatedAt: firestoreServerTimestamp
+        ? firestoreServerTimestamp()
+        : new Date().toISOString(),
+    });
+    await firestoreSetDoc(
+      firestoreDoc(fbDb, "jobs", "compressUpload"),
+      docPayload,
+      { merge: false }
+    );
+    firestoreStatus = "cloud";
+    return docPayload;
+  }
+
+  async function loadCompressJob() {
+    if (!firestoreReady || !fbDb || !firestoreGetDoc || !firestoreDoc) {
+      return null;
+    }
+    try {
+      const snap = await firestoreGetDoc(
+        firestoreDoc(fbDb, "jobs", "compressUpload")
+      );
+      if (!snap.exists) return null;
+      firestoreStatus = "cloud";
+      return snap.data() || null;
+    } catch (err) {
+      console.warn("Firestore compress job read failed:", err);
+      firestoreStatus = "error";
+      return null;
+    }
+  }
+
+  function watchCompressJob(callback) {
+    if (compressJobUnsub) {
+      try {
+        compressJobUnsub();
+      } catch (_) {
+        /* ok */
+      }
+      compressJobUnsub = null;
+    }
+    if (!firestoreReady || !fbDb || !firestoreOnSnapshot || !firestoreDoc) {
+      return () => {};
+    }
+    try {
+      compressJobUnsub = firestoreOnSnapshot(
+        firestoreDoc(fbDb, "jobs", "compressUpload"),
+        (snap) => {
+          const data = snap.exists ? snap.data() : null;
+          if (typeof callback === "function") {
+            try {
+              callback(data);
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        },
+        (err) => {
+          console.warn("Firestore compress job watch failed:", err);
+          firestoreStatus = "error";
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore compress job watch setup failed:", err);
+    }
+    return () => {
+      if (compressJobUnsub) {
+        try {
+          compressJobUnsub();
+        } catch (_) {
+          /* ok */
+        }
+        compressJobUnsub = null;
+      }
+    };
+  }
+
   /**
    * Append an admin ops activity log entry (best-effort).
    * Shape: { at, action, source, pickId?, filename?, title?, youtubeId?, detail?, actor? }
-   * action: compress_stage_youtube | stage_youtube | swap_live | skip | fail
+   * action: compress_requested | compress_stage_youtube | stage_youtube | swap_live | skip | fail
    * source: manual | scheduler
    * Never throws to callers when used via bestEffortLogActivity — this one may throw.
    */
@@ -1836,6 +1949,7 @@
       addDoc: fsMod.addDoc,
       orderBy: fsMod.orderBy,
       limit: fsMod.limit,
+      serverTimestamp: fsMod.serverTimestamp,
     };
   }
 
@@ -1871,6 +1985,8 @@
   let firestoreOrderBy = null;
   /** @type {any} */
   let firestoreLimit = null;
+  /** @type {any} */
+  let firestoreServerTimestamp = null;
 
   /**
    * Auth strategy:
@@ -1971,6 +2087,7 @@
     firestoreAddDoc = mod.addDoc;
     firestoreOrderBy = mod.orderBy;
     firestoreLimit = mod.limit;
+    firestoreServerTimestamp = mod.serverTimestamp;
     try {
       fbDb = mod.getFirestore(app);
       firestoreReady = true;
@@ -2242,6 +2359,9 @@
     stageNextWeek,
     loadNextWeekFromCloud,
     promoteStagedToLive,
+    requestCompressUpload,
+    loadCompressJob,
+    watchCompressJob,
     logActivity,
     bestEffortLogActivity,
     loadActivityLog,

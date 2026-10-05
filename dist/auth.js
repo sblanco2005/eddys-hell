@@ -450,6 +450,8 @@
   const checkinFeedListeners = [];
   /** @type {string|null} last checkinFeed read/watch error message */
   let checkinFeedLastError = null;
+  /** @type {Set<string>} pickId__uid keys already attempted for feed backfill */
+  const checkinFeedBackfillAttempted = new Set();
 
   function loadCheckins() {
     try {
@@ -726,10 +728,91 @@
     return checkinDocId(pickId, email);
   }
 
+  /** Map a checkins-row into feed shape (first-name label, Easy|Okay|Hard). */
+  function checkinToFeedRow(c) {
+    const e = normalizeEmail(c && c.email);
+    const diff = String((c && c.difficulty) || "").toLowerCase();
+    return {
+      email: e,
+      displayName: shortMemberLabel((c && c.displayName) || "", e),
+      pickId: c && c.pickId,
+      at: (c && c.at) || new Date().toISOString(),
+      difficulty: ["easy", "okay", "hard"].includes(diff) ? diff : "okay",
+      uid: (c && c.uid) || "",
+    };
+  }
+
+  /** Persist checkins → local feed (no cloud write). Returns true if list changed. */
+  function mergeCheckinsIntoFeedLocal(pickId) {
+    if (!pickId) return false;
+    const list = loadCheckinFeed();
+    const before = JSON.stringify(list.filter((c) => c.pickId === pickId));
+    for (const c of checkinsForPick(pickId)) {
+      if (!c || !c.email || !c.pickId) continue;
+      mergeFeedRow(list, checkinToFeedRow(c));
+    }
+    const after = JSON.stringify(list.filter((c) => c.pickId === pickId));
+    if (before === after) return false;
+    saveCheckinFeed(list);
+    return true;
+  }
+
+  /**
+   * Idempotent: if current user has a checkin for pickId but no checkinFeed
+   * doc yet, write one. Rules only allow writing own email+uid — others stay
+   * UI-merged from the checkins store until they open the app themselves.
+   */
+  async function backfillOwnCheckinFeedDoc(pickId, presentEmails) {
+    if (!pickId || !currentUser || !currentUser.uid || !currentUser.email) return;
+    if (!firestoreReady || !fbDb || !firestoreSetDoc || !firestoreDoc) return;
+    const me = normalizeEmail(currentUser.email);
+    const key = pickId + "__" + currentUser.uid;
+    if (presentEmails && presentEmails.has(me)) {
+      checkinFeedBackfillAttempted.add(key);
+      return;
+    }
+    if (checkinFeedBackfillAttempted.has(key)) return;
+    const mine = checkinsForPick(pickId).find(
+      (c) => normalizeEmail(c.email) === me
+    );
+    if (!mine) return;
+    if (!presentEmails && firestoreGetDoc) {
+      try {
+        const id = checkinFeedDocId(pickId, me);
+        const snap = await firestoreGetDoc(firestoreDoc(fbDb, "checkinFeed", id));
+        if (snap && typeof snap.exists === "function" ? snap.exists() : snap.exists) {
+          checkinFeedBackfillAttempted.add(key);
+          return;
+        }
+      } catch (_) {
+        /* proceed to write attempt */
+      }
+    }
+    checkinFeedBackfillAttempted.add(key);
+    try {
+      await writeCheckinFeedEntry({
+        email: mine.email,
+        displayName: mine.displayName,
+        pickId: mine.pickId,
+        difficulty: mine.difficulty,
+        at: mine.at,
+        uid: currentUser.uid,
+      });
+    } catch (err) {
+      checkinFeedBackfillAttempted.delete(key);
+      console.warn("checkinFeed backfill failed:", err);
+    }
+  }
+
   function feedForPick(pickId) {
-    return loadCheckinFeed()
-      .filter((c) => c.pickId === pickId)
-      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+    // Merge known checkins so the feed UI shows pre-feed-era check-ins even
+    // when checkinFeed has no (or fewer) rows for this pick.
+    const list = loadCheckinFeed().filter((c) => c.pickId === pickId);
+    for (const c of checkinsForPick(pickId)) {
+      if (!c || !c.email || !c.pickId) continue;
+      mergeFeedRow(list, checkinToFeedRow(c));
+    }
+    return list.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   }
 
   function loadFeedSeenMap() {
@@ -832,7 +915,15 @@
 
   async function refreshCheckinFeedForPick(pickId) {
     if (!pickId) return feedForPick(pickId);
+    // Prefer fresh checkins so merge/backfill sees cloud truth.
+    try {
+      await refreshCheckinsForPick(pickId);
+    } catch (_) {
+      /* local checkins still usable */
+    }
+    const presentEmails = new Set();
     if (!firestoreReady || !fbDb || !firestoreGetDocs) {
+      if (mergeCheckinsIntoFeedLocal(pickId)) notifyCheckinFeed();
       return feedForPick(pickId);
     }
     try {
@@ -844,8 +935,16 @@
       const list = loadCheckinFeed();
       snap.forEach((d) => {
         const data = d.data();
-        if (data && data.pickId && data.email) mergeFeedRow(list, data);
+        if (data && data.pickId && data.email) {
+          mergeFeedRow(list, data);
+          presentEmails.add(normalizeEmail(data.email));
+        }
       });
+      // Also fold current-week checkins into local feed (pre-feed-era rows).
+      for (const c of checkinsForPick(pickId)) {
+        if (!c || !c.email || !c.pickId) continue;
+        mergeFeedRow(list, checkinToFeedRow(c));
+      }
       saveCheckinFeed(list);
       firestoreStatus = "cloud";
       checkinFeedLastError = null;
@@ -854,7 +953,15 @@
       console.warn("Firestore checkinFeed read failed:", err);
       firestoreStatus = "error";
       checkinFeedLastError = (err && err.message) || String(err);
+      if (mergeCheckinsIntoFeedLocal(pickId)) {
+        /* still show checkins-sourced rows */
+      }
       notifyCheckinFeed();
+    }
+    try {
+      await backfillOwnCheckinFeedDoc(pickId, presentEmails);
+    } catch (err) {
+      console.warn("checkinFeed backfill after refresh failed:", err);
     }
     return feedForPick(pickId);
   }
@@ -882,14 +989,25 @@
         q,
         (snap) => {
           const list = loadCheckinFeed();
+          const presentEmails = new Set();
           snap.forEach((d) => {
             const data = d.data();
-            if (data && data.pickId && data.email) mergeFeedRow(list, data);
+            if (data && data.pickId && data.email) {
+              mergeFeedRow(list, data);
+              presentEmails.add(normalizeEmail(data.email));
+            }
           });
+          for (const c of checkinsForPick(pickId)) {
+            if (!c || !c.email || !c.pickId) continue;
+            mergeFeedRow(list, checkinToFeedRow(c));
+          }
           saveCheckinFeed(list);
           firestoreStatus = "cloud";
           checkinFeedLastError = null;
           notifyCheckinFeed();
+          backfillOwnCheckinFeedDoc(pickId, presentEmails).catch((err) => {
+            console.warn("checkinFeed backfill on watch failed:", err);
+          });
         },
         (err) => {
           console.warn("Firestore checkinFeed watch failed:", err);
@@ -1472,10 +1590,123 @@
   }
 
 
+  let compressJobUnsub = null;
+
+  /**
+   * Request Mac-side compress + YouTube upload for the staged next-week pick.
+   * Writes jobs/compressUpload. Does not touch config/thisWeek.
+   */
+  async function requestCompressUpload(stagedPayload) {
+    requireFirestoreWrite();
+    const base = stagedPayload && typeof stagedPayload === "object" ? stagedPayload : {};
+    const pickId = base.pickId || base.id;
+    if (!pickId) {
+      throw new Error("requestCompressUpload: missing pickId");
+    }
+    if (base.youtubeId) {
+      throw new Error("Staged pick already has a YouTube id — no compress needed.");
+    }
+    const email = currentUser ? normalizeEmail(currentUser.email) : null;
+    const docPayload = scrubUndefined({
+      status: "requested",
+      pickId,
+      id: pickId,
+      filename: base.filename || "",
+      file: base.filename || "",
+      folderType: base.folderType || null,
+      hr: typeof base.hr === "number" ? base.hr : base.hr ?? null,
+      relPath: base.relPath || "",
+      path: base.relPath || "",
+      sizeBytes: base.sizeBytes ?? null,
+      mtime: base.mtime || null,
+      rawTags: Array.isArray(base.rawTags) ? base.rawTags : [],
+      archiveRoot: base.archiveRoot || "/Volumes/EddysHell/",
+      requestedBy: email,
+      requestedAt: firestoreServerTimestamp
+        ? firestoreServerTimestamp()
+        : new Date().toISOString(),
+      youtubeId: null,
+      message: null,
+      updatedAt: firestoreServerTimestamp
+        ? firestoreServerTimestamp()
+        : new Date().toISOString(),
+    });
+    await firestoreSetDoc(
+      firestoreDoc(fbDb, "jobs", "compressUpload"),
+      docPayload,
+      { merge: false }
+    );
+    firestoreStatus = "cloud";
+    return docPayload;
+  }
+
+  async function loadCompressJob() {
+    if (!firestoreReady || !fbDb || !firestoreGetDoc || !firestoreDoc) {
+      return null;
+    }
+    try {
+      const snap = await firestoreGetDoc(
+        firestoreDoc(fbDb, "jobs", "compressUpload")
+      );
+      if (!snap.exists) return null;
+      firestoreStatus = "cloud";
+      return snap.data() || null;
+    } catch (err) {
+      console.warn("Firestore compress job read failed:", err);
+      firestoreStatus = "error";
+      return null;
+    }
+  }
+
+  function watchCompressJob(callback) {
+    if (compressJobUnsub) {
+      try {
+        compressJobUnsub();
+      } catch (_) {
+        /* ok */
+      }
+      compressJobUnsub = null;
+    }
+    if (!firestoreReady || !fbDb || !firestoreOnSnapshot || !firestoreDoc) {
+      return () => {};
+    }
+    try {
+      compressJobUnsub = firestoreOnSnapshot(
+        firestoreDoc(fbDb, "jobs", "compressUpload"),
+        (snap) => {
+          const data = snap.exists ? snap.data() : null;
+          if (typeof callback === "function") {
+            try {
+              callback(data);
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        },
+        (err) => {
+          console.warn("Firestore compress job watch failed:", err);
+          firestoreStatus = "error";
+        }
+      );
+    } catch (err) {
+      console.warn("Firestore compress job watch setup failed:", err);
+    }
+    return () => {
+      if (compressJobUnsub) {
+        try {
+          compressJobUnsub();
+        } catch (_) {
+          /* ok */
+        }
+        compressJobUnsub = null;
+      }
+    };
+  }
+
   /**
    * Append an admin ops activity log entry (best-effort).
    * Shape: { at, action, source, pickId?, filename?, title?, youtubeId?, detail?, actor? }
-   * action: compress_stage_youtube | stage_youtube | swap_live | skip | fail
+   * action: compress_requested | compress_stage_youtube | stage_youtube | swap_live | skip | fail
    * source: manual | scheduler
    * Never throws to callers when used via bestEffortLogActivity — this one may throw.
    */
@@ -1718,6 +1949,7 @@
       addDoc: fsMod.addDoc,
       orderBy: fsMod.orderBy,
       limit: fsMod.limit,
+      serverTimestamp: fsMod.serverTimestamp,
     };
   }
 
@@ -1753,6 +1985,8 @@
   let firestoreOrderBy = null;
   /** @type {any} */
   let firestoreLimit = null;
+  /** @type {any} */
+  let firestoreServerTimestamp = null;
 
   /**
    * Auth strategy:
@@ -1853,6 +2087,7 @@
     firestoreAddDoc = mod.addDoc;
     firestoreOrderBy = mod.orderBy;
     firestoreLimit = mod.limit;
+    firestoreServerTimestamp = mod.serverTimestamp;
     try {
       fbDb = mod.getFirestore(app);
       firestoreReady = true;
@@ -2096,6 +2331,9 @@
     getCheckinSyncMode,
     shortMemberLabel,
     feedForPick,
+    checkinToFeedRow,
+    mergeCheckinsIntoFeedLocal,
+    backfillOwnCheckinFeedDoc,
     refreshCheckinFeedForPick,
     watchCheckinFeedForPick,
     onCheckinFeedChange,
@@ -2121,6 +2359,9 @@
     stageNextWeek,
     loadNextWeekFromCloud,
     promoteStagedToLive,
+    requestCompressUpload,
+    loadCompressJob,
+    watchCompressJob,
     logActivity,
     bestEffortLogActivity,
     loadActivityLog,

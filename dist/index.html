@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-webpush-20261002" />
+  <meta name="eddys-hell-build" content="beta-compress-queue-20261005" />
   <title>Eddy's Hell · Thursday</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=20261002-webpush" />
+  <link rel="stylesheet" href="styles.css?v=20261005-compress-queue" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -306,41 +306,83 @@
             <h2>Next week staged</h2>
             <span class="badge">Not live</span>
           </header>
-          <p class="hint"><strong>Always manual:</strong> <strong>Pick again</strong> (= dry-run) → <strong>Reveal in Finder</strong> → <strong>Stage next week</strong>. Optional after that: <strong>Compress &amp; Stage YouTube</strong> (paste URL/id after Mac compress + unlisted upload — saves onto staged next week only, no promote) and <strong>Swap live now</strong> (promote staged → live when it already has a youtubeId; no upload). <strong>Wednesday:</strong> never auto-picks. If staged ≠ live and already has YT → swap only; if staged ≠ live and no YT → compress + upload + stage youtubeId + swap; if nothing new (no staged or same as live) → skip. Friends keep seeing <strong>Candidate pick (LIVE)</strong> until swap/promote. Dry-run never lives on the Rule or LIVE cards.</p>
+          <p class="hint">Four manual steps — Pick again → Stage next week → Compress &amp; Upload → Swap live now. Wednesday never auto-picks; it only compresses/swaps when staged differs from what friends see. Friends keep seeing <strong>Candidate pick (LIVE)</strong> until you swap (or Wednesday does).</p>
 
-          <div class="actions nonlive-always-actions" id="nonlive-always-actions">
-            <button type="button" class="btn accent" id="btn-dryrun">Pick again</button>
-            <button type="button" class="btn secondary" id="btn-reveal-finder" hidden>Reveal in Finder</button>
-            <button type="button" class="btn accent" id="btn-accept" hidden>Stage next week</button>
-            <button type="button" class="btn accent" id="btn-keep" hidden>Publish this week</button>
-          </div>
-          <div class="path-reveal-row nonlive-path-row" id="path-reveal-row" hidden>
-            <label class="reveal-path-label" for="reveal-path-display">Mac path (select &amp; copy)</label>
-            <input type="text" class="mono reveal-path-display" id="reveal-path-display" readonly hidden value="" />
-          </div>
-          <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
-          <p class="hint staged-next-hint" id="staged-next-hint" hidden></p>
-          <p class="hint publish-pending" id="publish-pending" hidden></p>
+          <ol class="admin-week-flow" id="admin-week-flow">
+            <li class="admin-week-step" id="admin-step-1" data-step="1">
+              <div class="admin-week-step-head">
+                <span class="admin-week-num">1</span>
+                <strong>Pick again</strong>
+                <span class="admin-week-status" id="step-1-status">Idle</span>
+              </div>
+              <p class="hint">Dry-run a candidate from the rule. Does not change what friends see.</p>
+              <div class="actions nonlive-always-actions" id="nonlive-always-actions">
+                <button type="button" class="btn accent" id="btn-dryrun">Pick again</button>
+                <button type="button" class="btn secondary" id="btn-reveal-finder" hidden>Reveal in Finder</button>
+                <button type="button" class="btn accent" id="btn-keep" hidden>Publish this week</button>
+              </div>
+              <div class="path-reveal-row nonlive-path-row" id="path-reveal-row" hidden>
+                <label class="reveal-path-label" for="reveal-path-display">Mac path (select &amp; copy)</label>
+                <input type="text" class="mono reveal-path-display" id="reveal-path-display" readonly hidden value="" />
+              </div>
+            </li>
 
-          <div id="staged-next-card" hidden>
-            <h3 class="pick-name" id="staged-next-name">—</h3>
-            <p class="hint" id="staged-next-meta"></p>
-            <p class="hint">Already staged in cloud — live week unchanged.</p>
-          </div>
+            <li class="admin-week-step" id="admin-step-2" data-step="2">
+              <div class="admin-week-step-head">
+                <span class="admin-week-num">2</span>
+                <strong>Stage next week</strong>
+                <span class="admin-week-status" id="step-2-status">Idle</span>
+              </div>
+              <p class="hint">Saves the candidate for next week without changing live.</p>
+              <div class="actions nonlive-always-actions">
+                <button type="button" class="btn accent" id="btn-accept" hidden>Stage next week</button>
+              </div>
+              <p class="toast" id="accept-toast" hidden>This week’s pick updated.</p>
+              <p class="hint staged-next-hint" id="staged-next-hint" hidden></p>
+              <p class="hint publish-pending" id="publish-pending" hidden></p>
+              <div id="staged-next-card" hidden>
+                <h3 class="pick-name" id="staged-next-name">—</h3>
+                <p class="hint" id="staged-next-meta"></p>
+                <p class="hint">Already staged — live week unchanged.</p>
+              </div>
+            </li>
 
-          <div class="stage-yt-block" id="stage-yt-block">
-            <h3 class="stage-yt-title">Compress &amp; Stage YouTube</h3>
-            <p class="hint">Paste the YouTube URL/id <em>after</em> Mac compress + unlisted upload (done offline, or by the Wednesday job if still missing). This browser step only saves the id onto staged <code>config/nextWeek</code> — it does <strong>not</strong> compress, upload, or change what friends see.</p>
-            <label class="reveal-path-label" for="yt-url-input">YouTube URL or video id</label>
-            <input type="url" id="yt-url-input" inputmode="url" placeholder="https://youtu.be/… or 11-character id" autocomplete="off" spellcheck="false" />
-            <div class="actions nonlive-always-actions">
-              <button type="button" class="btn accent" id="btn-stage-youtube" disabled>Compress &amp; Stage YouTube</button>
-            </div>
-            <div class="swap-live-row">
-              <button type="button" class="btn primary" id="btn-swap-live" disabled>Swap live now</button>
-              <p class="hint">Swap live now promotes staged next week (must already have youtubeId) to live this week. No upload in that step.</p>
-            </div>
-          </div>
+            <li class="admin-week-step" id="admin-step-3" data-step="3">
+              <div class="admin-week-step-head">
+                <span class="admin-week-num">3</span>
+                <strong>Compress &amp; Upload</strong>
+                <span class="admin-week-status" id="step-3-status">Idle</span>
+              </div>
+              <p class="hint" id="compress-step-hint">Queues compress + unlisted YouTube upload on the Mac. Does not change live.</p>
+              <div class="actions nonlive-always-actions">
+                <button type="button" class="btn accent" id="btn-compress-upload" disabled>Compress &amp; Upload</button>
+                <button type="button" class="btn secondary" id="btn-compress-retry" hidden>Retry</button>
+              </div>
+              <p class="hint compress-job-status" id="compress-job-status" hidden></p>
+              <details class="yt-paste-details" id="yt-paste-details">
+                <summary>Already uploaded? Paste YouTube link</summary>
+                <p class="hint">If you already compressed and uploaded offline, paste the URL or 11-character id here to save it onto the staged week only.</p>
+                <label class="reveal-path-label" for="yt-url-input">YouTube URL or video id</label>
+                <input type="url" id="yt-url-input" inputmode="url" placeholder="https://youtu.be/… or 11-character id" autocomplete="off" spellcheck="false" />
+                <div class="actions nonlive-always-actions">
+                  <button type="button" class="btn secondary" id="btn-stage-youtube" disabled>Save YouTube id to staged week</button>
+                </div>
+              </details>
+            </li>
+
+            <li class="admin-week-step" id="admin-step-4" data-step="4">
+              <div class="admin-week-step-head">
+                <span class="admin-week-num">4</span>
+                <strong>Swap live now</strong>
+                <span class="admin-week-status" id="step-4-status">Idle</span>
+              </div>
+              <p class="hint">Promotes staged → live when the staged pick already has a YouTube id. No upload in this step.</p>
+              <div class="actions nonlive-always-actions">
+                <button type="button" class="btn primary" id="btn-swap-live" disabled>Swap live now</button>
+              </div>
+              <p class="hint">Or leave it — Wednesday 8pm swaps automatically.</p>
+            </li>
+          </ol>
 
 
           <div class="activity-log-block" id="activity-log-block">
@@ -444,7 +486,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20261002-webpush"></script>
-  <script src="app.js?v=20261002-webpush"></script>
+  <script src="auth.js?v=20261005-compress-queue"></script>
+  <script src="app.js?v=20261005-compress-queue"></script>
 </body>
 </html>

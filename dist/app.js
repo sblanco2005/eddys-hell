@@ -1078,7 +1078,7 @@
           " — YouTube saved. Live week unchanged until Swap live now or the scheduler."
         : "Staged next: " +
           name +
-          " — live week unchanged. Compress & Stage YouTube does not publish.";
+          " — live week unchanged. Compress & Upload does not publish.";
     }
     if (card) card.hidden = false;
     if (nameEl) nameEl.textContent = name;
@@ -1162,21 +1162,278 @@
     );
   }
 
-  /** Enable Compress & Stage YouTube when a staged pick or dry-run candidate exists.
-   *  Swap live now only when staged nextWeek already has a youtubeId.
-   *  Browser path only pastes/saves the id onto staged nextWeek — Mac ffmpeg/YT is offline. */
+  /** Live compress-job snapshot from jobs/compressUpload. */
+  let compressJobState = null;
+  let compressJobWatchStarted = false;
+
+  function stagedDiffersFromLive(staged, live) {
+    if (!staged) return false;
+    if (!live) return true;
+    return !samePublishedPick(staged, live);
+  }
+
+  function setAdminStepState(stepNum, { statusText, state }) {
+    const step = $("admin-step-" + stepNum);
+    const status = $("step-" + stepNum + "-status");
+    if (status) status.textContent = statusText || "";
+    if (step) {
+      step.classList.remove("is-done", "is-active", "is-error");
+      if (state === "done") step.classList.add("is-done");
+      else if (state === "active") step.classList.add("is-active");
+      else if (state === "error") step.classList.add("is-error");
+    }
+  }
+
+  function renderCompressJobStatus(job) {
+    const el = $("compress-job-status");
+    const retry = $("btn-compress-retry");
+    if (!el) return;
+    const status = job && job.status ? String(job.status) : "";
+    if (!status) {
+      el.hidden = true;
+      el.textContent = "";
+      if (retry) retry.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    if (status === "requested") {
+      el.textContent = "Queued — runs on the Mac within ~15 min";
+    } else if (status === "running") {
+      el.textContent = "Compressing/uploading…";
+    } else if (status === "done") {
+      const id = job.youtubeId || "";
+      el.textContent = id
+        ? "Uploaded ✓ (" + id + ")"
+        : "Uploaded ✓";
+    } else if (status === "failed") {
+      el.textContent =
+        "Failed: " + (job.message || job.error || "unknown error");
+    } else {
+      el.textContent = "Status: " + status;
+    }
+    if (retry) retry.hidden = status !== "failed";
+  }
+
+  /**
+   * Step enablement:
+   * 3 Compress & Upload — nextWeek exists, differs from live, no youtubeId;
+   *   disabled while job requested/running.
+   * Paste save — staged or dry-run candidate.
+   * 4 Swap — staged ≠ live and staged has youtubeId.
+   */
   function updateYoutubeStageControls() {
     const btnStage = $("btn-stage-youtube");
+    const btnCompress = $("btn-compress-upload");
     const btnSwap = $("btn-swap-live");
     const staged = resolveStagedNext();
-    const canStage = !!(staged || hasDryRunCandidate());
-    if (btnStage && btnStage.dataset.busy !== "1") {
-      btnStage.disabled = !canStage;
-      btnStage.textContent = "Compress & Stage YouTube";
+    const live = resolveThisWeek();
+    const differs = stagedDiffersFromLive(staged, live);
+    const canPaste = !!(staged || hasDryRunCandidate());
+    const jobStatus =
+      compressJobState && compressJobState.status
+        ? String(compressJobState.status)
+        : "";
+    const jobBusy = jobStatus === "requested" || jobStatus === "running";
+
+    // Step 1 status
+    if (hasDryRunCandidate()) {
+      const name =
+        (currentResult && currentResult.pick && currentResult.pick.filename) ||
+        "candidate";
+      setAdminStepState(1, { statusText: "Candidate: " + name, state: "done" });
+    } else if (staged) {
+      setAdminStepState(1, {
+        statusText: "Using staged pick",
+        state: "done",
+      });
+    } else {
+      setAdminStepState(1, { statusText: "Idle", state: "" });
     }
+
+    // Step 2 status
+    if (staged) {
+      setAdminStepState(2, {
+        statusText: differs ? "Staged ✓" : "Staged (same as live)",
+        state: "done",
+      });
+    } else {
+      setAdminStepState(2, { statusText: "Idle", state: "" });
+    }
+
+    // Step 3: Compress & Upload
+    if (staged && staged.youtubeId) {
+      setAdminStepState(3, {
+        statusText: "Video ready ✓ " + staged.youtubeId,
+        state: "done",
+      });
+      const hint = $("compress-step-hint");
+      if (hint) {
+        hint.textContent =
+          "Video ready ✓ " + staged.youtubeId + " — already on staged week.";
+      }
+      if (btnCompress && btnCompress.dataset.busy !== "1") {
+        btnCompress.disabled = true;
+        btnCompress.textContent = "Compress & Upload";
+      }
+      renderCompressJobStatus(
+        jobStatus === "done" || jobStatus === "failed" || jobStatus === "running" || jobStatus === "requested"
+          ? compressJobState
+          : { status: "done", youtubeId: staged.youtubeId }
+      );
+    } else {
+      const hint = $("compress-step-hint");
+      if (hint) {
+        hint.textContent =
+          "Queues compress + unlisted YouTube upload on the Mac. Does not change live.";
+      }
+      const canCompress = !!(staged && differs && !staged.youtubeId && !jobBusy);
+      if (btnCompress && btnCompress.dataset.busy !== "1") {
+        btnCompress.disabled = !canCompress;
+        btnCompress.textContent = "Compress & Upload";
+      }
+      if (jobStatus === "failed") {
+        setAdminStepState(3, { statusText: "Failed", state: "error" });
+      } else if (jobBusy) {
+        setAdminStepState(3, {
+          statusText: jobStatus === "running" ? "Running…" : "Queued",
+          state: "active",
+        });
+      } else if (staged && differs) {
+        setAdminStepState(3, { statusText: "Ready", state: "active" });
+      } else if (staged && !differs) {
+        setAdminStepState(3, {
+          statusText: "Same as live — pick again",
+          state: "",
+        });
+      } else {
+        setAdminStepState(3, { statusText: "Stage first", state: "" });
+      }
+      renderCompressJobStatus(compressJobState);
+    }
+
+    if (btnStage && btnStage.dataset.busy !== "1") {
+      btnStage.disabled = !canPaste;
+      btnStage.textContent = "Save YouTube id to staged week";
+    }
+
+    // Step 4: Swap
+    const canSwap = !!(staged && differs && staged.youtubeId);
     if (btnSwap && btnSwap.dataset.busy !== "1") {
-      btnSwap.disabled = !(staged && staged.youtubeId);
+      btnSwap.disabled = !canSwap;
       btnSwap.textContent = "Swap live now";
+    }
+    if (canSwap) {
+      setAdminStepState(4, { statusText: "Ready to swap", state: "active" });
+    } else if (staged && staged.youtubeId && !differs) {
+      setAdminStepState(4, {
+        statusText: "Already live",
+        state: "done",
+      });
+    } else if (staged && !staged.youtubeId) {
+      setAdminStepState(4, {
+        statusText: "Needs YouTube id",
+        state: "",
+      });
+    } else {
+      setAdminStepState(4, { statusText: "Idle", state: "" });
+    }
+  }
+
+  function ensureCompressJobWatch() {
+    if (compressJobWatchStarted) return;
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.watchCompressJob) return;
+    compressJobWatchStarted = true;
+    Auth.watchCompressJob((data) => {
+      compressJobState = data;
+      // When Mac finishes with youtubeId, refresh staged nextWeek so UI flips to ready.
+      if (data && data.status === "done" && data.youtubeId) {
+        loadCloudConfig().catch(() => {});
+      }
+      updateYoutubeStageControls();
+    });
+  }
+
+  async function requestCompressUploadNow() {
+    const staged = resolveStagedNext();
+    const live = resolveThisWeek();
+    if (!staged || !stagedDiffersFromLive(staged, live)) {
+      showAcceptToast(
+        "Stage a next-week pick that differs from live before compressing.",
+        { error: true, ms: 8000 }
+      );
+      return;
+    }
+    if (staged.youtubeId) {
+      showAcceptToast("Staged pick already has a YouTube id.", {
+        error: true,
+        ms: 6000,
+      });
+      return;
+    }
+    const jobStatus =
+      compressJobState && compressJobState.status
+        ? String(compressJobState.status)
+        : "";
+    if (jobStatus === "requested" || jobStatus === "running") {
+      showAcceptToast("Compress already queued or running.", {
+        error: true,
+        ms: 6000,
+      });
+      return;
+    }
+    const Auth = window.EddysHellAuth;
+    if (!Auth || !Auth.requestCompressUpload) {
+      showAcceptToast("Auth requestCompressUpload API missing", {
+        error: true,
+        ms: 8000,
+      });
+      return;
+    }
+    const btn = $("btn-compress-upload");
+    if (btn) {
+      btn.dataset.busy = "1";
+      btn.disabled = true;
+      btn.textContent = "Queuing…";
+    }
+    try {
+      ensureCompressJobWatch();
+      const payload = payloadFromThisWeek(staged);
+      const saved = await Auth.requestCompressUpload(payload);
+      compressJobState = {
+        ...(saved || {}),
+        status: "requested",
+      };
+      showAcceptToast("Compress queued — Mac will run within ~15 min.", {
+        ms: 6000,
+      });
+      await logAdminActivity({
+        action: "compress_requested",
+        source: "manual",
+        pickId: payload.pickId || payload.id || null,
+        filename: payload.filename || null,
+        detail: "jobs/compressUpload requested",
+      });
+      refreshActivityLog();
+      updateYoutubeStageControls();
+    } catch (err) {
+      console.warn("Compress & Upload request failed:", err);
+      showAcceptToast(
+        "Compress request failed: " + ((err && err.message) || String(err)),
+        { error: true, ms: 8000 }
+      );
+      await logAdminActivity({
+        action: "fail",
+        source: "manual",
+        pickId: staged.pickId || staged.id || null,
+        filename: staged.filename || null,
+        detail:
+          "compress_requested failed: " + ((err && err.message) || String(err)),
+      });
+      refreshActivityLog();
+    } finally {
+      if (btn) btn.dataset.busy = "";
+      updateYoutubeStageControls();
     }
   }
 
@@ -1331,7 +1588,7 @@
     if (btn) {
       btn.dataset.busy = "1";
       btn.disabled = true;
-      btn.textContent = "Staging…";
+      btn.textContent = "Saving…";
     }
     try {
       await stagePayloadToCloud(payload);
@@ -1360,9 +1617,9 @@
       });
       refreshActivityLog();
     } catch (err) {
-      console.warn("Compress & Stage YouTube failed:", err);
+      console.warn("Save YouTube id failed:", err);
       showAcceptToast(
-        "Compress & Stage YouTube failed: " + ((err && err.message) || String(err)),
+        "Save YouTube id failed: " + ((err && err.message) || String(err)),
         { error: true, ms: 8000 }
       );
       const failBase = payloadForYoutubeStage() || {};
@@ -1387,10 +1644,18 @@
    */
   async function swapStagedToLiveNow() {
     const staged = resolveStagedNext();
+    const live = resolveThisWeek();
     if (!staged || !staged.youtubeId) {
       showAcceptToast(
         "Stage a YouTube id on next week before swapping live.",
         { error: true, ms: 8000 }
+      );
+      return;
+    }
+    if (!stagedDiffersFromLive(staged, live)) {
+      showAcceptToast(
+        "Staged pick is already live — nothing to swap.",
+        { error: true, ms: 6000 }
       );
       return;
     }
@@ -3218,8 +3483,17 @@
     $("btn-accept").addEventListener("click", acceptPick);
     const btnStageYt = $("btn-stage-youtube");
     if (btnStageYt) btnStageYt.addEventListener("click", saveYoutubeToStaged);
+    const btnCompressUpload = $("btn-compress-upload");
+    if (btnCompressUpload) {
+      btnCompressUpload.addEventListener("click", requestCompressUploadNow);
+    }
+    const btnCompressRetry = $("btn-compress-retry");
+    if (btnCompressRetry) {
+      btnCompressRetry.addEventListener("click", requestCompressUploadNow);
+    }
     const btnSwapLive = $("btn-swap-live");
     if (btnSwapLive) btnSwapLive.addEventListener("click", swapStagedToLiveNow);
+    ensureCompressJobWatch();
     const ytInput = $("yt-url-input");
     if (ytInput) {
       ytInput.addEventListener("keydown", (ev) => {
@@ -3324,6 +3598,19 @@
         renderMemberCheckin(tw);
         paintSharedCheckinsList(tw);
       }
+      // Checkins may arrive before/without checkinFeed docs (pre-feed-era).
+      // Re-merge into the feed UI whenever the checkins store updates.
+      if (isCheckinFeedEnabled()) {
+        const Auth = window.EddysHellAuth;
+        if (Auth && Auth.mergeCheckinsIntoFeedLocal) {
+          try {
+            Auth.mergeCheckinsIntoFeedLocal(tw.id);
+          } catch (_) {
+            /* ok */
+          }
+        }
+        handleCheckinFeedChange();
+      }
     });
     if (window.EddysHellAuth.onCheckinFeedChange) {
       window.EddysHellAuth.onCheckinFeedChange(() => {
@@ -3402,7 +3689,9 @@
         refreshActivityLog();
         return saved;
       },
-      /** Admin: paste/save YouTube id onto staged next week only (Compress & Stage YouTube). Never publishes. */
+      /** Admin: queue Mac compress+upload via jobs/compressUpload. Never publishes. */
+      requestCompressUpload: requestCompressUploadNow,
+      /** Admin: paste/save YouTube id onto staged next week only. Never publishes. */
       stageYoutubeOnly: saveYoutubeToStaged,
       /** Admin: promote staged next week (must already have youtubeId) to live. */
       swapLiveNow: swapStagedToLiveNow,
