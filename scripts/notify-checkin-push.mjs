@@ -4,8 +4,8 @@
  * members' pushSubscriptions. Used until Cloud Functions (Blaze) is available.
  *
  * Usage:
- *   GOOGLE_ACCESS_TOKEN=... node scripts/notify-checkin-push.mjs
- *   # or reads ~/.config/configstore/firebase-tools.json
+ * Auth via scripts/lib/google-token.mjs (self-refreshing).
+ *   GOOGLE_ACCESS_TOKEN=... overrides.
  *
  * Secrets: ../secrets/vapid.json (gitignored)
  * State:   ../.cache/checkin-push-seen.json
@@ -15,6 +15,7 @@ import path from "path";
 import https from "https";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
+import { getGoogleAccessToken } from "./lib/google-token.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -31,16 +32,6 @@ try {
 const PROJECT = "eddy-s-hell";
 const SEEN_PATH = path.join(ROOT, ".cache", "checkin-push-seen.json");
 const VAPID_PATH = path.join(ROOT, "secrets", "vapid.json");
-
-function loadToken() {
-  if (process.env.GOOGLE_ACCESS_TOKEN) return process.env.GOOGLE_ACCESS_TOKEN;
-  const cfgPath = path.join(
-    process.env.HOME || "",
-    ".config/configstore/firebase-tools.json"
-  );
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
-  return cfg.tokens.access_token;
-}
 
 function req(method, url, { token, body } = {}) {
   return new Promise((resolve, reject) => {
@@ -165,7 +156,7 @@ function saveSeen(seen) {
 }
 
 async function main() {
-  const token = loadToken();
+  const token = await getGoogleAccessToken();
   const vapid = JSON.parse(fs.readFileSync(VAPID_PATH, "utf8"));
   webpush.setVapidDetails(vapid.subject, vapid.publicKey, vapid.privateKey);
 

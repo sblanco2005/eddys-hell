@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Firestore jobs/compressUpload queue helper (beta).
- * Same auth approach as notify-checkin-push.mjs:
- *   GOOGLE_ACCESS_TOKEN=... or ~/.config/configstore/firebase-tools.json
+ * Auth via scripts/lib/google-token.mjs (self-refreshing firebase-tools token,
+ *   or GOOGLE_ACCESS_TOKEN / gcloud auth print-access-token).
  *
  * Usage:
  *   node scripts/compress-queue.mjs check
@@ -10,26 +10,16 @@
  *   node scripts/compress-queue.mjs set <status> [youtubeId] [message]
  *     → updates status (running|done|failed), optional youtubeId/message, updatedAt
  */
-import fs from "fs";
 import path from "path";
 import https from "https";
 import { fileURLToPath } from "url";
+import { getGoogleAccessToken } from "./lib/google-token.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PROJECT = "eddy-s-hell";
 const DOC_PATH = `projects/${PROJECT}/databases/(default)/documents/jobs/compressUpload`;
 const DOC_URL = `https://firestore.googleapis.com/v1/${DOC_PATH}`;
-
-function loadToken() {
-  if (process.env.GOOGLE_ACCESS_TOKEN) return process.env.GOOGLE_ACCESS_TOKEN;
-  const cfgPath = path.join(
-    process.env.HOME || "",
-    ".config/configstore/firebase-tools.json"
-  );
-  const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
-  return cfg.tokens.access_token;
-}
 
 function req(method, url, { token, body } = {}) {
   return new Promise((resolve, reject) => {
@@ -178,7 +168,7 @@ async function main() {
     );
     process.exit(2);
   }
-  const token = loadToken();
+  const token = await getGoogleAccessToken();
   if (cmd === "check") {
     process.exit(await cmdCheck(token));
   }

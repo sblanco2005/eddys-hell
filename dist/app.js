@@ -1295,18 +1295,18 @@
         setAdminStepState(3, { statusText: "Failed", state: "error" });
       } else if (jobBusy) {
         setAdminStepState(3, {
-          statusText: jobStatus === "running" ? "Running…" : "Queued",
+          statusText: jobStatus === "running" ? "Uploading…" : "Queued",
           state: "active",
         });
       } else if (staged && differs) {
-        setAdminStepState(3, { statusText: "Ready", state: "active" });
+        setAdminStepState(3, { statusText: "Not started", state: "active" });
       } else if (staged && !differs) {
         setAdminStepState(3, {
           statusText: "Same as live — pick again",
           state: "",
         });
       } else {
-        setAdminStepState(3, { statusText: "Stage first", state: "" });
+        setAdminStepState(3, { statusText: "Not started", state: "" });
       }
       renderCompressJobStatus(compressJobState);
     }
@@ -1331,7 +1331,7 @@
       });
     } else if (staged && !staged.youtubeId) {
       setAdminStepState(4, {
-        statusText: "Needs YouTube id",
+        statusText: "Waiting on video",
         state: "",
       });
     } else {
