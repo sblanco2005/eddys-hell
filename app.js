@@ -259,7 +259,7 @@
     });
   }
 
-  /** Beta-only in-app check-in feed + badge. */
+  /** In-app check-in feed + badge (+ Web Push UI). On for beta + stable Hosting. */
   let checkinFeedOpen = false;
   /** @type {string|null} */
   let checkinFeedToastTimer = null;
@@ -272,7 +272,13 @@
 
   function isCheckinFeedEnabled() {
     const Auth = window.EddysHellAuth;
-    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost());
+    if (!Auth) return false;
+    // Feed + push UI: beta and stable Firebase Hosting (and localhost for dev).
+    // BETA badge stays gated separately via isBetaHost().
+    if (Auth.isBetaHost && Auth.isBetaHost()) return true;
+    if (Auth.isFirebaseHosting && Auth.isFirebaseHosting()) return true;
+    if (Auth.isLocalhost && Auth.isLocalhost()) return true;
+    return false;
   }
 
 
