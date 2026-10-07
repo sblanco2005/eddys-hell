@@ -1,4 +1,4 @@
-/* Eddy's Hell — Web Push service worker (beta). Cache-bust via Hosting headers. */
+/* Eddy's Hell — Web Push service worker. Cache-bust via Hosting headers. */
 /* eslint-disable no-undef */
 self.addEventListener("install", (event) => {
   self.skipWaiting();
