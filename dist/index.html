@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-queue-labels-20261005" />
+  <meta name="eddys-hell-build" content="push-prod-20261011" />
   <title>Eddy's Hell · Thursday</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=20261005-job-status" />
+  <link rel="stylesheet" href="styles.css?v=20261011-push-prod" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -125,6 +125,28 @@
               <span class="checkin-feed-badge" id="checkin-feed-badge" hidden>0</span>
             </button>
           </header>
+
+          <!-- Push nudges (painted by app.js paintPushNudge; beta + stable Hosting) -->
+          <div class="push-nudge" id="push-nudge-a2hs" hidden role="note" aria-labelledby="push-nudge-a2hs-title">
+            <button type="button" class="push-nudge-close" id="push-nudge-a2hs-close" aria-label="Dismiss">×</button>
+            <p class="push-nudge-title" id="push-nudge-a2hs-title">📲 Add Eddy’s Hell to your Home Screen to get pinged when friends check in</p>
+            <ol class="push-nudge-steps">
+              <li>Tap <strong>Share</strong> <span aria-hidden="true">(square with ↑)</span> in Safari</li>
+              <li>Choose <strong>Add to Home Screen</strong> → <strong>Add</strong></li>
+              <li>Open Eddy’s Hell from the new icon and tap <strong>Enable</strong></li>
+            </ol>
+            <p class="hint push-nudge-foot">Needs iOS 16.4 or newer.</p>
+          </div>
+          <div class="push-nudge" id="push-nudge-enable" hidden role="note" aria-labelledby="push-nudge-enable-title">
+            <button type="button" class="push-nudge-close" id="push-nudge-enable-close" aria-label="Dismiss">×</button>
+            <p class="push-nudge-title" id="push-nudge-enable-title">🔔 Get notified when a friend checks in</p>
+            <p class="hint push-nudge-foot">A quick ping on your phone the moment someone finishes this week’s workout.</p>
+            <div class="push-nudge-actions">
+              <button type="button" class="btn accent btn-sm" id="push-nudge-enable-btn">Enable</button>
+              <button type="button" class="btn ghost btn-sm" id="push-nudge-enable-later">Not now</button>
+            </div>
+            <p class="hint toast-warn" id="push-nudge-enable-status" hidden></p>
+          </div>
 
           <aside class="card checkin-feed-card" id="checkin-feed-panel" hidden role="region" aria-labelledby="checkin-feed-title">
             <header class="card-head">
@@ -424,6 +446,47 @@
           </div>
         </article>
 
+        <article class="card members-card" id="test-push-card" hidden>
+          <header class="card-head">
+            <h2>Push notifications</h2>
+            <span class="badge">Admin</span>
+          </header>
+          <p class="hint">Sends a test check-in notification to <strong>your own</strong> notification-enabled devices on this site only. No check-in is recorded and nobody else is notified.</p>
+          <div class="actions">
+            <button type="button" class="btn secondary" id="btn-test-push">Send test notification</button>
+          </div>
+          <p class="toast" id="test-push-toast" hidden></p>
+
+          <div class="broadcast-composer" id="broadcast-composer">
+            <h3 class="broadcast-title">Send a message to the crew</h3>
+            <label class="field-label" for="broadcast-title-input">Title <span class="broadcast-count" id="broadcast-title-count">0/60</span></label>
+            <input type="text" id="broadcast-title-input" maxlength="60" placeholder="🔥 New workout is up" autocomplete="off" />
+            <label class="field-label" for="broadcast-body-input">Message <span class="broadcast-count" id="broadcast-body-count">0/200</span></label>
+            <textarea id="broadcast-body-input" maxlength="200" rows="3" placeholder="This week’s video is live — go crush it."></textarea>
+
+            <div class="broadcast-preview" aria-label="Notification preview">
+              <img class="broadcast-preview-icon" src="icons/icon-192.png" alt="" width="36" height="36" />
+              <div class="broadcast-preview-text">
+                <div class="broadcast-preview-app">EDDY’S HELL <span>now</span></div>
+                <div class="broadcast-preview-title" id="broadcast-preview-title">🔥 New workout is up</div>
+                <div class="broadcast-preview-body" id="broadcast-preview-body">This week’s video is live — go crush it.</div>
+              </div>
+            </div>
+
+            <p class="hint broadcast-reach" id="broadcast-reach">Counting devices…</p>
+            <div class="actions broadcast-actions">
+              <button type="button" class="btn secondary" id="btn-broadcast-self" data-action="broadcast-self">Send to me</button>
+              <button type="button" class="btn accent" id="btn-broadcast-all" data-action="broadcast-all">Send to everyone</button>
+            </div>
+            <p class="toast" id="broadcast-toast" hidden></p>
+
+            <h3 class="broadcast-title broadcast-recent-title">Recent messages</h3>
+            <ul class="broadcast-recent" id="broadcast-recent">
+              <li class="hint">Loading…</li>
+            </ul>
+          </div>
+        </article>
+
         <article class="card members-card" id="members-card">
           <header class="card-head">
             <h2>Members</h2>
@@ -486,7 +549,18 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20261005-job-status"></script>
-  <script src="app.js?v=20261005-job-status"></script>
+  <div class="eh-modal" id="eh-confirm-modal" hidden role="dialog" aria-modal="true" aria-labelledby="eh-confirm-title">
+    <div class="eh-modal-backdrop" data-action="confirm-cancel"></div>
+    <div class="eh-modal-card">
+      <h3 id="eh-confirm-title">Send to everyone?</h3>
+      <p class="hint" id="eh-confirm-body"></p>
+      <div class="actions eh-modal-actions">
+        <button type="button" class="btn ghost" data-action="confirm-cancel">Cancel</button>
+        <button type="button" class="btn accent" data-action="confirm-ok" id="eh-confirm-ok">Send</button>
+      </div>
+    </div>
+  </div>
+  <script src="auth.js?v=20261011-push-prod"></script>
+  <script src="app.js?v=20261011-push-prod"></script>
 </body>
 </html>

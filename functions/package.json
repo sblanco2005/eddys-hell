@@ -1,12 +1,19 @@
 {
   "name": "eddys-hell-functions",
-  "description": "Eddy's Hell Cloud Functions — check-in Web Push",
-  "engines": { "node": "20" },
+  "description": "Eddy's Hell Cloud Functions — check-in Web Push (beta)",
+  "engines": { "node": "22" },
   "main": "index.js",
   "private": true,
+  "scripts": {
+    "lint": "node --check index.js && eslint index.js",
+    "build": "node -e \"require('./index.js'); console.log('exports:', Object.keys(require('./index.js')).join(','))\""
+  },
   "dependencies": {
-    "firebase-admin": "^12.6.0",
-    "firebase-functions": "^5.1.1",
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^6.1.0",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
   }
 }

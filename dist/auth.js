@@ -543,6 +543,8 @@
           pickId: row.pickId,
           at: row.at,
           notes: row.notes || "",
+          // Source site (beta-only build) — lets backend logic tell beta vs prod check-ins.
+          host: (typeof location !== "undefined" && location.hostname) || "",
         };
         if (row.difficulty) payload.difficulty = row.difficulty;
         await firestoreSetDoc(
@@ -900,7 +902,8 @@
         const id = checkinFeedDocId(pickId, row.email);
         await firestoreSetDoc(
           firestoreDoc(fbDb, "checkinFeed", id),
-          scrubUndefined(row),
+          // host: source site; Cloud Function notifies subscribers on the same host only.
+          scrubUndefined({ ...row, host: (typeof location !== "undefined" && location.hostname) || "" }),
           { merge: true }
         );
         firestoreStatus = "cloud";
@@ -1027,7 +1030,7 @@
     return checkinFeedLastError;
   }
 
-  // ——— Web Push subscriptions (beta) ———
+  // ——— Web Push subscriptions (check-in alerts; beta + stable) ———
 
   const PUSH_PREF_KEY = "eddys-hell-push-pref-v1";
   let vapidPublicKeyCache = null;
@@ -1202,11 +1205,6 @@
    * @returns {Promise<{enabled:boolean, permission:string}>}
    */
   async function enableCheckinPush() {
-    if (!isBetaHost()) {
-      const err = new Error("Check-in push is beta-only.");
-      err.code = "push-beta-only";
-      throw err;
-    }
     if (!pushSupported()) {
       const err = new Error("Web Push is not supported here.");
       err.code = "push-unsupported";
@@ -1242,6 +1240,114 @@
     }
     await savePushSubscriptionToCloud(sub);
     return { enabled: true, permission };
+  }
+
+  /**
+   * Admin-only (beta): ask Cloud Function sendTestPush to notify the caller's own
+   * enabled beta devices. Callable protocol over fetch (no extra SDK load).
+   * @returns {Promise<{sent:number, failed:number, subscriptions:number}>}
+   */
+  async function sendTestPush() {
+    const r = await callCallable("sendTestPush", { host: location.hostname });
+    return r || { sent: 0, failed: 0, subscriptions: 0 };
+  }
+
+  /** Call a us-central1 callable with the Firebase Auth SDK user's fresh ID token. */
+  async function callCallable(name, data) {
+    const fbUser = fbAuth && fbAuth.currentUser;
+    if (!fbUser || typeof fbUser.getIdToken !== "function") {
+      const err = new Error(
+        currentUser
+          ? "Firebase sign-in isn’t ready yet — reload the page and try again."
+          : "Sign in first."
+      );
+      err.code = "push-auth";
+      throw err;
+    }
+    const idToken = await fbUser.getIdToken(true);
+    const res = await fetch("https://us-central1-eddy-s-hell.cloudfunctions.net/" + name, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
+      body: JSON.stringify({ data: data || {} }),
+    });
+    let json = null;
+    try {
+      json = await res.json();
+    } catch (_) {
+      /* non-JSON */
+    }
+    if (!res.ok || !json || json.error) {
+      const msg = (json && json.error && json.error.message) || name + " failed (HTTP " + res.status + ")";
+      const err = new Error(msg);
+      err.code = (json && json.error && json.error.status) || "callable-failed";
+      throw err;
+    }
+    return json.result !== undefined ? json.result : json.data;
+  }
+
+  /**
+   * Admin-only (beta): custom push. target "self" = own beta devices only (test);
+   * "all" = every enabled beta device incl. sender.
+   * @returns {Promise<{sent:number, failed:number, recipients:number}>}
+   */
+  async function sendBroadcastPush({ title, body, target, url } = {}) {
+    const r = await callCallable("sendBroadcastPush", {
+      title: String(title || "").trim(),
+      body: String(body || "").trim(),
+      target: target === "self" ? "self" : "all",
+      host: location.hostname,
+      url: url || undefined,
+    });
+    return r || { sent: 0, failed: 0, recipients: 0 };
+  }
+
+  /**
+   * Count enabled beta push subscriptions (all members + own) for the composer.
+   * @returns {Promise<{all:number, self:number}>}
+   */
+  async function countBetaPushDevices() {
+    if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection || !firestoreQuery || !firestoreWhere) {
+      const err = new Error("Firestore not ready yet");
+      err.code = "firestore-not-ready";
+      throw err;
+    }
+    const snap = await firestoreGetDocs(
+      firestoreQuery(
+        firestoreCollection(fbDb, "pushSubscriptions"),
+        firestoreWhere("host", "==", (typeof location !== "undefined" && location.hostname) || "")
+      )
+    );
+    const uid = currentUser && currentUser.uid;
+    const me = normalizeEmail(currentUser && currentUser.email);
+    let all = 0;
+    let self = 0;
+    snap.forEach((d) => {
+      const sub = d.data() || {};
+      if (sub.enabled === false || !sub.endpoint) return;
+      all++;
+      if ((uid && sub.uid === uid) || (me && normalizeEmail(sub.email) === me)) self++;
+    });
+    return { all, self };
+  }
+
+  /** Admin: newest broadcasts (default 5). */
+  async function loadRecentBroadcasts(limitCount) {
+    if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection || !firestoreQuery) {
+      const err = new Error("Firestore not ready yet");
+      err.code = "firestore-not-ready";
+      throw err;
+    }
+    const n = Math.min(Math.max(Number(limitCount) || 5, 1), 20);
+    const snap = await firestoreGetDocs(
+      firestoreQuery(
+        firestoreCollection(fbDb, "broadcasts"),
+        firestoreOrderBy("sentAt", "desc"),
+        firestoreLimit(n)
+      )
+    );
+    const rows = [];
+    snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+    return rows;
   }
 
   /** Disable Web Push for this device. */
@@ -2358,6 +2464,10 @@
     enableCheckinPush,
     disableCheckinPush,
     getCheckinPushStatus,
+    sendTestPush,
+    sendBroadcastPush,
+    countBetaPushDevices,
+    loadRecentBroadcasts,
     loadVapidPublicKey,
     PUSH_PREF_KEY,
     isFirestoreReady: () => firestoreReady,
