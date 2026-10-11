@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="push-prod-20261011" />
+  <meta name="eddys-hell-build" content="beta-manual-pick-20261011" />
   <title>Eddy's Hell · Thursday</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=20261011-push-prod" />
+  <link rel="stylesheet" href="styles.css?v=20261011-manual-pick" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -340,6 +340,7 @@
               <p class="hint">Dry-run a candidate from the rule. Does not change what friends see.</p>
               <div class="actions nonlive-always-actions" id="nonlive-always-actions">
                 <button type="button" class="btn accent" id="btn-dryrun">Pick again</button>
+                <button type="button" class="btn secondary" id="btn-choose-video" data-action="choose-video" hidden>Choose video</button>
                 <button type="button" class="btn secondary" id="btn-reveal-finder" hidden>Reveal in Finder</button>
                 <button type="button" class="btn accent" id="btn-keep" hidden>Publish this week</button>
               </div>
@@ -560,7 +561,24 @@
       </div>
     </div>
   </div>
-  <script src="auth.js?v=20261011-push-prod"></script>
-  <script src="app.js?v=20261011-push-prod"></script>
+  <div class="eh-modal" id="video-picker-modal" hidden role="dialog" aria-modal="true" aria-labelledby="video-picker-title">
+    <div class="eh-modal-backdrop" data-action="video-picker-close"></div>
+    <div class="eh-modal-card video-picker-card">
+      <header class="video-picker-head">
+        <h3 id="video-picker-title">Choose a video</h3>
+        <button type="button" class="push-nudge-close" data-action="video-picker-close" aria-label="Close">×</button>
+      </header>
+      <p class="hint video-picker-meta" id="video-picker-meta"></p>
+      <div class="video-picker-filters">
+        <input type="search" id="video-picker-search" placeholder="Search name, tag, folder…" autocomplete="off" />
+        <select id="video-picker-type" aria-label="Type"><option value="">All types</option></select>
+        <input type="number" id="video-picker-minhr" placeholder="Min HR" min="0" max="250" inputmode="numeric" aria-label="Minimum HR" />
+      </div>
+      <ul class="video-picker-list" id="video-picker-list"></ul>
+      <p class="hint video-picker-foot">Not seeing a new file? The list comes from the last drive scan — ask Grok Bot to <strong>rescan EddysHell</strong> (Mac must be on with the drive mounted).</p>
+    </div>
+  </div>
+  <script src="auth.js?v=20261011-manual-pick"></script>
+  <script src="app.js?v=20261011-manual-pick"></script>
 </body>
 </html>

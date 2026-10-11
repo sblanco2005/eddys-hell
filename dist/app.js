@@ -1277,7 +1277,201 @@
     const hasCandidate = !!(currentResult && pickIsCandidate && currentResult.pick);
     const hasStaged = !!resolveStagedNext();
     btn.textContent = hasCandidate || hasStaged ? "Pick again" : "Dry-run pick";
+    paintChooseVideoButton();
   }
+
+  // ——— Beta: manual "Choose video" picker over the scanned catalog ———
+  function isManualPickEnabled() {
+    const Auth = window.EddysHellAuth;
+    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost() && authUser && authUser.role === "admin");
+  }
+
+  function paintChooseVideoButton() {
+    const b = $("btn-choose-video");
+    if (b) b.hidden = !isManualPickEnabled();
+  }
+
+  function lastUsedAt(fileId) {
+    let best = 0;
+    for (const e of state.usedHistory || []) {
+      if (e && e.id === fileId) {
+        const t = Date.parse(e.pickedAt);
+        if (Number.isFinite(t) && t > best) best = t;
+      }
+    }
+    return best;
+  }
+
+  function videoPickerStatus(f) {
+    const live = resolveThisWeek();
+    const staged = resolveStagedNext();
+    const same = (x) =>
+      !!x && (x.id === f.id || (x.relPath && f.relPath && x.relPath === f.relPath));
+    return { isLive: same(live), isStaged: same(staged) };
+  }
+
+  function fillVideoPickerTypes() {
+    const sel = $("video-picker-type");
+    if (!sel || sel.dataset.filled === "1") return;
+    const types = [...new Set((catalog.files || []).map((f) => f.folderType).filter(Boolean))].sort();
+    for (const t of types) {
+      const o = document.createElement("option");
+      o.value = t;
+      o.textContent = t;
+      sel.appendChild(o);
+    }
+    sel.dataset.filled = "1";
+  }
+
+  function paintVideoPickerList() {
+    const ul = $("video-picker-list");
+    if (!ul) return;
+    const q = ($("video-picker-search").value || "").trim().toLowerCase();
+    const type = $("video-picker-type").value || "";
+    const minHR = Number($("video-picker-minhr").value);
+    const hasMin = $("video-picker-minhr").value !== "" && Number.isFinite(minHR);
+    const files = (catalog.files || [])
+      .filter((f) => {
+        if (type && f.folderType !== type) return false;
+        if (hasMin && !(f.hr != null && Number(f.hr) >= minHR)) return false;
+        if (q) {
+          const hay = [f.filename, f.relPath, f.folderType, ...(f.rawTags || [])].join(" ").toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => parseMtime(b.mtime) - parseMtime(a.mtime));
+    ul.innerHTML = "";
+    if (!files.length) {
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "No videos match.";
+      ul.appendChild(li);
+      return;
+    }
+    const twoWeeks = Date.now() - 2 * WEEK_MS;
+    for (const f of files) {
+      const st = videoPickerStatus(f);
+      const used = lastUsedAt(f.id);
+      const li = document.createElement("li");
+      li.className = "video-picker-item";
+      const main = document.createElement("div");
+      main.className = "video-picker-main";
+      const name = document.createElement("div");
+      name.className = "video-picker-name";
+      name.textContent = f.filename || f.relPath || f.id;
+      const meta = document.createElement("div");
+      meta.className = "hint video-picker-row-meta";
+      meta.textContent = [
+        f.folderType || "—",
+        f.hr != null ? "HR " + f.hr : "HR —",
+        formatMtime(f.mtime),
+      ].join(" · ");
+      main.appendChild(name);
+      main.appendChild(meta);
+      const badges = document.createElement("div");
+      badges.className = "video-picker-badges";
+      const addBadge = (text, cls) => {
+        const b = document.createElement("span");
+        b.className = "badge " + (cls || "");
+        b.textContent = text;
+        badges.appendChild(b);
+      };
+      if (st.isLive) addBadge("Live now", "live-badge");
+      if (st.isStaged) addBadge("Staged", "accent");
+      if (used && !st.isLive) {
+        addBadge(used >= twoWeeks ? "Used within 2w" : "Last used " + formatMtime(new Date(used).toISOString()), used >= twoWeeks ? "warn-badge" : "");
+      }
+      main.appendChild(badges);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-sm " + (st.isLive ? "ghost" : "secondary");
+      btn.textContent = st.isLive ? "Live" : "Choose";
+      btn.disabled = st.isLive;
+      if (st.isLive) btn.title = "This is already the live week";
+      btn.setAttribute("data-action", "video-picker-choose");
+      btn.setAttribute("data-file-id", f.id);
+      li.appendChild(main);
+      li.appendChild(btn);
+      ul.appendChild(li);
+    }
+  }
+
+  function openVideoPicker() {
+    if (!isManualPickEnabled()) return;
+    const modal = $("video-picker-modal");
+    if (!modal) return;
+    fillVideoPickerTypes();
+    const meta = $("video-picker-meta");
+    if (meta) {
+      const m = catalog.meta || {};
+      meta.textContent =
+        (catalog.files || []).length + " videos on " + (m.root || "/Volumes/EddysHell") +
+        (m.scannedAt ? " · scanned " + formatMtime(m.scannedAt) : "");
+    }
+    paintVideoPickerList();
+    modal.hidden = false;
+    modal.removeAttribute("hidden");
+    const q = $("video-picker-search");
+    if (q) setTimeout(() => q.focus(), 50);
+  }
+
+  function closeVideoPicker() {
+    const modal = $("video-picker-modal");
+    if (modal) modal.hidden = true;
+  }
+
+  /** Set a catalog file as the candidate exactly like a dry-run pick (same shape). */
+  function chooseVideoManually(fileId) {
+    const f = (catalog.files || []).find((x) => x.id === fileId);
+    if (!f) return;
+    if (videoPickerStatus(f).isLive) {
+      window.alert("That video is already the live week — pick a different one.");
+      return;
+    }
+    const result = {
+      ok: true,
+      pick: f,
+      matches: [f],
+      why: "Chosen manually",
+      _manual: true,
+    };
+    currentResult = result;
+    pickIsCandidate = true;
+    closeVideoPicker();
+    showView("rule");
+    renderPickResult(result);
+    scrollCandidatePreviewIntoView();
+  }
+
+  (function bindVideoPicker() {
+    document.addEventListener("click", (e) => {
+      const el = e.target && e.target.closest ? e.target.closest("[data-action]") : null;
+      if (!el) return;
+      const a = el.getAttribute("data-action");
+      if (a === "choose-video") {
+        e.preventDefault();
+        openVideoPicker();
+      } else if (a === "video-picker-close") {
+        e.preventDefault();
+        closeVideoPicker();
+      } else if (a === "video-picker-choose") {
+        e.preventDefault();
+        chooseVideoManually(el.getAttribute("data-file-id"));
+      }
+    });
+    document.addEventListener("input", (e) => {
+      const id = e.target && e.target.id;
+      if (id === "video-picker-search" || id === "video-picker-minhr") paintVideoPickerList();
+    });
+    document.addEventListener("change", (e) => {
+      if (e.target && e.target.id === "video-picker-type") paintVideoPickerList();
+    });
+    document.addEventListener("keydown", (e) => {
+      const m = $("video-picker-modal");
+      if (e.key === "Escape" && m && !m.hidden) closeVideoPicker();
+    });
+  })();
 
   function runDryRunOrAgain() {
     if (currentResult && pickIsCandidate && currentResult.pick) {
@@ -2850,6 +3044,7 @@
 
   function renderAdminShell(preferredView) {
     paintTestPushCard();
+    paintChooseVideoButton();
     $("admin-tabs").hidden = false;
     $("brand-sub").textContent = "Thursday workout admin";
     const view = preferredView || "rule";
@@ -3145,7 +3340,9 @@
     if (titleEl) {
       titleEl.textContent = result._fromStaged
         ? "Staged candidate"
-        : "Dry-run candidate";
+        : result._manual
+          ? "Chosen manually"
+          : "Dry-run candidate";
     }
     $("pick-type").textContent = f.folderType || "—";
     $("pick-filename").textContent = f.filename || "—";
