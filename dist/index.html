@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-no-bell-20261011" />
+  <meta name="eddys-hell-build" content="beta-broadcast-20261011" />
   <title>Eddy's Hell · Thursday</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=20261011-no-bell" />
+  <link rel="stylesheet" href="styles.css?v=20261011-broadcast" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -456,6 +456,35 @@
             <button type="button" class="btn secondary" id="btn-test-push">Send test notification</button>
           </div>
           <p class="toast" id="test-push-toast" hidden></p>
+
+          <div class="broadcast-composer" id="broadcast-composer">
+            <h3 class="broadcast-title">Send a message to the crew</h3>
+            <label class="field-label" for="broadcast-title-input">Title <span class="broadcast-count" id="broadcast-title-count">0/60</span></label>
+            <input type="text" id="broadcast-title-input" maxlength="60" placeholder="🔥 New workout is up" autocomplete="off" />
+            <label class="field-label" for="broadcast-body-input">Message <span class="broadcast-count" id="broadcast-body-count">0/200</span></label>
+            <textarea id="broadcast-body-input" maxlength="200" rows="3" placeholder="This week’s video is live — go crush it."></textarea>
+
+            <div class="broadcast-preview" aria-label="Notification preview">
+              <img class="broadcast-preview-icon" src="icons/icon-192.png" alt="" width="36" height="36" />
+              <div class="broadcast-preview-text">
+                <div class="broadcast-preview-app">EDDY’S HELL <span>now</span></div>
+                <div class="broadcast-preview-title" id="broadcast-preview-title">🔥 New workout is up</div>
+                <div class="broadcast-preview-body" id="broadcast-preview-body">This week’s video is live — go crush it.</div>
+              </div>
+            </div>
+
+            <p class="hint broadcast-reach" id="broadcast-reach">Counting devices…</p>
+            <div class="actions broadcast-actions">
+              <button type="button" class="btn secondary" id="btn-broadcast-self" disabled>Send to me</button>
+              <button type="button" class="btn accent" id="btn-broadcast-all" disabled>Send to everyone</button>
+            </div>
+            <p class="toast" id="broadcast-toast" hidden></p>
+
+            <h3 class="broadcast-title broadcast-recent-title">Recent messages</h3>
+            <ul class="broadcast-recent" id="broadcast-recent">
+              <li class="hint">Loading…</li>
+            </ul>
+          </div>
         </article>
 
         <article class="card members-card" id="members-card">
@@ -520,7 +549,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20261011-no-bell"></script>
-  <script src="app.js?v=20261011-no-bell"></script>
+  <script src="auth.js?v=20261011-broadcast"></script>
+  <script src="app.js?v=20261011-broadcast"></script>
 </body>
 </html>

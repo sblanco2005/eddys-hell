@@ -2543,6 +2543,7 @@
       authUser && authUser.role === "admin"
     );
     card.hidden = !show;
+    if (show) setupBroadcastComposer();
     if (!show || testPushBound) return;
     testPushBound = true;
     const btn = $("btn-test-push");
@@ -2587,6 +2588,189 @@
         /* ok */
       }
     });
+  }
+
+  // ——— Beta admin broadcast composer ———
+  let broadcastBound = false;
+  let broadcastBusy = false;
+  let broadcastReach = { all: 0, self: 0 };
+  const BROADCAST_TITLE_PH = "🔥 New workout is up";
+  const BROADCAST_BODY_PH = "This week’s video is live — go crush it.";
+
+  function broadcastValues() {
+    const t = $("broadcast-title-input");
+    const b = $("broadcast-body-input");
+    return {
+      title: t ? t.value.trim() : "",
+      body: b ? b.value.trim() : "",
+    };
+  }
+
+  function paintBroadcastForm() {
+    const { title, body } = broadcastValues();
+    const tc = $("broadcast-title-count");
+    const bc = $("broadcast-body-count");
+    const t = $("broadcast-title-input");
+    const b = $("broadcast-body-input");
+    if (tc && t) tc.textContent = t.value.length + "/60";
+    if (bc && b) bc.textContent = b.value.length + "/200";
+    const pt = $("broadcast-preview-title");
+    const pb = $("broadcast-preview-body");
+    if (pt) pt.textContent = title || BROADCAST_TITLE_PH;
+    if (pb) pb.textContent = body || BROADCAST_BODY_PH;
+    const valid = title.length >= 1 && title.length <= 60 && body.length >= 1 && body.length <= 200;
+    const selfBtn = $("btn-broadcast-self");
+    const allBtn = $("btn-broadcast-all");
+    if (selfBtn) selfBtn.disabled = broadcastBusy || !valid || broadcastReach.self < 1;
+    if (allBtn) allBtn.disabled = broadcastBusy || !valid || broadcastReach.all < 1;
+    if (selfBtn) {
+      selfBtn.title = broadcastReach.self < 1 ? "No notification-enabled device for you — Enable in the Home Screen app first" : "";
+    }
+  }
+
+  function plural(n, w) {
+    return n + " " + w + (n === 1 ? "" : "s");
+  }
+
+  async function refreshBroadcastReach() {
+    const el = $("broadcast-reach");
+    const Auth = window.EddysHellAuth;
+    if (!el || !Auth || !Auth.countBetaPushDevices) return;
+    try {
+      broadcastReach = await Auth.countBetaPushDevices();
+      el.textContent =
+        "Will reach " + plural(broadcastReach.all, "device") +
+        " (incl. " + broadcastReach.self + " of yours).";
+    } catch (err) {
+      el.textContent = "Couldn’t count devices: " + ((err && err.message) || String(err));
+    }
+    paintBroadcastForm();
+  }
+
+  function fmtBroadcastWhen(iso) {
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return String(iso || "");
+      return d.toLocaleString("en-US", {
+        timeZone: "America/New_York",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    } catch (_) {
+      return String(iso || "");
+    }
+  }
+
+  async function refreshRecentBroadcasts() {
+    const ul = $("broadcast-recent");
+    const Auth = window.EddysHellAuth;
+    if (!ul || !Auth || !Auth.loadRecentBroadcasts) return;
+    try {
+      const rows = await Auth.loadRecentBroadcasts(5);
+      ul.innerHTML = "";
+      if (!rows.length) {
+        const li = document.createElement("li");
+        li.className = "hint";
+        li.textContent = "No messages sent yet.";
+        ul.appendChild(li);
+        return;
+      }
+      for (const r of rows) {
+        const li = document.createElement("li");
+        li.className = "broadcast-recent-item";
+        const t = document.createElement("strong");
+        t.textContent = r.title || "(no title)";
+        const meta = document.createElement("span");
+        meta.className = "hint";
+        meta.textContent = " · " + fmtBroadcastWhen(r.sentAt) + " · sent " + (r.sent || 0) + "/" + (r.recipients || 0);
+        li.appendChild(t);
+        li.appendChild(meta);
+        ul.appendChild(li);
+      }
+    } catch (err) {
+      ul.innerHTML = "";
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "Couldn’t load messages: " + ((err && err.message) || String(err));
+      ul.appendChild(li);
+    }
+  }
+
+  async function doBroadcast(target) {
+    const Auth = window.EddysHellAuth;
+    const toast = $("broadcast-toast");
+    if (!Auth || !Auth.sendBroadcastPush || broadcastBusy) return;
+    const { title, body } = broadcastValues();
+    if (target === "all") {
+      await refreshBroadcastReach();
+      const n = broadcastReach.all;
+      if (!n) return;
+      if (!window.confirm("Send to " + plural(n, "device") + "?\n\n" + title + "\n" + body)) return;
+    }
+    broadcastBusy = true;
+    paintBroadcastForm();
+    if (toast) {
+      toast.hidden = true;
+      toast.classList.remove("toast-warn");
+    }
+    let msg;
+    let warn = false;
+    try {
+      const r = await Auth.sendBroadcastPush({ title, body, target });
+      if (!r.recipients) {
+        msg = target === "self"
+          ? "No notification-enabled device — open the Home Screen app and Enable first."
+          : "No notification-enabled devices to send to.";
+        warn = true;
+      } else {
+        msg = (target === "self" ? "Test sent to " : "Sent to ") + plural(r.sent, "device") + (r.failed ? " (" + r.failed + " failed)" : "") + ".";
+        warn = !r.sent;
+        if (target === "all" && r.sent) {
+          const t = $("broadcast-title-input");
+          const b = $("broadcast-body-input");
+          if (t) t.value = "";
+          if (b) b.value = "";
+        }
+      }
+    } catch (err) {
+      msg = "Send failed: " + ((err && err.message) || String(err));
+      warn = true;
+    } finally {
+      broadcastBusy = false;
+    }
+    if (toast) {
+      toast.textContent = msg;
+      toast.classList.toggle("toast-warn", warn);
+      toast.hidden = false;
+    }
+    paintBroadcastForm();
+    refreshBroadcastReach();
+    if (target === "all") refreshRecentBroadcasts();
+    try {
+      refreshActivityLog();
+    } catch (_) {
+      /* ok */
+    }
+  }
+
+  function setupBroadcastComposer() {
+    if (!$("broadcast-composer")) return;
+    if (!broadcastBound) {
+      broadcastBound = true;
+      const t = $("broadcast-title-input");
+      const b = $("broadcast-body-input");
+      if (t) t.addEventListener("input", paintBroadcastForm);
+      if (b) b.addEventListener("input", paintBroadcastForm);
+      const selfBtn = $("btn-broadcast-self");
+      const allBtn = $("btn-broadcast-all");
+      if (selfBtn) selfBtn.addEventListener("click", () => doBroadcast("self"));
+      if (allBtn) allBtn.addEventListener("click", () => doBroadcast("all"));
+    }
+    paintBroadcastForm();
+    refreshBroadcastReach();
+    refreshRecentBroadcasts();
   }
 
   function renderAdminShell(preferredView) {

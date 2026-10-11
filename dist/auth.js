@@ -1248,8 +1248,12 @@
    * @returns {Promise<{sent:number, failed:number, subscriptions:number}>}
    */
   async function sendTestPush() {
-    // currentUser is our normalized plain profile (no SDK methods) — the ID token
-    // must come from the Firebase Auth SDK user on fbAuth (same app instance).
+    const r = await callCallable("sendTestPush", {});
+    return r || { sent: 0, failed: 0, subscriptions: 0 };
+  }
+
+  /** Call a us-central1 callable with the Firebase Auth SDK user's fresh ID token. */
+  async function callCallable(name, data) {
     const fbUser = fbAuth && fbAuth.currentUser;
     if (!fbUser || typeof fbUser.getIdToken !== "function") {
       const err = new Error(
@@ -1261,10 +1265,10 @@
       throw err;
     }
     const idToken = await fbUser.getIdToken(true);
-    const res = await fetch("https://us-central1-eddy-s-hell.cloudfunctions.net/sendTestPush", {
+    const res = await fetch("https://us-central1-eddy-s-hell.cloudfunctions.net/" + name, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
-      body: JSON.stringify({ data: {} }),
+      body: JSON.stringify({ data: data || {} }),
     });
     let json = null;
     try {
@@ -1273,12 +1277,70 @@
       /* non-JSON */
     }
     if (!res.ok || !json || json.error) {
-      const msg = (json && json.error && json.error.message) || "Test push failed (HTTP " + res.status + ")";
+      const msg = (json && json.error && json.error.message) || name + " failed (HTTP " + res.status + ")";
       const err = new Error(msg);
-      err.code = (json && json.error && json.error.status) || "test-push-failed";
+      err.code = (json && json.error && json.error.status) || "callable-failed";
       throw err;
     }
-    return json.result || json.data || { sent: 0, failed: 0, subscriptions: 0 };
+    return json.result !== undefined ? json.result : json.data;
+  }
+
+  /**
+   * Admin-only (beta): custom push. target "self" = own beta devices only (test);
+   * "all" = every enabled beta device incl. sender.
+   * @returns {Promise<{sent:number, failed:number, recipients:number}>}
+   */
+  async function sendBroadcastPush({ title, body, target, url } = {}) {
+    const r = await callCallable("sendBroadcastPush", {
+      title: String(title || "").trim(),
+      body: String(body || "").trim(),
+      target: target === "self" ? "self" : "all",
+      url: url || undefined,
+    });
+    return r || { sent: 0, failed: 0, recipients: 0 };
+  }
+
+  /**
+   * Count enabled beta push subscriptions (all members + own) for the composer.
+   * @returns {Promise<{all:number, self:number}>}
+   */
+  async function countBetaPushDevices() {
+    if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection || !firestoreQuery || !firestoreWhere) {
+      return { all: 0, self: 0 };
+    }
+    const snap = await firestoreGetDocs(
+      firestoreQuery(
+        firestoreCollection(fbDb, "pushSubscriptions"),
+        firestoreWhere("host", "==", "eddy-s-hell-beta.web.app")
+      )
+    );
+    const uid = currentUser && currentUser.uid;
+    const me = normalizeEmail(currentUser && currentUser.email);
+    let all = 0;
+    let self = 0;
+    snap.forEach((d) => {
+      const sub = d.data() || {};
+      if (sub.enabled === false || !sub.endpoint) return;
+      all++;
+      if ((uid && sub.uid === uid) || (me && normalizeEmail(sub.email) === me)) self++;
+    });
+    return { all, self };
+  }
+
+  /** Admin: newest broadcasts (default 5). */
+  async function loadRecentBroadcasts(limitCount) {
+    if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection || !firestoreQuery) return [];
+    const n = Math.min(Math.max(Number(limitCount) || 5, 1), 20);
+    const snap = await firestoreGetDocs(
+      firestoreQuery(
+        firestoreCollection(fbDb, "broadcasts"),
+        firestoreOrderBy("sentAt", "desc"),
+        firestoreLimit(n)
+      )
+    );
+    const rows = [];
+    snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+    return rows;
   }
 
   /** Disable Web Push for this device. */
@@ -2396,6 +2458,9 @@
     disableCheckinPush,
     getCheckinPushStatus,
     sendTestPush,
+    sendBroadcastPush,
+    countBetaPushDevices,
+    loadRecentBroadcasts,
     loadVapidPublicKey,
     PUSH_PREF_KEY,
     isFirestoreReady: () => firestoreReady,

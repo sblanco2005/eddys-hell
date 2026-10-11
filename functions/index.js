@@ -263,3 +263,169 @@ exports.sendTestPush = onCall(
     return out;
   }
 );
+
+// ——— Admin broadcast (beta) ———
+
+/** Same auth pattern as sendTestPush: request.auth, else verify Bearer ID token. */
+async function resolveCallableAuth(request) {
+  let auth = request.auth;
+  if (!auth || !auth.uid) {
+    const hdr = String((request.rawRequest && request.rawRequest.headers && request.rawRequest.headers.authorization) || "");
+    const m = hdr.match(/^Bearer\s+(.+)$/i);
+    if (m) {
+      try {
+        const token = await getAuth().verifyIdToken(m[1]);
+        auth = { uid: token.uid, token };
+      } catch (err) {
+        logger.warn("bearer verify failed", { message: err && err.message });
+      }
+    }
+  }
+  if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "Sign in first.");
+  const email = String((auth.token && auth.token.email) || "").toLowerCase();
+  if (!email || !ADMIN_EMAILS.has(email) || (auth.token && auth.token.email_verified === false)) {
+    throw new HttpsError("permission-denied", "Admins only.");
+  }
+  return { uid: auth.uid, email, token: auth.token || {} };
+}
+
+const BROADCAST_MIN_INTERVAL_MS = 30 * 1000;
+const BROADCAST_SELF_MIN_INTERVAL_MS = 5 * 1000;
+const BETA_ORIGIN = "https://eddy-s-hell-beta.web.app";
+
+function safeBroadcastUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return CLICK_URL;
+  try {
+    const u = new URL(s, BETA_ORIGIN);
+    // Only allow links back into the beta app (no open redirects from a push).
+    if (u.origin !== BETA_ORIGIN) return CLICK_URL;
+    return u.href;
+  } catch (_) {
+    return CLICK_URL;
+  }
+}
+
+exports.sendBroadcastPush = onCall(
+  {
+    region: "us-central1",
+    secrets: [VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT],
+    memory: "256MiB",
+    maxInstances: 1,
+  },
+  async (request) => {
+    const caller = await resolveCallableAuth(request);
+    const data = request.data || {};
+    const title = String(data.title || "").trim();
+    const body = String(data.body || "").trim();
+    // target: "self" = only caller's own beta devices (test); "all" = every beta device incl. caller.
+    const target = data.target === "self" ? "self" : "all";
+    const url = safeBroadcastUrl(data.url);
+    if (title.length < 1 || title.length > 60) {
+      throw new HttpsError("invalid-argument", "Title must be 1–60 characters.");
+    }
+    if (body.length < 1 || body.length > 200) {
+      throw new HttpsError("invalid-argument", "Message must be 1–200 characters.");
+    }
+
+    const pub = (VAPID_PUBLIC.value() || "").trim();
+    const priv = (VAPID_PRIVATE.value() || "").trim();
+    const subject = (VAPID_SUBJECT.value() || "").trim() || "mailto:sblanco2005@gmail.com";
+    if (!pub || !priv) throw new HttpsError("failed-precondition", "Push keys not configured.");
+    webpush.setVapidDetails(subject, pub, priv);
+
+    const db = getFirestore();
+    // Rate limit + reservation in one transaction so double-taps can't both send.
+    // Self tests use their own (5s) lock so they never block a real broadcast.
+    const lockRef = db.collection("broadcastMeta").doc(target === "self" ? "lockSelf" : "lock");
+    const minGap = target === "self" ? BROADCAST_SELF_MIN_INTERVAL_MS : BROADCAST_MIN_INTERVAL_MS;
+    const now = Date.now();
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(lockRef);
+      const last = snap.exists ? Number(snap.get("lastAtMs") || 0) : 0;
+      if (now - last < minGap) {
+        const wait = Math.ceil((minGap - (now - last)) / 1000);
+        throw new HttpsError("resource-exhausted", `Slow down — try again in ${wait}s.`);
+      }
+      tx.set(lockRef, { lastAtMs: now, lastBy: caller.email }, { merge: true });
+    });
+
+    const subsSnap = await db.collection("pushSubscriptions").where("host", "==", "eddy-s-hell-beta.web.app").get();
+    const payload = JSON.stringify({
+      title,
+      body,
+      tag: `broadcast-${now}`,
+      url,
+    });
+    const jobs = [];
+    for (const doc of subsSnap.docs) {
+      const sub = doc.data() || {};
+      if (sub.enabled === false) continue;
+      if (!PUSH_HOSTS.has(String(sub.host || ""))) continue;
+      const isSelf = sub.uid === caller.uid || String(sub.email || "").toLowerCase() === caller.email;
+      if (target === "self" && !isSelf) continue;
+      if (!sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) continue;
+      jobs.push(
+        webpush
+          .sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
+            payload,
+            { TTL: TTL_SECONDS, urgency: "high" }
+          )
+          .then(() => true)
+          .catch(async (err) => {
+            const status = err && (err.statusCode || err.status);
+            logger.warn("broadcast push fail", { id: doc.id, status, message: err && err.message });
+            if (status === 404 || status === 410) {
+              try {
+                await doc.ref.set(
+                  { enabled: false, disabledAt: new Date().toISOString(), disableReason: String(status) },
+                  { merge: true }
+                );
+              } catch (_) {
+                /* ok */
+              }
+            }
+            return false;
+          })
+      );
+    }
+    const results = await Promise.all(jobs);
+    const sent = results.filter(Boolean).length;
+    const out = { sent, failed: results.length - sent, recipients: results.length };
+    const sentAt = new Date().toISOString();
+    logger.info("broadcast", { by: caller.email, target, ...out });
+    if (target === "all") {
+      try {
+        await db.collection("broadcasts").add({
+          title,
+          body,
+          url,
+          target,
+          sentBy: caller.email,
+          sentAt,
+          ...out,
+        });
+      } catch (err) {
+        logger.warn("broadcasts write failed", { message: err && err.message });
+      }
+    }
+    try {
+      await db.collection("activityLog").add({
+        at: sentAt,
+        action: target === "self" ? "broadcast-test" : "broadcast",
+        source: "cloud-function",
+        actor: caller.email,
+        title,
+        detail:
+          target === "self"
+            ? `Test broadcast “${title}” → ${sent}/${results.length} of own devices`
+            : `Broadcast “${title}” → ${sent}/${results.length} devices`,
+        ...out,
+      });
+    } catch (_) {
+      /* best-effort */
+    }
+    return out;
+  }
+);
