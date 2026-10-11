@@ -902,7 +902,7 @@
         const id = checkinFeedDocId(pickId, row.email);
         await firestoreSetDoc(
           firestoreDoc(fbDb, "checkinFeed", id),
-          // host: source site; Cloud Function only pushes for eddy-s-hell-beta.web.app.
+          // host: source site; Cloud Function notifies subscribers on the same host only.
           scrubUndefined({ ...row, host: (typeof location !== "undefined" && location.hostname) || "" }),
           { merge: true }
         );
@@ -1248,7 +1248,7 @@
    * @returns {Promise<{sent:number, failed:number, subscriptions:number}>}
    */
   async function sendTestPush() {
-    const r = await callCallable("sendTestPush", {});
+    const r = await callCallable("sendTestPush", { host: location.hostname });
     return r || { sent: 0, failed: 0, subscriptions: 0 };
   }
 
@@ -1295,6 +1295,7 @@
       title: String(title || "").trim(),
       body: String(body || "").trim(),
       target: target === "self" ? "self" : "all",
+      host: location.hostname,
       url: url || undefined,
     });
     return r || { sent: 0, failed: 0, recipients: 0 };
@@ -1313,7 +1314,7 @@
     const snap = await firestoreGetDocs(
       firestoreQuery(
         firestoreCollection(fbDb, "pushSubscriptions"),
-        firestoreWhere("host", "==", "eddy-s-hell-beta.web.app")
+        firestoreWhere("host", "==", (typeof location !== "undefined" && location.hostname) || "")
       )
     );
     const uid = currentUser && currentUser.uid;

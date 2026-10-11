@@ -1,15 +1,13 @@
 /**
- * Eddy's Hell — Cloud Functions (2nd gen).
+ * Eddy's Hell — Cloud Functions (2nd gen, Node 22, us-central1). Requires Blaze.
  *
- * onCheckinFeedCreate: when a member's checkinFeed/{pickId__email} doc is
- * created (first check-in of the week), send Web Push to every OTHER member's
- * BETA subscription (host == eddy-s-hell-beta.web.app). Prod subscriptions are
- * ignored until we deliberately widen BETA_HOSTS.
+ * onCheckinFeedCreate: first check-in of the week (checkinFeed/{pickId__email})
+ *   → Web Push to every OTHER member's subscription saved from the SAME host
+ *   (prod eddy-s-hell.web.app / beta eddy-s-hell-beta.web.app stay separate).
+ * sendTestPush / sendBroadcastPush: admin callables, scoped to the caller's host.
  *
- * Requires Blaze. Secrets (set once):
- *   firebase functions:secrets:set VAPID_PUBLIC  --project eddy-s-hell
- *   firebase functions:secrets:set VAPID_PRIVATE --project eddy-s-hell
- *   firebase functions:secrets:set VAPID_SUBJECT --project eddy-s-hell
+ * Secrets (set once; scripts/deploy-functions-beta-push.sh pipes them in):
+ *   VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT
  */
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
@@ -27,8 +25,19 @@ const VAPID_PRIVATE = defineSecret("VAPID_PRIVATE");
 const VAPID_SUBJECT = defineSecret("VAPID_SUBJECT");
 
 /** Only these site hosts receive check-in pushes (beta-only for now). */
-const PUSH_HOSTS = new Set(["eddy-s-hell-beta.web.app"]);
-const CLICK_URL = "https://eddy-s-hell-beta.web.app/";
+/**
+ * Hosts allowed to send/receive pushes. Each crew stays on its own host: a
+ * check-in on host H only notifies subscriptions saved from host H (no double pings).
+ */
+const PUSH_HOSTS = new Set([
+  "eddy-s-hell.web.app",
+  "eddy-s-hell.firebaseapp.com",
+  "eddy-s-hell-beta.web.app",
+]);
+const DEFAULT_HOST = "eddy-s-hell.web.app";
+function clickUrlFor(host) {
+  return `https://${PUSH_HOSTS.has(host) ? host : DEFAULT_HOST}/`;
+}
 const TTL_SECONDS = 60 * 60 * 12;
 
 function shortName(displayName, email) {
@@ -51,9 +60,10 @@ exports.onCheckinFeedCreate = onDocumentCreated(
     const snap = event.data;
     if (!snap) return;
     const row = snap.data() || {};
-    // Beta-only: prod check-ins carry no host field (or a non-beta host) → skip.
-    if (!PUSH_HOSTS.has(String(row.host || ""))) {
-      logger.info("skip non-beta check-in", { docId: event.params && event.params.docId, host: row.host || null });
+    // Untagged (old clients) or unknown hosts → skip.
+    const checkinHost = String(row.host || "");
+    if (!PUSH_HOSTS.has(checkinHost)) {
+      logger.info("skip untagged/unknown-host check-in", { docId: event.params && event.params.docId, host: row.host || null });
       return;
     }
     const db = getFirestore();
@@ -65,7 +75,7 @@ exports.onCheckinFeedCreate = onDocumentCreated(
       title: `🔥 ${who} just did Eddy’s Hell`,
       body: "Your turn — this week’s workout is waiting.",
       tag: `checkin-${row.pickId || ""}-${checkerEmail}`,
-      url: CLICK_URL,
+      url: clickUrlFor(checkinHost),
       pickId: row.pickId || null,
     });
 
@@ -85,7 +95,7 @@ exports.onCheckinFeedCreate = onDocumentCreated(
     for (const doc of subsSnap.docs) {
       const sub = doc.data() || {};
       if (sub.enabled === false) continue;
-      if (!PUSH_HOSTS.has(String(sub.host || ""))) {
+      if (String(sub.host || "") !== checkinHost) {
         skippedHost++;
         continue;
       }
@@ -143,7 +153,7 @@ exports.onCheckinFeedCreate = onDocumentCreated(
         source: "cloud-function",
         pickId: row.pickId || null,
         actor: checkerEmail || null,
-        detail: `${who} checked in → push ${ok}/${results.length} delivered (skipped self ${skippedSelf}, non-beta ${skippedHost})`,
+        detail: `${who} checked in → push ${ok}/${results.length} delivered on ${checkinHost} (skipped self ${skippedSelf}, other-host ${skippedHost})`,
         targets: results.length,
         ok,
         failed: results.length - ok,
@@ -153,6 +163,20 @@ exports.onCheckinFeedCreate = onDocumentCreated(
     }
   }
 );
+
+/** Caller's site host: validated `host` param, else the request Origin header. */
+function callerHost(request) {
+  const fromParam = String((request.data && request.data.host) || "").trim().toLowerCase();
+  if (PUSH_HOSTS.has(fromParam)) return fromParam;
+  const origin = String((request.rawRequest && request.rawRequest.headers && request.rawRequest.headers.origin) || "");
+  try {
+    const h = new URL(origin).hostname.toLowerCase();
+    if (PUSH_HOSTS.has(h)) return h;
+  } catch (_) {
+    /* no/invalid origin */
+  }
+  return null;
+}
 
 /** Mirrors firestore.rules isAdmin() / data/admins.json. */
 const ADMIN_EMAILS = new Set(["sblanco2005@gmail.com"]);
@@ -203,19 +227,21 @@ exports.sendTestPush = onCall(
     const docs = new Map();
     for (const d of [...byUid.docs, ...byEmail.docs]) docs.set(d.id, d);
 
+    const host = callerHost(request);
+    if (!host) throw new HttpsError("invalid-argument", "Unknown site host.");
     const name = shortName(auth.token && auth.token.name, email);
     const payload = JSON.stringify({
       title: `🔥 Test — ${name} just did Eddy’s Hell`,
       body: "Your turn — this week’s workout is waiting.",
       tag: `test-push-${Date.now()}`,
-      url: CLICK_URL,
+      url: clickUrlFor(host),
     });
 
     const jobs = [];
     for (const doc of docs.values()) {
       const sub = doc.data() || {};
       if (sub.enabled === false) continue;
-      if (!PUSH_HOSTS.has(String(sub.host || ""))) continue;
+      if (String(sub.host || "") !== host) continue;
       // Belt and braces: only the caller's own subscriptions.
       if (sub.uid !== auth.uid && String(sub.email || "").toLowerCase() !== email) continue;
       if (!sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) continue;
@@ -254,7 +280,7 @@ exports.sendTestPush = onCall(
         action: "test-push",
         source: "cloud-function",
         actor: email,
-        detail: `Test push → ${sent}/${results.length} of own beta devices`,
+        detail: `Test push → ${sent}/${results.length} of own devices on ${host}`,
         ...out,
       });
     } catch (_) {
@@ -291,18 +317,18 @@ async function resolveCallableAuth(request) {
 
 const BROADCAST_MIN_INTERVAL_MS = 30 * 1000;
 const BROADCAST_SELF_MIN_INTERVAL_MS = 5 * 1000;
-const BETA_ORIGIN = "https://eddy-s-hell-beta.web.app";
-
-function safeBroadcastUrl(raw) {
+function safeBroadcastUrl(raw, host) {
+  const root = clickUrlFor(host);
   const s = String(raw || "").trim();
-  if (!s) return CLICK_URL;
+  if (!s) return root;
   try {
-    const u = new URL(s, BETA_ORIGIN);
-    // Only allow links back into the beta app (no open redirects from a push).
-    if (u.origin !== BETA_ORIGIN) return CLICK_URL;
+    const origin = new URL(root).origin;
+    const u = new URL(s, origin);
+    // Only allow links back into the same app (no open redirects from a push).
+    if (u.origin !== origin) return root;
     return u.href;
   } catch (_) {
-    return CLICK_URL;
+    return root;
   }
 }
 
@@ -320,7 +346,9 @@ exports.sendBroadcastPush = onCall(
     const body = String(data.body || "").trim();
     // target: "self" = only caller's own beta devices (test); "all" = every beta device incl. caller.
     const target = data.target === "self" ? "self" : "all";
-    const url = safeBroadcastUrl(data.url);
+    const host = callerHost(request);
+    if (!host) throw new HttpsError("invalid-argument", "Unknown site host.");
+    const url = safeBroadcastUrl(data.url, host);
     if (title.length < 1 || title.length > 60) {
       throw new HttpsError("invalid-argument", "Title must be 1–60 characters.");
     }
@@ -337,7 +365,7 @@ exports.sendBroadcastPush = onCall(
     const db = getFirestore();
     // Rate limit + reservation in one transaction so double-taps can't both send.
     // Self tests use their own (5s) lock so they never block a real broadcast.
-    const lockRef = db.collection("broadcastMeta").doc(target === "self" ? "lockSelf" : "lock");
+    const lockRef = db.collection("broadcastMeta").doc((target === "self" ? "lockSelf__" : "lock__") + host);
     const minGap = target === "self" ? BROADCAST_SELF_MIN_INTERVAL_MS : BROADCAST_MIN_INTERVAL_MS;
     const now = Date.now();
     await db.runTransaction(async (tx) => {
@@ -350,7 +378,7 @@ exports.sendBroadcastPush = onCall(
       tx.set(lockRef, { lastAtMs: now, lastBy: caller.email }, { merge: true });
     });
 
-    const subsSnap = await db.collection("pushSubscriptions").where("host", "==", "eddy-s-hell-beta.web.app").get();
+    const subsSnap = await db.collection("pushSubscriptions").where("host", "==", host).get();
     const payload = JSON.stringify({
       title,
       body,
@@ -361,7 +389,7 @@ exports.sendBroadcastPush = onCall(
     for (const doc of subsSnap.docs) {
       const sub = doc.data() || {};
       if (sub.enabled === false) continue;
-      if (!PUSH_HOSTS.has(String(sub.host || ""))) continue;
+      if (String(sub.host || "") !== host) continue;
       const isSelf = sub.uid === caller.uid || String(sub.email || "").toLowerCase() === caller.email;
       if (target === "self" && !isSelf) continue;
       if (!sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) continue;
@@ -394,7 +422,7 @@ exports.sendBroadcastPush = onCall(
     const sent = results.filter(Boolean).length;
     const out = { sent, failed: results.length - sent, recipients: results.length };
     const sentAt = new Date().toISOString();
-    logger.info("broadcast", { by: caller.email, target, ...out });
+    logger.info("broadcast", { by: caller.email, target, host, ...out });
     if (target === "all") {
       try {
         await db.collection("broadcasts").add({
@@ -402,6 +430,7 @@ exports.sendBroadcastPush = onCall(
           body,
           url,
           target,
+          host,
           sentBy: caller.email,
           sentAt,
           ...out,
@@ -419,8 +448,8 @@ exports.sendBroadcastPush = onCall(
         title,
         detail:
           target === "self"
-            ? `Test broadcast “${title}” → ${sent}/${results.length} of own devices`
-            : `Broadcast “${title}” → ${sent}/${results.length} devices`,
+            ? `Test broadcast “${title}” → ${sent}/${results.length} of own devices on ${host}`
+            : `Broadcast “${title}” → ${sent}/${results.length} devices on ${host}`,
         ...out,
       });
     } catch (_) {

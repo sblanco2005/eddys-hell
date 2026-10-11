@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-broadcast2-20261011" />
+  <meta name="eddys-hell-build" content="push-prod-20261011" />
   <title>Eddy's Hell · Thursday</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=20261011-broadcast2" />
+  <link rel="stylesheet" href="styles.css?v=20261011-push-prod" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -126,7 +126,7 @@
             </button>
           </header>
 
-          <!-- Beta-only push nudges (painted by app.js paintPushNudge; gated to isBetaHost) -->
+          <!-- Push nudges (painted by app.js paintPushNudge; beta + stable Hosting) -->
           <div class="push-nudge" id="push-nudge-a2hs" hidden role="note" aria-labelledby="push-nudge-a2hs-title">
             <button type="button" class="push-nudge-close" id="push-nudge-a2hs-close" aria-label="Dismiss">×</button>
             <p class="push-nudge-title" id="push-nudge-a2hs-title">📲 Add Eddy’s Hell to your Home Screen to get pinged when friends check in</p>
@@ -449,9 +449,9 @@
         <article class="card members-card" id="test-push-card" hidden>
           <header class="card-head">
             <h2>Push notifications</h2>
-            <span class="badge">Beta</span>
+            <span class="badge">Admin</span>
           </header>
-          <p class="hint">Sends a test check-in notification to <strong>your own</strong> notification-enabled beta devices only. No check-in is recorded and nobody else is notified.</p>
+          <p class="hint">Sends a test check-in notification to <strong>your own</strong> notification-enabled devices on this site only. No check-in is recorded and nobody else is notified.</p>
           <div class="actions">
             <button type="button" class="btn secondary" id="btn-test-push">Send test notification</button>
           </div>
@@ -560,7 +560,7 @@
       </div>
     </div>
   </div>
-  <script src="auth.js?v=20261011-broadcast2"></script>
-  <script src="app.js?v=20261011-broadcast2"></script>
+  <script src="auth.js?v=20261011-push-prod"></script>
+  <script src="app.js?v=20261011-push-prod"></script>
 </body>
 </html>

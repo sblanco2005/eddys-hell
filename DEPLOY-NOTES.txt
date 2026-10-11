@@ -288,3 +288,14 @@ Slack admin self-DM unchanged.
 - Functions deploy needs Blaze:
   firebase functions:secrets:set VAPID_PUBLIC|VAPID_PRIVATE|VAPID_SUBJECT --project eddy-s-hell (values piped from secrets/vapid.json)
   firebase deploy --only functions --project eddy-s-hell
+
+## 2026-10-11 ~11:40 AM ET — PROMOTE to prod: instant push + broadcast + bell removal
+- Functions (Node 22, us-central1, Blaze): onCheckinFeedCreate / sendTestPush / sendBroadcastPush
+  now serve prod + beta. Same-host routing: a check-in/broadcast on host H only reaches
+  subscriptions saved from host H (eddy-s-hell.web.app, eddy-s-hell.firebaseapp.com,
+  eddy-s-hell-beta.web.app). Click URL = that host's root. Untagged check-ins skipped.
+- Client: host tag on check-ins everywhere; composer + test button + A2HS banner + Enable card
+  on beta + stable; 🔔 bell retired everywhere. BETA badge stays beta-only.
+- Cache-bust ?v=20261011-push-prod, build push-prod-20261011. Hosting: stable + beta (REST).
+- Members must Add to Home Screen from eddy-s-hell.web.app and Enable again (subscriptions
+  are per-site; beta subs don't carry over).

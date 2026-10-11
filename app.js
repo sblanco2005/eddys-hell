@@ -365,8 +365,8 @@
   }
 
   function isPushNudgeEnabled() {
-    const Auth = window.EddysHellAuth;
-    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost());
+    // Beta + stable Firebase Hosting (same gate as feed/push UI).
+    return isCheckinFeedEnabled();
   }
 
   function paintPushNudge(st) {
@@ -495,12 +495,12 @@
   }
 
   /**
-   * Beta: the 🔔 Check-ins bell (+ unread badge + feed panel) is retired now that
-   * Web Push works. Stable keeps it until a deliberate prod promote.
+   * The 🔔 Check-ins bell (+ unread badge + feed panel) is retired now that
+   * Web Push works (beta + stable).
    */
   function isCheckinBellRetired() {
-    const Auth = window.EddysHellAuth;
-    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost());
+    // Retired everywhere (beta + stable) — Web Push replaces it.
+    return true;
   }
 
   function hideCheckinBell() {
@@ -2539,7 +2539,7 @@
     if (!card) return;
     const Auth = window.EddysHellAuth;
     const show = !!(
-      Auth && Auth.isBetaHost && Auth.isBetaHost() && Auth.sendTestPush &&
+      isCheckinFeedEnabled() && Auth && Auth.sendTestPush &&
       authUser && authUser.role === "admin"
     );
     card.hidden = !show;
@@ -2709,7 +2709,8 @@
         t.textContent = r.title || "(no title)";
         const meta = document.createElement("span");
         meta.className = "hint";
-        meta.textContent = " · " + fmtBroadcastWhen(r.sentAt) + " · sent " + (r.sent || 0) + "/" + (r.recipients || 0);
+        meta.textContent = " · " + fmtBroadcastWhen(r.sentAt) + " · sent " + (r.sent || 0) + "/" + (r.recipients || 0) +
+          (r.host && /beta/.test(r.host) ? " · beta" : r.host ? " · prod" : "");
         li.appendChild(t);
         li.appendChild(meta);
         ul.appendChild(li);
