@@ -494,7 +494,36 @@
     return String(row.pickId || "") + "__" + String(row.email || "").toLowerCase() + "__" + String(row.at || "");
   }
 
+  /**
+   * Beta: the 🔔 Check-ins bell (+ unread badge + feed panel) is retired now that
+   * Web Push works. Stable keeps it until a deliberate prod promote.
+   */
+  function isCheckinBellRetired() {
+    const Auth = window.EddysHellAuth;
+    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost());
+  }
+
+  function hideCheckinBell() {
+    const btn = $("btn-checkin-feed");
+    if (btn) {
+      btn.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    }
+    const badge = $("checkin-feed-badge");
+    if (badge) badge.hidden = true;
+    const panel = $("checkin-feed-panel");
+    if (panel) {
+      panel.hidden = true;
+      panel.classList.remove("is-open");
+    }
+    checkinFeedOpen = false;
+  }
+
   function updateCheckinFeedBadge(tw) {
+    if (isCheckinBellRetired()) {
+      hideCheckinBell();
+      return;
+    }
     const btn = $("btn-checkin-feed");
     const badge = $("checkin-feed-badge");
     if (!btn || !badge) return;
@@ -569,6 +598,10 @@
   }
 
   function setCheckinFeedOpen(open) {
+    if (open && isCheckinBellRetired()) {
+      hideCheckinBell();
+      return;
+    }
     if (open && !isCheckinFeedEnabled()) open = false;
     checkinFeedOpen = !!open;
     const panel = $("checkin-feed-panel");
@@ -691,6 +724,10 @@
 
   function setupCheckinFeedForWeek(tw) {
     bindCheckinFeedControls();
+    if (isCheckinBellRetired()) {
+      // Keep feed data + live toast; only the bell/badge/panel UI is gone on beta.
+      hideCheckinBell();
+    }
     if (!isCheckinFeedEnabled() || !tw || !authUser) {
       const btn = $("btn-checkin-feed");
       if (btn) {
