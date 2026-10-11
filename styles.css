@@ -1548,3 +1548,40 @@ input:focus {
     grid-column: 1 / -1;
   }
 }
+
+/* ——— Beta: Admin Face ID lock ——— */
+.admin-lock-card { text-align: center; max-width: 440px; margin: 24px auto; padding: 28px 22px; }
+.admin-lock-icon { font-size: 44px; line-height: 1; margin-bottom: 10px; }
+.admin-lock-card h2 { margin: 0 0 8px; }
+.admin-lock-actions { justify-content: center; margin: 18px 0 10px; }
+.admin-lock-actions .btn { min-width: 220px; min-height: 48px; font-size: 1.02rem; }
+.admin-lock-fallback { font-size: 0.85rem; }
+.faceid-list .members-item { gap: 10px; }
+
+/* ——— Beta: check-in history ——— */
+.history-filter-row { margin: 4px 0 10px; }
+.history-filter-row select {
+  width: 100%; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--bg-chip); color: var(--text); border: 1px solid var(--border); font: inherit;
+}
+.history-totals { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.history-total {
+  font-size: 0.8rem; padding: 4px 9px; border-radius: 999px;
+  background: var(--bg-chip); border: 1px solid var(--border); color: var(--text-dim);
+}
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.history-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm); background: var(--bg-elev); border: 1px solid var(--border);
+}
+.history-main { min-width: 0; flex: 1; }
+.history-name { display: block; color: var(--text); font-weight: 600; overflow-wrap: anywhere; text-decoration: none; }
+a.history-name { color: var(--text); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.history-meta { margin: 2px 0 0; font-size: 0.8rem; }
+.diff-chip {
+  flex: none; font-size: 0.78rem; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+  background: var(--bg-chip); color: var(--text-dim); border: 1px solid var(--border);
+}
+.diff-chip.diff-easy, .history-total.diff-easy { color: var(--ok); border-color: rgba(61, 214, 140, 0.4); background: var(--ok-soft); }
+.diff-chip.diff-okay, .history-total.diff-okay { color: var(--warn); border-color: rgba(245, 185, 66, 0.4); background: rgba(245, 185, 66, 0.12); }
+.diff-chip.diff-hard, .history-total.diff-hard { color: var(--accent); border-color: var(--accent-glow); background: var(--accent-soft); }

@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-manual-pick-20261011" />
+  <meta name="eddys-hell-build" content="beta-faceid-history-20261011" />
   <title>Eddy's Hell · Thursday</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=20261011-manual-pick" />
+  <link rel="stylesheet" href="styles.css?v=20261011-faceid-history" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -221,6 +221,30 @@
           <ul class="checkins-list" id="checkins-list">
             <li class="hint">Nobody has checked in yet — tap Check in after the workout.</li>
           </ul>
+        </article>
+
+        <article class="card history-card" id="my-history-card" hidden>
+          <header class="card-head">
+            <h2>My history</h2>
+            <span class="badge" id="my-history-count">0</span>
+          </header>
+          <div class="history-totals" id="my-history-totals"></div>
+          <ul class="history-list" id="my-history-list"><li class="hint">Loading…</li></ul>
+        </article>
+      </section>
+
+      <!-- ADMIN LOCK (beta: Face ID step-up) -->
+      <section id="view-admin-lock" class="view" aria-label="Unlock Admin" hidden>
+        <article class="card admin-lock-card">
+          <div class="admin-lock-icon" aria-hidden="true">🔒</div>
+          <h2 id="admin-lock-title">Unlock Admin with Face ID</h2>
+          <p class="hint" id="admin-lock-hint">Admin tools need a quick Face ID check on this device. It stays unlocked for 12 hours.</p>
+          <div class="actions admin-lock-actions">
+            <button type="button" class="btn accent" id="btn-admin-unlock" data-action="admin-unlock" disabled>Preparing Face ID…</button>
+          </div>
+          <p class="hint admin-lock-fallback" id="admin-lock-fallback">If Face ID doesn’t recognize you, your iPhone will offer <strong>Use passcode</strong> — that works too.</p>
+          <p class="toast toast-warn" id="admin-lock-status" hidden></p>
+          <p class="hint"><button type="button" class="btn ghost btn-sm" data-action="admin-lock-week">View this week instead</button></p>
         </article>
       </section>
 
@@ -488,6 +512,32 @@
           </div>
         </article>
 
+        <article class="card members-card" id="faceid-card" hidden>
+          <header class="card-head">
+            <h2>Face ID devices</h2>
+            <span class="badge" id="faceid-unlock-badge">Unlocked</span>
+          </header>
+          <p class="hint">Devices that can unlock Admin with Face ID (or the device passcode). Admin unlock lasts 12 hours per device.</p>
+          <ul class="members-list faceid-list" id="faceid-list"><li class="hint">Loading…</li></ul>
+          <div class="actions">
+            <button type="button" class="btn secondary btn-sm" data-action="faceid-add">Add this device</button>
+            <button type="button" class="btn ghost btn-sm" data-action="faceid-lock">Lock Admin now</button>
+          </div>
+          <p class="toast" id="faceid-toast" hidden></p>
+        </article>
+
+        <article class="card members-card history-card" id="all-history-card" hidden>
+          <header class="card-head">
+            <h2>Everyone’s history</h2>
+            <span class="badge" id="all-history-count">0</span>
+          </header>
+          <div class="history-filter-row">
+            <select id="all-history-member" aria-label="Filter by member"><option value="">All members</option></select>
+          </div>
+          <div class="history-totals" id="all-history-totals"></div>
+          <ul class="history-list" id="all-history-list"><li class="hint">Loading…</li></ul>
+        </article>
+
         <article class="card members-card" id="members-card">
           <header class="card-head">
             <h2>Members</h2>
@@ -578,7 +628,7 @@
       <p class="hint video-picker-foot">Not seeing a new file? The list comes from the last drive scan — ask Grok Bot to <strong>rescan EddysHell</strong> (Mac must be on with the drive mounted).</p>
     </div>
   </div>
-  <script src="auth.js?v=20261011-manual-pick"></script>
-  <script src="app.js?v=20261011-manual-pick"></script>
+  <script src="auth.js?v=20261011-faceid-history"></script>
+  <script src="app.js?v=20261011-faceid-history"></script>
 </body>
 </html>

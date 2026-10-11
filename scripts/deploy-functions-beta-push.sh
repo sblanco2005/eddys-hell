@@ -13,4 +13,13 @@ for pair in VAPID_PUBLIC:publicKey VAPID_PRIVATE:privateKey VAPID_SUBJECT:subjec
     | $FB functions:secrets:set "$name" --project eddy-s-hell --data-file - --non-interactive --force >/dev/null
   echo "secret set: $name"
 done
+# Admin Face ID step-up signing key (HMAC). Generated once into gitignored secrets/, never echoed.
+STEPUP_FILE="${STEPUP_FILE:-$ROOT/secrets/stepup-secret.txt}"
+if [ ! -s "$STEPUP_FILE" ]; then
+  umask 077
+  node -e 'process.stdout.write(require("crypto").randomBytes(48).toString("base64url"))' > "$STEPUP_FILE"
+  echo "generated: $STEPUP_FILE"
+fi
+$FB functions:secrets:set STEPUP_SECRET --project eddy-s-hell --data-file "$STEPUP_FILE" --non-interactive --force >/dev/null
+echo "secret set: STEPUP_SECRET"
 $FB deploy --only functions --project eddy-s-hell --non-interactive --force

@@ -530,7 +530,7 @@
     return row;
   }
 
-  async function upsertCheckin({ email, displayName, pickId, difficulty, notes }) {
+  async function upsertCheckin({ email, displayName, pickId, difficulty, notes, video }) {
     const row = upsertCheckinLocal({ email, displayName, pickId, difficulty, notes });
     notifyCheckins();
 
@@ -543,9 +543,12 @@
           pickId: row.pickId,
           at: row.at,
           notes: row.notes || "",
-          // Source site (beta-only build) — lets backend logic tell beta vs prod check-ins.
+          // Source site — lets backend logic tell beta vs prod check-ins.
           host: (typeof location !== "undefined" && location.hostname) || "",
         };
+        // Permanent history: snapshot of the video this check-in was for.
+        if (currentUser && currentUser.uid) payload.uid = currentUser.uid;
+        Object.assign(payload, historyVideoFields(video));
         if (row.difficulty) payload.difficulty = row.difficulty;
         await firestoreSetDoc(
           firestoreDoc(fbDb, "checkins", id),
@@ -1252,6 +1255,180 @@
     return r || { sent: 0, failed: 0, subscriptions: 0 };
   }
 
+  // ——— Check-in history (checkins/{pickId__email} enriched with the video) ———
+  function historyVideoFields(v) {
+    const out = {};
+    if (!v || typeof v !== "object") return out;
+    if (v.filename) out.videoFilename = String(v.filename);
+    if (v.title) out.videoTitle = String(v.title);
+    if (v.folderType) out.videoType = String(v.folderType);
+    if (v.hr != null && v.hr !== "" && Number.isFinite(Number(v.hr))) out.videoHR = Number(v.hr);
+    if (v.youtubeId) out.youtubeId = String(v.youtubeId);
+    if (v.relPath) out.videoRelPath = String(v.relPath);
+    return out;
+  }
+
+  /**
+   * History rows. scope "me" (default) = own check-ins; "all" = everyone (admins).
+   * @returns {Promise<object[]>} newest first
+   */
+  async function loadCheckinHistory(scope) {
+    if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection || !firestoreQuery) {
+      const err = new Error("Firestore not ready yet");
+      err.code = "firestore-not-ready";
+      throw err;
+    }
+    const col = firestoreCollection(fbDb, "checkins");
+    let q;
+    if (scope === "all") {
+      if (!currentUser || !isAdminEmail(currentUser.email)) throw new Error("Admins only.");
+      q = firestoreQuery(col, firestoreLimit(1000));
+    } else {
+      const me = normalizeEmail(currentUser && currentUser.email);
+      if (!me) throw new Error("Sign in first.");
+      q = firestoreQuery(col, firestoreWhere("email", "==", me), firestoreLimit(500));
+    }
+    const snap = await firestoreGetDocs(q);
+    const rows = [];
+    snap.forEach((d) => rows.push({ id: d.id, ...d.data() }));
+    rows.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+    return rows;
+  }
+
+  // ——— Admin Face ID step-up (beta) ———
+  const STEPUP_KEY = "eddys-hell-admin-stepup-v1";
+  const SWA_SRC = "https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@14.0.0/dist/bundle/index.umd.min.js";
+  const SWA_SRI = "sha384-06g944bCm8L/wG3i0Q8PdB8jccE4GdpHdNCa1tJY8eMqoP3GIHGJdL6B5lD5OMGD";
+  let swaPromise = null;
+
+  function loadSimpleWebAuthn() {
+    if (window.SimpleWebAuthnBrowser) return Promise.resolve(window.SimpleWebAuthnBrowser);
+    if (swaPromise) return swaPromise;
+    swaPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = SWA_SRC;
+      s.integrity = SWA_SRI;
+      s.crossOrigin = "anonymous";
+      s.async = true;
+      s.onload = () =>
+        window.SimpleWebAuthnBrowser ? resolve(window.SimpleWebAuthnBrowser) : reject(new Error("Face ID library failed to load"));
+      s.onerror = () => {
+        swaPromise = null;
+        reject(new Error("Face ID library failed to load — check your connection."));
+      };
+      document.head.appendChild(s);
+    });
+    return swaPromise;
+  }
+
+  /** Step-up is enforced on the beta host for admins only. */
+  function isStepUpRequired() {
+    return !!(isBetaHost() && currentUser && isAdminEmail(currentUser.email));
+  }
+
+  function getStepUp() {
+    try {
+      const j = JSON.parse(localStorage.getItem(STEPUP_KEY) || "null");
+      if (!j || !j.token || !currentUser) return null;
+      if (j.uid !== currentUser.uid || j.host !== location.hostname) return null;
+      if (!(Number(j.expiresAtMs) > Date.now() + 30 * 1000)) return null;
+      return j;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function hasValidStepUp() {
+    return !!getStepUp();
+  }
+
+  function saveStepUp(r) {
+    if (!r || !r.token || !currentUser) return;
+    try {
+      localStorage.setItem(
+        STEPUP_KEY,
+        JSON.stringify({ token: r.token, expiresAtMs: r.expiresAtMs, uid: currentUser.uid, host: location.hostname })
+      );
+    } catch (_) {
+      /* private mode */
+    }
+  }
+
+  function clearStepUp() {
+    try {
+      localStorage.removeItem(STEPUP_KEY);
+    } catch (_) {
+      /* ok */
+    }
+  }
+
+  /** Client-side gate for direct Firestore admin writes on beta. */
+  function requireStepUpClient() {
+    if (isStepUpRequired() && !hasValidStepUp()) {
+      const err = new Error("Unlock Admin with Face ID first.");
+      err.code = "stepup-required";
+      throw err;
+    }
+  }
+
+  function stepUpToken() {
+    const s = getStepUp();
+    return s ? s.token : undefined;
+  }
+
+  /** Prefetch (so the Face ID prompt runs straight from the tap on iOS). */
+  async function passkeyPrepare() {
+    await loadSimpleWebAuthn();
+    const r = await callCallable("passkeyAuthOptions", { host: location.hostname });
+    if (r && r.hasCredentials) return { mode: "unlock", options: r.options, fetchedAt: Date.now() };
+    const reg = await callCallable("passkeyRegisterOptions", { host: location.hostname });
+    return { mode: "setup", options: reg.options, fetchedAt: Date.now() };
+  }
+
+  async function passkeyPrepareAddDevice() {
+    await loadSimpleWebAuthn();
+    const reg = await callCallable("passkeyRegisterOptions", { host: location.hostname, stepUp: stepUpToken() });
+    return { mode: "setup", options: reg.options, fetchedAt: Date.now() };
+  }
+
+  function defaultDeviceLabel() {
+    const ua = navigator.userAgent || "";
+    if (/iPhone/.test(ua)) return "iPhone";
+    if (/iPad/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) return "iPad";
+    if (/Macintosh/.test(ua)) return "Mac";
+    if (/Android/.test(ua)) return "Android";
+    return "This device";
+  }
+
+  /** Run a prepared ceremony (call directly from the tap handler). */
+  async function passkeyRun(prepared, deviceLabel) {
+    const SWA = await loadSimpleWebAuthn();
+    if (!prepared || !prepared.options) throw new Error("Face ID isn’t ready — tap again.");
+    if (prepared.mode === "unlock") {
+      const response = await SWA.startAuthentication({ optionsJSON: prepared.options });
+      const r = await callCallable("passkeyAuthVerify", { host: location.hostname, response });
+      saveStepUp(r);
+      return r;
+    }
+    const response = await SWA.startRegistration({ optionsJSON: prepared.options });
+    const r = await callCallable("passkeyRegisterVerify", {
+      host: location.hostname,
+      response,
+      deviceLabel: deviceLabel || defaultDeviceLabel(),
+    });
+    saveStepUp(r);
+    return r;
+  }
+
+  async function passkeyListDevices() {
+    const r = await callCallable("passkeyList", { host: location.hostname, stepUp: stepUpToken() });
+    return (r && r.devices) || [];
+  }
+
+  async function passkeyDeleteDevice(credId) {
+    return callCallable("passkeyDelete", { host: location.hostname, stepUp: stepUpToken(), credId });
+  }
+
   /** Call a us-central1 callable with the Firebase Auth SDK user's fresh ID token. */
   async function callCallable(name, data) {
     const fbUser = fbAuth && fbAuth.currentUser;
@@ -1296,6 +1473,7 @@
       body: String(body || "").trim(),
       target: target === "self" ? "self" : "all",
       host: location.hostname,
+      stepUp: stepUpToken(),
       url: url || undefined,
     });
     return r || { sent: 0, failed: 0, recipients: 0 };
@@ -1449,6 +1627,7 @@
 
   async function publishThisWeek(payload) {
     requireFirestoreWrite();
+    requireStepUpClient();
     const base = payload && typeof payload === "object" ? payload : {};
     const pickId = base.pickId || base.id;
     if (!pickId) {
@@ -1541,6 +1720,7 @@
    */
   async function stageNextWeek(payload) {
     requireFirestoreWrite();
+    requireStepUpClient();
     const base = payload && typeof payload === "object" ? payload : {};
     const pickId = base.pickId || base.id;
     if (!pickId) {
@@ -1607,6 +1787,7 @@
    * staged nextWeek pick + youtubeId. Never promotes without a video id.
    */
   async function promoteStagedToLive(youtubeId, youtubeUrl) {
+    requireStepUpClient();
     const staged = await loadNextWeekFromCloud();
     const id = youtubeId || (staged && staged.youtubeId) || null;
     if (!id) {
@@ -1707,6 +1888,7 @@
    */
   async function requestCompressUpload(stagedPayload) {
     requireFirestoreWrite();
+    requireStepUpClient();
     const base = stagedPayload && typeof stagedPayload === "object" ? stagedPayload : {};
     const pickId = base.pickId || base.id;
     if (!pickId) {
@@ -1897,6 +2079,7 @@
 
   async function publishRule(rule) {
     requireFirestoreWrite();
+    requireStepUpClient();
     const base = rule && typeof rule === "object" ? rule : {};
     const docPayload = scrubUndefined({
       folderTypes: Array.isArray(base.folderTypes) ? base.folderTypes : [],
@@ -2465,6 +2648,17 @@
     disableCheckinPush,
     getCheckinPushStatus,
     sendTestPush,
+    loadCheckinHistory,
+    isStepUpRequired,
+    hasValidStepUp,
+    getStepUp,
+    clearStepUp,
+    passkeyPrepare,
+    passkeyPrepareAddDevice,
+    passkeyRun,
+    passkeyListDevices,
+    passkeyDeleteDevice,
+    browserSupportsPasskeys: () => !!(window.PublicKeyCredential && navigator.credentials),
     sendBroadcastPush,
     countBetaPushDevices,
     loadRecentBroadcasts,

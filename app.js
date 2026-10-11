@@ -2381,7 +2381,7 @@
   }
 
   function hideAllViews() {
-    for (const id of ["view-landing", "view-member", "view-rule", "view-pick"]) {
+    for (const id of ["view-landing", "view-member", "view-rule", "view-pick", "view-admin-lock"]) {
       const el = $(id);
       if (!el) continue;
       el.classList.remove("active");
@@ -2390,6 +2390,10 @@
   }
 
   function showView(name) {
+    if (name === "rule" && isAdminLocked()) {
+      showAdminLock();
+      return;
+    }
     hideAllViews();
     const map = {
       landing: "view-landing",
@@ -3042,9 +3046,418 @@
     refreshRecentBroadcasts(0);
   }
 
+  // ——— Beta: Admin Face ID lock (passkey step-up) ———
+  let lockPrepared = null;
+  let lockPreparing = false;
+  let addDevicePrepared = null;
+  const PREPARED_MAX_AGE_MS = 4.5 * 60 * 1000;
+
+  function isAdminLocked() {
+    const Auth = window.EddysHellAuth;
+    return !!(
+      Auth && Auth.isStepUpRequired && Auth.isStepUpRequired() &&
+      authUser && authUser.role === "admin" &&
+      !Auth.hasValidStepUp()
+    );
+  }
+
+  function setLockStatus(msg, warn) {
+    const el = $("admin-lock-status");
+    if (!el) return;
+    if (!msg) {
+      el.hidden = true;
+      return;
+    }
+    el.textContent = msg;
+    el.classList.toggle("toast-warn", warn !== false);
+    el.hidden = false;
+  }
+
+  function showAdminLock() {
+    hideAllViews();
+    const el = $("view-admin-lock");
+    if (!el) return;
+    el.hidden = false;
+    el.classList.add("active");
+    for (const tab of document.querySelectorAll(".tab")) {
+      const on = tab.dataset.view === "rule";
+      tab.classList.toggle("active", on);
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+    }
+    if (!lockPrepared || Date.now() - lockPrepared.fetchedAt > PREPARED_MAX_AGE_MS) prepareAdminLock();
+  }
+
+  async function prepareAdminLock() {
+    const Auth = window.EddysHellAuth;
+    const btn = $("btn-admin-unlock");
+    if (!btn || !Auth || lockPreparing) return;
+    if (Auth.browserSupportsPasskeys && !Auth.browserSupportsPasskeys()) {
+      btn.disabled = true;
+      btn.textContent = "Face ID not supported here";
+      setLockStatus("This browser can’t use Face ID / passkeys. Open the app in Safari on your iPhone.");
+      return;
+    }
+    lockPreparing = true;
+    btn.disabled = true;
+    btn.textContent = "Preparing Face ID…";
+    try {
+      lockPrepared = await Auth.passkeyPrepare();
+      const setup = lockPrepared.mode === "setup";
+      $("admin-lock-title").textContent = setup ? "Set up Face ID for Admin" : "Unlock Admin with Face ID";
+      $("admin-lock-hint").textContent = setup
+        ? "One-time setup on this device: your iPhone saves a passkey for Eddy’s Hell Admin. After that, Face ID unlocks Admin for 12 hours."
+        : "Admin tools need a quick Face ID check on this device. It stays unlocked for 12 hours.";
+      btn.textContent = setup ? "Set up Face ID" : "Unlock with Face ID";
+      btn.disabled = false;
+    } catch (err) {
+      lockPrepared = null;
+      btn.textContent = "Try again";
+      btn.disabled = false;
+      setLockStatus("Couldn’t prepare Face ID: " + ((err && err.message) || String(err)));
+    } finally {
+      lockPreparing = false;
+    }
+  }
+
+  async function runAdminUnlock() {
+    const Auth = window.EddysHellAuth;
+    const btn = $("btn-admin-unlock");
+    if (!Auth || !btn) return;
+    if (!lockPrepared || Date.now() - lockPrepared.fetchedAt > PREPARED_MAX_AGE_MS) {
+      setLockStatus("Getting Face ID ready — tap again in a second.", false);
+      await prepareAdminLock();
+      return;
+    }
+    const prepared = lockPrepared;
+    lockPrepared = null;
+    setLockStatus("");
+    btn.disabled = true;
+    btn.textContent = prepared.mode === "setup" ? "Setting up…" : "Checking…";
+    try {
+      await Auth.passkeyRun(prepared); // WebAuthn call happens directly from the tap
+      setLockStatus("");
+      renderAdminShell("rule");
+    } catch (err) {
+      const name = err && err.name;
+      const msg =
+        name === "NotAllowedError"
+          ? "Face ID was cancelled or timed out — tap to try again."
+          : name === "InvalidStateError"
+            ? "This device already has a passkey — tap Unlock."
+            : (err && err.message) || String(err);
+      setLockStatus(msg);
+      await prepareAdminLock();
+    }
+  }
+
+  function fmtShortDate(iso) {
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "—";
+      return d.toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" });
+    } catch (_) {
+      return "—";
+    }
+  }
+
+  function showFaceIdToast(msg, warn) {
+    const t = $("faceid-toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.toggle("toast-warn", !!warn);
+    t.hidden = false;
+  }
+
+  async function paintFaceIdCard() {
+    const card = $("faceid-card");
+    const Auth = window.EddysHellAuth;
+    if (!card) return;
+    const show = !!(Auth && Auth.isStepUpRequired && Auth.isStepUpRequired() && Auth.hasValidStepUp());
+    card.hidden = !show;
+    if (!show) return;
+    const st = Auth.getStepUp();
+    const badge = $("faceid-unlock-badge");
+    if (badge && st) {
+      badge.textContent =
+        "Unlocked until " +
+        new Date(st.expiresAtMs).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET";
+    }
+    const ul = $("faceid-list");
+    try {
+      const devices = await Auth.passkeyListDevices();
+      ul.innerHTML = "";
+      if (!devices.length) {
+        const li = document.createElement("li");
+        li.className = "hint";
+        li.textContent = "No devices yet.";
+        ul.appendChild(li);
+      }
+      for (const d of devices) {
+        const li = document.createElement("li");
+        li.className = "members-item";
+        const span = document.createElement("span");
+        span.className = "members-email";
+        span.textContent =
+          (d.deviceLabel || "Device") + " · added " + fmtShortDate(d.createdAt) +
+          (d.lastUsedAt ? " · used " + fmtShortDate(d.lastUsedAt) : "");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn ghost btn-sm";
+        btn.textContent = "Remove";
+        btn.setAttribute("data-action", "faceid-remove");
+        btn.setAttribute("data-cred-id", d.credId);
+        btn.setAttribute("data-label", d.deviceLabel || "Device");
+        li.appendChild(span);
+        li.appendChild(btn);
+        ul.appendChild(li);
+      }
+    } catch (err) {
+      ul.innerHTML = "";
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = "Couldn’t load devices: " + ((err && err.message) || String(err));
+      ul.appendChild(li);
+    }
+    // Prefetch "Add this device" options so the prompt runs straight from the tap.
+    try {
+      addDevicePrepared = await Auth.passkeyPrepareAddDevice();
+    } catch (_) {
+      addDevicePrepared = null;
+    }
+  }
+
+  async function runAddDevice() {
+    const Auth = window.EddysHellAuth;
+    if (!addDevicePrepared || Date.now() - addDevicePrepared.fetchedAt > PREPARED_MAX_AGE_MS) {
+      showFaceIdToast("Getting ready — tap Add this device again.", false);
+      try {
+        addDevicePrepared = await Auth.passkeyPrepareAddDevice();
+      } catch (err) {
+        showFaceIdToast("Couldn’t prepare: " + ((err && err.message) || String(err)), true);
+      }
+      return;
+    }
+    const prepared = addDevicePrepared;
+    addDevicePrepared = null;
+    try {
+      await Auth.passkeyRun(prepared);
+      showFaceIdToast("Device added.", false);
+    } catch (err) {
+      const name = err && err.name;
+      showFaceIdToast(
+        name === "InvalidStateError"
+          ? "This device is already registered."
+          : name === "NotAllowedError"
+            ? "Cancelled."
+            : "Couldn’t add device: " + ((err && err.message) || String(err)),
+        true
+      );
+    }
+    paintFaceIdCard();
+  }
+
+  async function runRemoveDevice(credId, label) {
+    const Auth = window.EddysHellAuth;
+    const ok = await inAppConfirm("Remove " + label + "?", "It will no longer unlock Admin with Face ID.", "Remove");
+    if (!ok) return;
+    try {
+      await Auth.passkeyDeleteDevice(credId);
+      showFaceIdToast(label + " removed.", false);
+    } catch (err) {
+      showFaceIdToast("Couldn’t remove: " + ((err && err.message) || String(err)), true);
+    }
+    paintFaceIdCard();
+  }
+
+  (function bindAdminLock() {
+    document.addEventListener("click", (e) => {
+      const el = e.target && e.target.closest ? e.target.closest("[data-action]") : null;
+      if (!el) return;
+      const a = el.getAttribute("data-action");
+      if (a === "admin-unlock") {
+        e.preventDefault();
+        runAdminUnlock();
+      } else if (a === "admin-lock-week") {
+        e.preventDefault();
+        renderMemberView({ asAdmin: true });
+      } else if (a === "faceid-add") {
+        e.preventDefault();
+        runAddDevice();
+      } else if (a === "faceid-remove") {
+        e.preventDefault();
+        runRemoveDevice(el.getAttribute("data-cred-id"), el.getAttribute("data-label") || "this device");
+      } else if (a === "faceid-lock") {
+        e.preventDefault();
+        window.EddysHellAuth.clearStepUp();
+        showView("rule");
+      }
+    });
+    // Re-lock when the 12h unlock expires while Admin · Rule is open.
+    setInterval(() => {
+      const rule = $("view-rule");
+      if (rule && !rule.hidden && isAdminLocked()) showView("rule");
+    }, 60 * 1000);
+  })();
+
+  // ——— Beta: check-in history ———
+  let myHistoryLoadedAt = 0;
+  let allHistoryRows = [];
+  let allHistoryLoadedAt = 0;
+
+  function isHistoryEnabled() {
+    const Auth = window.EddysHellAuth;
+    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost() && Auth.loadCheckinHistory && authUser);
+  }
+
+  function diffLabel(d) {
+    const k = String(d || "").toLowerCase();
+    return k === "easy" ? "Easy" : k === "hard" ? "Hard" : k === "okay" ? "Okay" : "—";
+  }
+
+  function paintHistory(ul, totalsEl, rows, opts) {
+    if (!ul) return;
+    const o = opts || {};
+    ul.innerHTML = "";
+    const counts = { easy: 0, okay: 0, hard: 0 };
+    for (const r of rows) {
+      const k = String(r.difficulty || "").toLowerCase();
+      if (counts[k] != null) counts[k]++;
+    }
+    if (totalsEl) {
+      totalsEl.innerHTML = "";
+      const mk = (text, cls) => {
+        const sp = document.createElement("span");
+        sp.className = "history-total " + (cls || "");
+        sp.textContent = text;
+        totalsEl.appendChild(sp);
+      };
+      mk(plural(rows.length, "check-in"), "");
+      mk("Easy " + counts.easy, "diff-easy");
+      mk("Okay " + counts.okay, "diff-okay");
+      mk("Hard " + counts.hard, "diff-hard");
+    }
+    if (!rows.length) {
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = o.emptyText || "No check-ins yet.";
+      ul.appendChild(li);
+      return;
+    }
+    for (const r of rows) {
+      const li = document.createElement("li");
+      li.className = "history-item";
+      const main = document.createElement("div");
+      main.className = "history-main";
+      const name = r.videoTitle || r.videoFilename || "Workout " + (r.pickId || "");
+      let nameEl;
+      if (r.youtubeId) {
+        nameEl = document.createElement("a");
+        nameEl.href = "https://www.youtube.com/watch?v=" + encodeURIComponent(r.youtubeId);
+        nameEl.target = "_blank";
+        nameEl.rel = "noopener";
+      } else {
+        nameEl = document.createElement("span");
+      }
+      nameEl.className = "history-name";
+      nameEl.textContent = name;
+      const meta = document.createElement("div");
+      meta.className = "hint history-meta";
+      const bits = [fmtShortDate(r.at)];
+      if (r.videoType) bits.push(r.videoType);
+      if (r.videoHR != null) bits.push("HR " + r.videoHR);
+      if (o.showMember) bits.push(r.displayName || r.email || "");
+      meta.textContent = bits.filter(Boolean).join(" · ");
+      main.appendChild(nameEl);
+      main.appendChild(meta);
+      const chip = document.createElement("span");
+      const k = String(r.difficulty || "").toLowerCase();
+      chip.className = "diff-chip diff-" + (k || "none");
+      chip.textContent = diffLabel(k);
+      li.appendChild(main);
+      li.appendChild(chip);
+      ul.appendChild(li);
+    }
+  }
+
+  async function paintMyHistory(force, retry) {
+    const card = $("my-history-card");
+    if (!card) return;
+    if (!isHistoryEnabled()) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    if (!force && Date.now() - myHistoryLoadedAt < 20000) return;
+    myHistoryLoadedAt = Date.now();
+    try {
+      const rows = await window.EddysHellAuth.loadCheckinHistory("me");
+      $("my-history-count").textContent = String(rows.length);
+      paintHistory($("my-history-list"), $("my-history-totals"), rows, { emptyText: "Your check-ins will show up here." });
+    } catch (err) {
+      if (err && err.code === "firestore-not-ready" && (retry || 0) < 10) {
+        myHistoryLoadedAt = 0;
+        setTimeout(() => paintMyHistory(true, (retry || 0) + 1), 1500);
+        return;
+      }
+      const ul = $("my-history-list");
+      if (ul) ul.innerHTML = '<li class="hint">History unavailable right now.</li>';
+    }
+  }
+
+  function paintAllHistoryFiltered() {
+    const sel = $("all-history-member");
+    const who = sel ? sel.value : "";
+    const rows = who ? allHistoryRows.filter((r) => String(r.email || "").toLowerCase() === who) : allHistoryRows;
+    $("all-history-count").textContent = String(rows.length);
+    paintHistory($("all-history-list"), $("all-history-totals"), rows, { showMember: !who });
+  }
+
+  async function paintAllHistory(force, retry) {
+    const card = $("all-history-card");
+    if (!card) return;
+    const show = isHistoryEnabled() && authUser.role === "admin" && !isAdminLocked();
+    card.hidden = !show;
+    if (!show) return;
+    if (!force && Date.now() - allHistoryLoadedAt < 20000) return;
+    allHistoryLoadedAt = Date.now();
+    try {
+      allHistoryRows = await window.EddysHellAuth.loadCheckinHistory("all");
+      const sel = $("all-history-member");
+      if (sel) {
+        const keep = sel.value;
+        const members = [...new Map(allHistoryRows.map((r) => [String(r.email || "").toLowerCase(), r.displayName || r.email])).entries()]
+          .filter(([e]) => e)
+          .sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+        sel.innerHTML = '<option value="">All members</option>';
+        for (const [e, label] of members) {
+          const o = document.createElement("option");
+          o.value = e;
+          o.textContent = label === e ? e : label + " (" + e + ")";
+          sel.appendChild(o);
+        }
+        sel.value = members.some(([e]) => e === keep) ? keep : "";
+      }
+      paintAllHistoryFiltered();
+    } catch (err) {
+      if (err && err.code === "firestore-not-ready" && (retry || 0) < 10) {
+        allHistoryLoadedAt = 0;
+        setTimeout(() => paintAllHistory(true, (retry || 0) + 1), 1500);
+        return;
+      }
+      const ul = $("all-history-list");
+      if (ul) ul.innerHTML = '<li class="hint">History unavailable right now.</li>';
+    }
+  }
+
+  document.addEventListener("change", (e) => {
+    if (e.target && e.target.id === "all-history-member") paintAllHistoryFiltered();
+  });
+
   function renderAdminShell(preferredView) {
     paintTestPushCard();
     paintChooseVideoButton();
+    paintFaceIdCard();
+    paintAllHistory(false);
     $("admin-tabs").hidden = false;
     $("brand-sub").textContent = "Thursday workout admin";
     const view = preferredView || "rule";
@@ -3370,6 +3783,7 @@
   }
 
   function renderSharedCheckins(tw) {
+    paintMyHistory(false);
     const box = $("shared-checkins");
     if (!box) return;
     if (!tw) {
@@ -4015,7 +4429,16 @@
           pickId: tw.id,
           difficulty,
           notes: "",
+          video: {
+            filename: tw.filename,
+            title: tw.title || null,
+            folderType: tw.folderType,
+            hr: tw.hr,
+            youtubeId: tw.youtubeId,
+            relPath: tw.relPath,
+          },
         });
+        paintMyHistory(true);
         $("checkin-toast").hidden = false;
         setTimeout(() => {
           $("checkin-toast").hidden = true;
