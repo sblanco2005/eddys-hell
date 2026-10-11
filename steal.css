@@ -1,0 +1,98 @@
+/* Eddy's Hell — Mine / Gym + bottom tab bar (steal.js). Eddy's colors, Steal layout. */
+
+/* Bottom tab bar */
+.bnav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 6px 8px calc(6px + var(--safe-b));
+  background: rgba(11, 15, 20, 0.94);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+}
+.bnav[hidden] { display: none !important; }
+body.is-guest .bnav { display: none !important; }
+.bnav-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-mute);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  min-height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.bnav-btn.active { color: var(--text); }
+.bnav-btn.active svg, .bnav-btn.active .bnav-flame { color: var(--accent); filter: drop-shadow(0 0 6px var(--accent-glow)); }
+.bnav-flame { font-size: 18px; line-height: 20px; }
+.bnav-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+body.has-bnav .app { padding-bottom: calc(86px + var(--safe-b)); }
+body.has-bnav .toast { margin-bottom: 70px; }
+
+/* Non-Eddy's tabs hide the Eddy's views + sub-tabs (app.js keeps running underneath). */
+body.tab-mine main > .view,
+body.tab-gym main > .view,
+body.tab-mine #admin-tabs,
+body.tab-gym #admin-tabs,
+body.tab-mine .foot,
+body.tab-gym .foot { display: none !important; }
+.steal-root[hidden] { display: none !important; }
+.steal-root { display: flex; flex-direction: column; gap: 14px; }
+
+/* Headings (Steal pattern: kicker / big title / sub) */
+.steal-head { display: flex; flex-direction: column; gap: 4px; margin-bottom: 2px; }
+.steal-kicker {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+}
+.steal-title { margin: 0; font-size: 1.9rem; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; }
+.steal-sub { margin: 0; color: var(--text-dim); font-size: 0.9rem; }
+.steal-status { margin: 0; font-size: 0.8rem; color: var(--text-dim); }
+.steal-status.ok { color: var(--ok); }
+.steal-status.err { color: var(--warn); }
+
+/* Gym */
+.gym-groups { display: flex; flex-direction: column; gap: 18px; }
+.gym-group { display: flex; flex-direction: column; gap: 8px; }
+.gym-group h3 { margin: 0; }
+.gym-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.gym-chip {
+  appearance: none;
+  font: inherit;
+  font-size: 0.88rem;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.gym-chip.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.gym-count { margin: 4px 0 0; }

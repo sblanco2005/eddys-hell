@@ -2665,6 +2665,16 @@
     loadVapidPublicKey,
     PUSH_PREF_KEY,
     isFirestoreReady: () => firestoreReady,
+    /** Mine/Gym (steal.js): Firestore handle for the signed-in Firebase user, else null.
+     *  Localhost-only test hook window.__EH_TEST_CLOUD lets headless checks drive the
+     *  Firestore code path against a stubbed module. */
+    getCloudHandle: () => {
+      if (isLocalhost() && window.__EH_TEST_CLOUD && currentUser) {
+        return { db: window.__EH_TEST_CLOUD.db || {}, uid: currentUser.uid, email: currentUser.email };
+      }
+      if (!firestoreReady || !fbDb || !fbAuth || !fbAuth.currentUser) return null;
+      return { db: fbDb, uid: fbAuth.currentUser.uid, email: fbAuth.currentUser.email };
+    },
     publishThisWeek,
     loadThisWeekFromCloud,
     watchThisWeek,
