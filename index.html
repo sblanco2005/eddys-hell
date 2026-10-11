@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-broadcast-20261011" />
+  <meta name="eddys-hell-build" content="beta-broadcast2-20261011" />
   <title>Eddy's Hell · Thursday</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=20261011-broadcast" />
+  <link rel="stylesheet" href="styles.css?v=20261011-broadcast2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -475,8 +475,8 @@
 
             <p class="hint broadcast-reach" id="broadcast-reach">Counting devices…</p>
             <div class="actions broadcast-actions">
-              <button type="button" class="btn secondary" id="btn-broadcast-self" disabled>Send to me</button>
-              <button type="button" class="btn accent" id="btn-broadcast-all" disabled>Send to everyone</button>
+              <button type="button" class="btn secondary" id="btn-broadcast-self" data-action="broadcast-self">Send to me</button>
+              <button type="button" class="btn accent" id="btn-broadcast-all" data-action="broadcast-all">Send to everyone</button>
             </div>
             <p class="toast" id="broadcast-toast" hidden></p>
 
@@ -549,7 +549,18 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20261011-broadcast"></script>
-  <script src="app.js?v=20261011-broadcast"></script>
+  <div class="eh-modal" id="eh-confirm-modal" hidden role="dialog" aria-modal="true" aria-labelledby="eh-confirm-title">
+    <div class="eh-modal-backdrop" data-action="confirm-cancel"></div>
+    <div class="eh-modal-card">
+      <h3 id="eh-confirm-title">Send to everyone?</h3>
+      <p class="hint" id="eh-confirm-body"></p>
+      <div class="actions eh-modal-actions">
+        <button type="button" class="btn ghost" data-action="confirm-cancel">Cancel</button>
+        <button type="button" class="btn accent" data-action="confirm-ok" id="eh-confirm-ok">Send</button>
+      </div>
+    </div>
+  </div>
+  <script src="auth.js?v=20261011-broadcast2"></script>
+  <script src="app.js?v=20261011-broadcast2"></script>
 </body>
 </html>

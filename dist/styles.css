@@ -1414,3 +1414,44 @@ input:focus {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   overflow-wrap: anywhere;
 }
+
+/* ——— In-app confirm modal ——— */
+.eh-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.eh-modal[hidden] {
+  display: none !important;
+}
+.eh-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+.eh-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 22rem;
+  padding: 1.1rem 1.1rem 0.9rem;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+.eh-modal-card h3 {
+  margin: 0 0 0.5rem;
+}
+.eh-modal-card .hint {
+  overflow-wrap: anywhere;
+}
+.eh-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+}

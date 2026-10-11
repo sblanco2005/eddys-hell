@@ -1306,7 +1306,9 @@
    */
   async function countBetaPushDevices() {
     if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection || !firestoreQuery || !firestoreWhere) {
-      return { all: 0, self: 0 };
+      const err = new Error("Firestore not ready yet");
+      err.code = "firestore-not-ready";
+      throw err;
     }
     const snap = await firestoreGetDocs(
       firestoreQuery(
@@ -1329,7 +1331,11 @@
 
   /** Admin: newest broadcasts (default 5). */
   async function loadRecentBroadcasts(limitCount) {
-    if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection || !firestoreQuery) return [];
+    if (!firestoreReady || !fbDb || !firestoreGetDocs || !firestoreCollection || !firestoreQuery) {
+      const err = new Error("Firestore not ready yet");
+      err.code = "firestore-not-ready";
+      throw err;
+    }
     const n = Math.min(Math.max(Number(limitCount) || 5, 1), 20);
     const snap = await firestoreGetDocs(
       firestoreQuery(

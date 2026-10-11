@@ -2591,9 +2591,14 @@
   }
 
   // ——— Beta admin broadcast composer ———
-  let broadcastBound = false;
+  // Buttons are never left disabled waiting on Firestore (that was the "nothing happens"
+  // bug: count returned 0 before Firestore was ready → buttons stayed disabled forever).
+  // Clicks are delegated on document so late-rendered DOM always works.
+  let broadcastDelegated = false;
   let broadcastBusy = false;
-  let broadcastReach = { all: 0, self: 0 };
+  /** @type {{all:number, self:number}|null} null = unknown (count failed / pending) */
+  let broadcastReach = null;
+  let broadcastReachRetries = 0;
   const BROADCAST_TITLE_PH = "🔥 New workout is up";
   const BROADCAST_BODY_PH = "This week’s video is live — go crush it.";
 
@@ -2606,45 +2611,61 @@
     };
   }
 
+  function plural(n, w) {
+    return n + " " + w + (n === 1 ? "" : "s");
+  }
+
+  function showBroadcastToast(msg, warn) {
+    const toast = $("broadcast-toast");
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.toggle("toast-warn", !!warn);
+    toast.hidden = false;
+    toast.removeAttribute("hidden");
+  }
+
   function paintBroadcastForm() {
     const { title, body } = broadcastValues();
-    const tc = $("broadcast-title-count");
-    const bc = $("broadcast-body-count");
     const t = $("broadcast-title-input");
     const b = $("broadcast-body-input");
+    const tc = $("broadcast-title-count");
+    const bc = $("broadcast-body-count");
     if (tc && t) tc.textContent = t.value.length + "/60";
     if (bc && b) bc.textContent = b.value.length + "/200";
     const pt = $("broadcast-preview-title");
     const pb = $("broadcast-preview-body");
     if (pt) pt.textContent = title || BROADCAST_TITLE_PH;
     if (pb) pb.textContent = body || BROADCAST_BODY_PH;
-    const valid = title.length >= 1 && title.length <= 60 && body.length >= 1 && body.length <= 200;
     const selfBtn = $("btn-broadcast-self");
     const allBtn = $("btn-broadcast-all");
-    if (selfBtn) selfBtn.disabled = broadcastBusy || !valid || broadcastReach.self < 1;
-    if (allBtn) allBtn.disabled = broadcastBusy || !valid || broadcastReach.all < 1;
-    if (selfBtn) {
-      selfBtn.title = broadcastReach.self < 1 ? "No notification-enabled device for you — Enable in the Home Screen app first" : "";
-    }
-  }
-
-  function plural(n, w) {
-    return n + " " + w + (n === 1 ? "" : "s");
+    // Only disabled while a send is in flight.
+    if (selfBtn) selfBtn.disabled = broadcastBusy;
+    if (allBtn) allBtn.disabled = broadcastBusy;
   }
 
   async function refreshBroadcastReach() {
     const el = $("broadcast-reach");
     const Auth = window.EddysHellAuth;
-    if (!el || !Auth || !Auth.countBetaPushDevices) return;
+    if (!el || !Auth || !Auth.countBetaPushDevices) return broadcastReach;
     try {
       broadcastReach = await Auth.countBetaPushDevices();
+      broadcastReachRetries = 0;
       el.textContent =
         "Will reach " + plural(broadcastReach.all, "device") +
         " (incl. " + broadcastReach.self + " of yours).";
     } catch (err) {
-      el.textContent = "Couldn’t count devices: " + ((err && err.message) || String(err));
+      broadcastReach = null;
+      if (err && err.code === "firestore-not-ready" && broadcastReachRetries < 10) {
+        broadcastReachRetries++;
+        el.textContent = "Counting devices…";
+        setTimeout(refreshBroadcastReach, 1500);
+      } else {
+        el.textContent = "Couldn’t count devices — you can still send.";
+        console.warn("broadcast reach:", err);
+      }
     }
     paintBroadcastForm();
+    return broadcastReach;
   }
 
   function fmtBroadcastWhen(iso) {
@@ -2663,20 +2684,24 @@
     }
   }
 
-  async function refreshRecentBroadcasts() {
+  async function refreshRecentBroadcasts(retry) {
     const ul = $("broadcast-recent");
     const Auth = window.EddysHellAuth;
     if (!ul || !Auth || !Auth.loadRecentBroadcasts) return;
+    const setHint = (text) => {
+      ul.innerHTML = "";
+      const li = document.createElement("li");
+      li.className = "hint";
+      li.textContent = text;
+      ul.appendChild(li);
+    };
     try {
       const rows = await Auth.loadRecentBroadcasts(5);
-      ul.innerHTML = "";
       if (!rows.length) {
-        const li = document.createElement("li");
-        li.className = "hint";
-        li.textContent = "No messages sent yet.";
-        ul.appendChild(li);
+        setHint("No messages sent yet.");
         return;
       }
+      ul.innerHTML = "";
       for (const r of rows) {
         const li = document.createElement("li");
         li.className = "broadcast-recent-item";
@@ -2690,43 +2715,78 @@
         ul.appendChild(li);
       }
     } catch (err) {
-      ul.innerHTML = "";
-      const li = document.createElement("li");
-      li.className = "hint";
-      li.textContent = "Couldn’t load messages: " + ((err && err.message) || String(err));
-      ul.appendChild(li);
+      if (err && err.code === "firestore-not-ready" && (retry || 0) < 10) {
+        setTimeout(() => refreshRecentBroadcasts((retry || 0) + 1), 1500);
+        return;
+      }
+      console.warn("recent broadcasts:", err);
+      setHint("Recent messages unavailable right now.");
     }
   }
 
+  /** In-app confirm (window.confirm is unreliable in iOS standalone PWAs). */
+  let confirmResolve = null;
+  function inAppConfirm(title, bodyText, okLabel) {
+    const modal = $("eh-confirm-modal");
+    if (!modal) return Promise.resolve(window.confirm(title + "\n\n" + bodyText));
+    if (confirmResolve) confirmResolve(false);
+    $("eh-confirm-title").textContent = title;
+    $("eh-confirm-body").textContent = bodyText;
+    $("eh-confirm-ok").textContent = okLabel || "Send";
+    modal.hidden = false;
+    modal.removeAttribute("hidden");
+    return new Promise((resolve) => {
+      confirmResolve = (v) => {
+        confirmResolve = null;
+        modal.hidden = true;
+        resolve(v);
+      };
+    });
+  }
+
   async function doBroadcast(target) {
+    if (broadcastBusy) return;
     const Auth = window.EddysHellAuth;
-    const toast = $("broadcast-toast");
-    if (!Auth || !Auth.sendBroadcastPush || broadcastBusy) return;
-    const { title, body } = broadcastValues();
-    if (target === "all") {
-      await refreshBroadcastReach();
-      const n = broadcastReach.all;
-      if (!n) return;
-      if (!window.confirm("Send to " + plural(n, "device") + "?\n\n" + title + "\n" + body)) return;
-    }
-    broadcastBusy = true;
-    paintBroadcastForm();
-    if (toast) {
-      toast.hidden = true;
-      toast.classList.remove("toast-warn");
-    }
-    let msg;
-    let warn = false;
+    const btn = $(target === "self" ? "btn-broadcast-self" : "btn-broadcast-all");
+    const label = btn ? btn.textContent : "";
     try {
+      const { title, body } = broadcastValues();
+      if (!title || !body) {
+        showBroadcastToast("Add a title and a message first.", true);
+        return;
+      }
+      if (title.length > 60 || body.length > 200) {
+        showBroadcastToast("Title max 60 characters, message max 200.", true);
+        return;
+      }
+      if (!Auth || !Auth.sendBroadcastPush) {
+        showBroadcastToast("Broadcast isn’t available — reload the page.", true);
+        return;
+      }
+      if (target === "all") {
+        const reach = await refreshBroadcastReach();
+        const what = reach ? plural(reach.all, "device") : "every notification-enabled device";
+        const ok = await inAppConfirm("Send to " + what + "?", "“" + title + "” — " + body, "Send to everyone");
+        if (!ok) return;
+      }
+      broadcastBusy = true;
+      if (btn) btn.textContent = "Sending…";
+      paintBroadcastForm();
+      showBroadcastToast("Sending…", false);
       const r = await Auth.sendBroadcastPush({ title, body, target });
-      if (!r.recipients) {
-        msg = target === "self"
-          ? "No notification-enabled device — open the Home Screen app and Enable first."
-          : "No notification-enabled devices to send to.";
-        warn = true;
+      if (!r || !r.recipients) {
+        showBroadcastToast(
+          target === "self"
+            ? "No notification-enabled device — open the Home Screen app and Enable first."
+            : "No notification-enabled devices to send to.",
+          true
+        );
       } else {
-        msg = (target === "self" ? "Test sent to " : "Sent to ") + plural(r.sent, "device") + (r.failed ? " (" + r.failed + " failed)" : "") + ".";
-        warn = !r.sent;
+        showBroadcastToast(
+          (target === "self" ? "Test sent to " : "Sent to ") + plural(r.sent, "device") +
+            (r.failed ? " (" + r.failed + " failed)" : "") + ".",
+          !r.sent
+        );
         if (target === "all" && r.sent) {
           const t = $("broadcast-title-input");
           const b = $("broadcast-body-input");
@@ -2734,43 +2794,57 @@
           if (b) b.value = "";
         }
       }
+      if (target === "all") refreshRecentBroadcasts();
+      refreshBroadcastReach();
+      try {
+        refreshActivityLog();
+      } catch (_) {
+        /* ok */
+      }
     } catch (err) {
-      msg = "Send failed: " + ((err && err.message) || String(err));
-      warn = true;
+      console.warn("broadcast:", err);
+      showBroadcastToast("Send failed: " + ((err && err.message) || String(err)), true);
     } finally {
       broadcastBusy = false;
-    }
-    if (toast) {
-      toast.textContent = msg;
-      toast.classList.toggle("toast-warn", warn);
-      toast.hidden = false;
-    }
-    paintBroadcastForm();
-    refreshBroadcastReach();
-    if (target === "all") refreshRecentBroadcasts();
-    try {
-      refreshActivityLog();
-    } catch (_) {
-      /* ok */
+      if (btn) btn.textContent = label;
+      paintBroadcastForm();
     }
   }
 
+  function bindBroadcastDelegation() {
+    if (broadcastDelegated) return;
+    broadcastDelegated = true;
+    document.addEventListener("click", (e) => {
+      const el = e.target && e.target.closest ? e.target.closest("[data-action]") : null;
+      if (!el) return;
+      const action = el.getAttribute("data-action");
+      if (action === "broadcast-self" || action === "broadcast-all") {
+        e.preventDefault();
+        doBroadcast(action === "broadcast-self" ? "self" : "all");
+      } else if (action === "confirm-ok" || action === "confirm-cancel") {
+        e.preventDefault();
+        if (confirmResolve) confirmResolve(action === "confirm-ok");
+      }
+    });
+    document.addEventListener("input", (e) => {
+      const id = e.target && e.target.id;
+      if (id === "broadcast-title-input" || id === "broadcast-body-input") paintBroadcastForm();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && confirmResolve) confirmResolve(false);
+    });
+  }
+
+  // Delegated listeners are cheap and DOM-independent — bind once at load.
+  bindBroadcastDelegation();
+
   function setupBroadcastComposer() {
+    bindBroadcastDelegation();
     if (!$("broadcast-composer")) return;
-    if (!broadcastBound) {
-      broadcastBound = true;
-      const t = $("broadcast-title-input");
-      const b = $("broadcast-body-input");
-      if (t) t.addEventListener("input", paintBroadcastForm);
-      if (b) b.addEventListener("input", paintBroadcastForm);
-      const selfBtn = $("btn-broadcast-self");
-      const allBtn = $("btn-broadcast-all");
-      if (selfBtn) selfBtn.addEventListener("click", () => doBroadcast("self"));
-      if (allBtn) allBtn.addEventListener("click", () => doBroadcast("all"));
-    }
     paintBroadcastForm();
+    broadcastReachRetries = 0;
     refreshBroadcastReach();
-    refreshRecentBroadcasts();
+    refreshRecentBroadcasts(0);
   }
 
   function renderAdminShell(preferredView) {
