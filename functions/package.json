@@ -1,7 +1,7 @@
 {
   "name": "eddys-hell-functions",
   "description": "Eddy's Hell Cloud Functions — check-in Web Push (beta)",
-  "engines": { "node": "20" },
+  "engines": { "node": "22" },
   "main": "index.js",
   "private": true,
   "scripts": {
