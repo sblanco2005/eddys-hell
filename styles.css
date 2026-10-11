@@ -1269,3 +1269,54 @@ input:focus {
 #push-notify-status {
   margin-top: 0.45rem;
 }
+
+/* ——— Beta push nudges (A2HS banner + Enable card) ——— */
+.push-nudge {
+  position: relative;
+  margin: 0.75rem 0 1rem;
+  padding: 0.85rem 2.25rem 0.85rem 0.95rem;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(255, 77, 46, 0.16), rgba(245, 185, 66, 0.1));
+  border: 1px solid rgba(255, 77, 46, 0.35);
+}
+.push-nudge[hidden] {
+  display: none !important;
+}
+.push-nudge-title {
+  margin: 0 0 0.4rem;
+  font-weight: 600;
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+.push-nudge-steps {
+  margin: 0.25rem 0 0.35rem;
+  padding-left: 1.2rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.push-nudge-foot {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+.push-nudge-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+}
+.push-nudge-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.45rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+#push-nudge-enable-status {
+  margin-top: 0.5rem;
+}

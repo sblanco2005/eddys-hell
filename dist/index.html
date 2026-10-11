@@ -9,11 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="Eddy's Hell" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <meta name="eddys-hell-build" content="beta-queue-labels-20261005" />
+  <meta name="eddys-hell-build" content="beta-instant-push-20261011" />
   <title>Eddy's Hell · Thursday</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=20261005-job-status" />
+  <link rel="stylesheet" href="styles.css?v=20261011-instant-push" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
@@ -125,6 +125,28 @@
               <span class="checkin-feed-badge" id="checkin-feed-badge" hidden>0</span>
             </button>
           </header>
+
+          <!-- Beta-only push nudges (painted by app.js paintPushNudge; gated to isBetaHost) -->
+          <div class="push-nudge" id="push-nudge-a2hs" hidden role="note" aria-labelledby="push-nudge-a2hs-title">
+            <button type="button" class="push-nudge-close" id="push-nudge-a2hs-close" aria-label="Dismiss">×</button>
+            <p class="push-nudge-title" id="push-nudge-a2hs-title">📲 Add Eddy’s Hell to your Home Screen to get pinged when friends check in</p>
+            <ol class="push-nudge-steps">
+              <li>Tap <strong>Share</strong> <span aria-hidden="true">(square with ↑)</span> in Safari</li>
+              <li>Choose <strong>Add to Home Screen</strong> → <strong>Add</strong></li>
+              <li>Open Eddy’s Hell from the new icon and tap <strong>Enable</strong></li>
+            </ol>
+            <p class="hint push-nudge-foot">Needs iOS 16.4 or newer.</p>
+          </div>
+          <div class="push-nudge" id="push-nudge-enable" hidden role="note" aria-labelledby="push-nudge-enable-title">
+            <button type="button" class="push-nudge-close" id="push-nudge-enable-close" aria-label="Dismiss">×</button>
+            <p class="push-nudge-title" id="push-nudge-enable-title">🔔 Get notified when a friend checks in</p>
+            <p class="hint push-nudge-foot">A quick ping on your phone the moment someone finishes this week’s workout.</p>
+            <div class="push-nudge-actions">
+              <button type="button" class="btn accent btn-sm" id="push-nudge-enable-btn">Enable</button>
+              <button type="button" class="btn ghost btn-sm" id="push-nudge-enable-later">Not now</button>
+            </div>
+            <p class="hint toast-warn" id="push-nudge-enable-status" hidden></p>
+          </div>
 
           <aside class="card checkin-feed-card" id="checkin-feed-panel" hidden role="region" aria-labelledby="checkin-feed-title">
             <header class="card-head">
@@ -486,7 +508,7 @@
       <span id="catalog-meta">Loading…</span>
     </footer>
   </div>
-  <script src="auth.js?v=20261005-job-status"></script>
-  <script src="app.js?v=20261005-job-status"></script>
+  <script src="auth.js?v=20261011-instant-push"></script>
+  <script src="app.js?v=20261011-instant-push"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-/* Eddy's Hell — Web Push service worker (beta). Cache-bust via Hosting headers. */
+/* Eddy's Hell — Web Push service worker. Cache-bust via Hosting headers. */
 /* eslint-disable no-undef */
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -39,26 +39,36 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target =
+  const raw =
     (event.notification &&
       event.notification.data &&
       event.notification.data.url) ||
     "/";
+  let target;
+  try {
+    target = new URL(raw, self.location.origin).href;
+  } catch (_) {
+    target = self.location.origin + "/";
+  }
   event.waitUntil(
     (async () => {
       const all = await self.clients.matchAll({
         type: "window",
         includeUncontrolled: true,
       });
+      // Prefer an already-open window on the same origin: focus it and
+      // navigate to the target (same-origin only; cross-origin navigate throws).
+      const sameOrigin = new URL(target).origin === self.location.origin;
       for (const client of all) {
-        if ("focus" in client) {
-          try {
-            await client.focus();
-            if (client.navigate) await client.navigate(target);
-            return;
-          } catch (_) {
-            /* fall through */
+        if (!("focus" in client)) continue;
+        try {
+          const focused = await client.focus();
+          if (sameOrigin && client.url !== target && (focused || client).navigate) {
+            await (focused || client).navigate(target);
           }
+          return;
+        } catch (_) {
+          /* try next / fall through */
         }
       }
       if (self.clients.openWindow) {

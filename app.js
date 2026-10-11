@@ -298,6 +298,7 @@
     if (!box || !toggle) return;
     if (!isPushNotifyUiEnabled() || !authUser) {
       box.hidden = true;
+      paintPushNudge(null);
       return;
     }
     box.hidden = false;
@@ -313,6 +314,7 @@
     } catch (err) {
       st = { supported: false, enabled: false };
     }
+    paintPushNudge(st);
     if (iosHint) {
       iosHint.hidden = !(st.iosSafari && !st.standalone);
     }
@@ -338,6 +340,107 @@
     if (status && !st.vapidReady) {
       status.hidden = false;
       status.textContent = "Push not configured yet (VAPID) — toggle stays off until Santiago finishes setup.";
+    }
+  }
+
+  // ——— Beta-only push nudges (A2HS banner on iOS Safari; Enable card in standalone) ———
+  const PUSH_NUDGE_A2HS_KEY = "eddys-hell-push-nudge-a2hs-dismissed-v1";
+  const PUSH_NUDGE_ENABLE_KEY = "eddys-hell-push-nudge-enable-dismissed-v1";
+  let pushNudgeBound = false;
+
+  function pushNudgeDismissed(key) {
+    try {
+      return localStorage.getItem(key) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function dismissPushNudge(key) {
+    try {
+      localStorage.setItem(key, "1");
+    } catch (_) {
+      /* private mode — hide for this session only */
+    }
+  }
+
+  function isPushNudgeEnabled() {
+    const Auth = window.EddysHellAuth;
+    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost());
+  }
+
+  function paintPushNudge(st) {
+    const a2hs = $("push-nudge-a2hs");
+    const enable = $("push-nudge-enable");
+    if (!a2hs || !enable) return;
+    a2hs.hidden = true;
+    enable.hidden = true;
+    if (!isPushNudgeEnabled() || !authUser || !st) return;
+    bindPushNudgeControls();
+    if (st.iosSafari && !st.standalone) {
+      if (!pushNudgeDismissed(PUSH_NUDGE_A2HS_KEY)) a2hs.hidden = false;
+      return;
+    }
+    if (
+      st.standalone &&
+      st.supported &&
+      st.vapidReady &&
+      st.permission === "default" &&
+      !st.enabled &&
+      !pushNudgeDismissed(PUSH_NUDGE_ENABLE_KEY)
+    ) {
+      enable.hidden = false;
+    }
+  }
+
+  function bindPushNudgeControls() {
+    if (pushNudgeBound) return;
+    pushNudgeBound = true;
+    const a2hsClose = $("push-nudge-a2hs-close");
+    if (a2hsClose) {
+      a2hsClose.addEventListener("click", () => {
+        dismissPushNudge(PUSH_NUDGE_A2HS_KEY);
+        $("push-nudge-a2hs").hidden = true;
+      });
+    }
+    const hideEnable = () => {
+      dismissPushNudge(PUSH_NUDGE_ENABLE_KEY);
+      $("push-nudge-enable").hidden = true;
+    };
+    const close = $("push-nudge-enable-close");
+    if (close) close.addEventListener("click", hideEnable);
+    const later = $("push-nudge-enable-later");
+    if (later) later.addEventListener("click", hideEnable);
+    const btn = $("push-nudge-enable-btn");
+    if (btn) {
+      btn.addEventListener("click", async () => {
+        const Auth = window.EddysHellAuth;
+        const status = $("push-nudge-enable-status");
+        if (!Auth || !Auth.enableCheckinPush || pushNotifyBusy) return;
+        pushNotifyBusy = true;
+        btn.disabled = true;
+        if (status) status.hidden = true;
+        try {
+          await Auth.enableCheckinPush();
+          hideEnable();
+          const s2 = $("push-notify-status");
+          if (s2) {
+            s2.hidden = false;
+            s2.textContent = "Notifications on — you’ll hear when someone else checks in.";
+          }
+        } catch (err) {
+          // Permission prompt answered "Don't Allow" → card is pointless; hide for good.
+          if (err && err.code === "push-denied") hideEnable();
+          if (status) {
+            status.hidden = false;
+            status.textContent = (err && err.message) || String(err);
+          }
+        } finally {
+          pushNotifyBusy = false;
+          btn.disabled = false;
+          paintPushNotifyBox();
+        }
+      });
     }
   }
 
@@ -1561,7 +1664,7 @@
         });
       }
     } catch (_) { /* keep raw */ }
-    const src = entry.source === "scheduler" ? "scheduler" : "manual";
+    const src = entry.source === "scheduler" || entry.source === "cloud-function" ? entry.source : "manual";
     const action = entry.action || "?";
     const who = entry.actor ? " · " + entry.actor : "";
     const pick =

@@ -273,3 +273,18 @@ FCM: APIs enabled; Console VAPID + Blaze still required for full FCM Functions p
   toggle explains “not configured”).
 Cache-bust ?v=20261002-webpush. Build meta beta-webpush-20261002.
 Slack admin self-DM unchanged.
+
+## 2026-10-11 ~10:45 AM ET — beta only (instant check-in push via Cloud Function)
+- functions/: firebase-functions v2 onDocumentCreated(checkinFeed/{docId}), region us-central1
+  (Firestore nam5), secrets VAPID_PUBLIC / VAPID_PRIVATE / VAPID_SUBJECT (defineSecret).
+  Sends only to pushSubscriptions with host == eddy-s-hell-beta.web.app, enabled != false,
+  skips checker (uid OR email), urgency high, TTL 12h, disables 404/410, logs activityLog
+  action "checkin-push" source "cloud-function".
+- Beta UX (isBetaHost only): one-time iOS Safari "Add to Home Screen" banner; one-time
+  standalone "Get notified when a friend checks in" Enable card. Toggle kept.
+- sw.js click: focus same-origin window + navigate, else openWindow(url).
+- Cache-bust ?v=20261011-instant-push, build beta-instant-push-20261011. REST deploy to
+  eddy-s-hell-beta only (version 2e9019f1d4a063bf). Stable untouched.
+- Functions deploy needs Blaze:
+  firebase functions:secrets:set VAPID_PUBLIC|VAPID_PRIVATE|VAPID_SUBJECT --project eddy-s-hell (values piped from secrets/vapid.json)
+  firebase deploy --only functions --project eddy-s-hell

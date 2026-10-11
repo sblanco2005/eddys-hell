@@ -1027,7 +1027,7 @@
     return checkinFeedLastError;
   }
 
-  // ——— Web Push subscriptions (beta) ———
+  // ——— Web Push subscriptions (check-in alerts; beta + stable) ———
 
   const PUSH_PREF_KEY = "eddys-hell-push-pref-v1";
   let vapidPublicKeyCache = null;
@@ -1202,11 +1202,6 @@
    * @returns {Promise<{enabled:boolean, permission:string}>}
    */
   async function enableCheckinPush() {
-    if (!isBetaHost()) {
-      const err = new Error("Check-in push is beta-only.");
-      err.code = "push-beta-only";
-      throw err;
-    }
     if (!pushSupported()) {
       const err = new Error("Web Push is not supported here.");
       err.code = "push-unsupported";
