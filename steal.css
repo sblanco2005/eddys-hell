@@ -96,3 +96,84 @@ body.tab-gym .foot { display: none !important; }
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 .gym-count { margin: 4px 0 0; }
+
+/* Mine — list */
+.mine-nudge {
+  appearance: none; font: inherit; text-align: left; cursor: pointer;
+  padding: 14px 16px; border-radius: var(--radius);
+  border: 1px solid rgba(245, 185, 66, 0.5); background: rgba(245, 185, 66, 0.1); color: var(--warn);
+  font-size: 0.88rem;
+}
+.split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.split-card {
+  appearance: none; font: inherit; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 16px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+.split-card:active { border-color: var(--accent); background: var(--accent-soft); }
+.split-card.wide { grid-column: span 2; }
+.split-label { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; }
+.split-blurb { font-size: 0.8rem; color: var(--text-dim); }
+.split-grid.compact .split-card { padding: 12px 14px; }
+.split-grid.compact .split-label { font-size: 1.05rem; }
+.mine-blank, .wide-btn { width: 100%; }
+.mine-list-kicker { margin-top: 10px; }
+.mine-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.mine-item { border: 1px solid var(--border); background: var(--bg-card); border-radius: var(--radius); padding: 14px 16px; }
+.mine-item-main { appearance: none; border: 0; background: none; color: inherit; font: inherit; text-align: left; width: 100%; padding: 0; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.mine-item-name { font-size: 1.15rem; font-weight: 700; }
+.mine-item-meta { font-size: 0.78rem; color: var(--text-dim); }
+.mine-item-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.btn.danger, .btn.ghost.danger { color: #ff8a73; border-color: rgba(255, 77, 46, 0.5); }
+.mine-skel { height: 96px; border-radius: var(--radius); background: var(--bg-card); opacity: 0.6; }
+
+/* Mine — editor */
+.steal-back { appearance: none; border: 0; background: none; padding: 0; font: inherit; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-mute); cursor: pointer; align-self: flex-start; }
+.steal-title-input { width: 100%; background: transparent; border: 0; border-bottom: 1px dashed var(--border); color: var(--text); font: inherit; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; padding: 2px 0 4px; }
+.steal-title-input:focus { outline: none; border-bottom-color: var(--accent); }
+.ex-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ex-card { border: 1px solid var(--border); background: var(--bg-card); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.ex-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.ex-name-wrap { min-width: 0; flex: 1; }
+.ex-name { margin: 0; font-weight: 600; }
+.ex-muscle { margin: 2px 0 0; font-size: 0.72rem; color: var(--text-mute); text-transform: capitalize; }
+.ex-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.ex-move { display: flex; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elev); }
+.ex-move button, .ex-x, .stepper button {
+  appearance: none; border: 0; background: none; color: var(--text-dim); font: inherit; font-size: 1.05rem;
+  min-width: 36px; height: 36px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.ex-move button:disabled { opacity: 0.3; }
+.ex-clip { appearance: none; font: inherit; font-family: var(--mono); font-size: 0.75rem; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--accent); cursor: pointer; }
+.ex-row { display: flex; align-items: center; gap: 8px; }
+.stepper { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-elev); }
+.stepper .mono { min-width: 24px; text-align: center; font-size: 0.88rem; }
+.stepper .rest { min-width: 40px; font-size: 0.78rem; color: var(--text-dim); }
+.ex-x-sign { color: var(--text-mute); }
+.ex-reps, .ex-setup, .sess-input {
+  min-width: 0; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-elev); color: var(--text); font: inherit; font-size: 16px;
+}
+.ex-reps { flex: 1; font-family: var(--mono); }
+.ex-setup { width: 100%; }
+.ex-reps:focus, .ex-setup:focus, .sess-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.add-panel { border: 1px solid var(--border); background: var(--bg-card); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 14px; }
+.add-head { display: flex; justify-content: space-between; align-items: center; }
+.add-group { display: flex; flex-direction: column; gap: 6px; }
+.add-group h4 { margin: 0; }
+.add-move { appearance: none; font: inherit; text-align: left; cursor: pointer; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); font-size: 0.9rem; display: flex; justify-content: space-between; gap: 8px; }
+.add-move .mono { color: var(--text-mute); font-size: 0.75rem; }
+.editor-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Demo clip sheet */
+.clip-sheet { position: fixed; inset: 0; z-index: 80; display: flex; align-items: flex-end; justify-content: center; }
+.clip-backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); }
+.clip-card { position: relative; width: 100%; max-width: 560px; background: var(--bg-elev); border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; padding: 12px 12px calc(16px + var(--safe-b)); }
+.clip-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.clip-name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clip-head .hint { margin: 0; font-size: 0.75rem; }
+.clip-frame { position: relative; padding-top: 56.25%; border-radius: 10px; overflow: hidden; background: #000; }
+.clip-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
