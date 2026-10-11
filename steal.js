@@ -100,6 +100,26 @@
     },
   };
 
+  Object.assign(Store, {
+    async loadSessions() {
+      const local = this.readLocal("sessions", null);
+      const c = await this.cloud();
+      if (!c) return local || [];
+      const snap = await c.fs.getDocs(c.fs.collection(c.db, "users", c.uid, "sessions"));
+      const list = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id }));
+      this.writeLocal("sessions", list.slice(-200));
+      return list;
+    },
+    async saveSession(sess, all) {
+      this.writeLocal("sessions", all.slice(-200));
+      const c = await this.cloud();
+      if (!c) return "device";
+      await c.fs.setDoc(c.fs.doc(c.db, "users", c.uid, "sessions", sess.id), clean(sess));
+      return "cloud";
+    },
+  });
+
   /** Firestore rejects undefined — strip it (JSON round-trip). */
   function clean(o) {
     return JSON.parse(JSON.stringify(o));
@@ -200,7 +220,10 @@
     if (!(opts && opts.keepScroll)) window.scrollTo(0, 0);
   }
 
+  let statusTimer = null;
   function setStatus(msg, kind) {
+    clearTimeout(statusTimer);
+    if (msg) statusTimer = setTimeout(() => setStatus(""), 6000);
     S.status = msg || "";
     S.statusKind = kind || "";
     const el = $("steal-status");
@@ -268,7 +291,9 @@
   function renderMine() {
     let html = "";
     if (S.view === "edit" && S.draft) html = renderEditor();
-    else html = renderMineList();
+    else if (HOOKS.renderView && (html = HOOKS.renderView(S.view))) {
+      /* session / history (phase 3) */
+    } else html = renderMineList();
     return html + renderClip() + `<p class="steal-status" id="steal-status" hidden></p>`;
   }
 
@@ -607,6 +632,7 @@
   function onMineInput(e) {
     const t = e.target;
     const f = t.dataset && t.dataset.field;
+    if (HOOKS.onInput && HOOKS.onInput(e)) return;
     if (!f || !S.draft) return;
     if (f === "name") S.draft.name = t.value;
     else {
@@ -620,6 +646,482 @@
 
   /** Extension points for the session logger (phase 3). */
   const HOOKS = {};
+
+
+  // ——— Hit it: session logger (phase 3) ———
+  const LB_PER_KG = 2.20462;
+  const PLATES = { lb: [45, 35, 25, 10, 5, 2.5], kg: [25, 20, 15, 10, 5, 2.5, 1.25] };
+  const barFor = (unit) => (unit === "kg" ? 20 : 45);
+  const toDisp = (lb, unit) => (unit === "kg" ? (lb ? Math.round((lb / LB_PER_KG) * 2) / 2 : 0) : Math.round((lb || 0) * 10) / 10);
+  const fromDisp = (v, unit) => {
+    const n = Math.max(0, Number(v) || 0);
+    return unit === "kg" ? Math.round(n * LB_PER_KG * 10) / 10 : n;
+  };
+  const perSideDisp = (lb, unit) => Math.max(0, Math.round((toDisp(lb, unit) - barFor(unit)) * 10) / 10) / 2;
+  const fromPerSide = (ps, unit) => fromDisp(Math.max(0, Number(ps) || 0) * 2 + barFor(unit), unit);
+  function plateList(ps, unit) {
+    let r = Math.round(ps * 100) / 100;
+    const out = [];
+    for (const p of PLATES[unit === "kg" ? "kg" : "lb"]) while (r + 1e-6 >= p) {
+      out.push(p);
+      r = Math.round((r - p) * 100) / 100;
+    }
+    return out;
+  }
+  const fmtNum = (n) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
+  function kindOf(ex) {
+    return ex.muscle === "cardio" ? (/\d+\s*(m|km|cal|kcal|min)\b/i.test(ex.reps) ? "time" : "reps") : "lift";
+  }
+  function parseTime(v) {
+    const t = String(v || "").trim();
+    if (!t) return null;
+    const m = t.match(/^(\d{1,2}):(\d{1,2})$/);
+    if (m) return Number(m[1]) * 60 + Number(m[2]);
+    const n = Number(t);
+    return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+  }
+  const fmtDur = (ms) => {
+    const t = Math.max(0, Math.round(ms / 1000));
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const sec = t % 60;
+    return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+  };
+
+  Object.assign(S, { sessions: [], active: null, sessIdx: 0, perSide: true, rest: null, historyFor: null });
+
+  /** Last finished session's logs for this workout, keyed by move name. */
+  function lastLogsFor(workoutId) {
+    const prev = S.sessions
+      .filter((x) => x.finishedAt && workoutId && x.workoutId === workoutId)
+      .sort((a, b) => (a.finishedAt < b.finishedAt ? 1 : -1))[0];
+    const map = new Map();
+    if (prev) for (const e of prev.exercises || []) map.set(e.name, e.logs || []);
+    return { prev, map };
+  }
+
+  function startSession(w, workoutId) {
+    if (!w || !w.exercises || !w.exercises.length) return;
+    const unit = Store.readLocal("unit", "lb");
+    const { map } = lastLogsFor(workoutId);
+    const sess = {
+      id: uuid(),
+      workoutId: workoutId || null,
+      name: (w.name || "").trim() || "My workout",
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      unit,
+      exercises: w.exercises.map((e) => {
+        const prior = map.get(e.name) || [];
+        return {
+          ...e,
+          setup: e.setup || "",
+          logs: Array.from({ length: Math.max(1, Number(e.sets) || 1) }, (_, i) => {
+            const p = prior[i] || prior[prior.length - 1];
+            return {
+              set: i + 1,
+              weightLb: p ? p.weightLb || 0 : 0,
+              reps: p && p.reps ? p.reps : Number.parseInt(e.reps, 10) || 8,
+              timeSeconds: null,
+              done: false,
+            };
+          }),
+        };
+      }),
+    };
+    if (!workoutId) sess.draft = { name: sess.name, notes: (w && w.notes) || "", exercises: w.exercises };
+    S.active = sess;
+    S.sessIdx = 0;
+    S.rest = null;
+    S.view = "session";
+    S.draft = null;
+    Store.writeLocal("draft", null);
+    persistActive();
+    render();
+    window.scrollTo(0, 0);
+    startTicker();
+  }
+  function persistActive() {
+    Store.writeLocal("active", S.active ? { ...S.active, _idx: S.sessIdx } : null);
+  }
+
+  let ticker = null;
+  function startTicker() {
+    if (ticker) return;
+    ticker = setInterval(() => {
+      if (!S.active || S.view !== "session" || tab !== "mine") return;
+      const el = $("sess-clock");
+      if (el) el.textContent = fmtDur(Date.now() - new Date(S.active.startedAt).getTime());
+      const r = $("rest-left");
+      if (S.rest && r) {
+        const left = Math.ceil((S.rest.until - Date.now()) / 1000);
+        if (left <= 0) {
+          S.rest = null;
+          try {
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+          } catch (_) {}
+          const bar = $("rest-bar");
+          if (bar) {
+            bar.classList.add("rest-done");
+            r.textContent = "Go";
+          }
+        } else r.textContent = mmss(left);
+      }
+    }, 500);
+  }
+
+  function platesHtml(l, unit) {
+    const ps = perSideDisp(l.weightLb, unit);
+    const list = plateList(ps, unit);
+    const total = l.weightLb ? toDisp(l.weightLb, unit) : barFor(unit);
+    return `<div class="plates">${
+      list.length
+        ? list.map((p) => `<span class="plate p${String(p).replace(".", "_")}">${fmtNum(p)}</span>`).join("") + `<span class="hint">/ side</span>`
+        : `<span class="hint">Empty bar</span>`
+    }</div><p class="plate-math">Bar ${barFor(unit)}${unit} + 2 × ${fmtNum(ps)}${unit} = ${fmtNum(total)}${unit}</p>`;
+  }
+
+  function renderSession() {
+    const sess = S.active;
+    if (!sess) return "";
+    const exs = sess.exercises;
+    const idx = Math.min(S.sessIdx, exs.length - 1);
+    const ex = exs[idx];
+    const unit = sess.unit;
+    const kind = kindOf(ex);
+    const per = S.perSide && ex.isBarbell && kind === "lift";
+    const doneMoves = exs.filter((e) => e.logs.every((l) => l.done)).length;
+    const clip = clipFor(ex);
+    const { map } = lastLogsFor(sess.workoutId);
+    const prior = (map.get(ex.name) || []).filter((l) => l.done);
+    const lastTxt = prior.length
+      ? prior
+          .map((l) => (kind === "time" ? mmss(l.timeSeconds) : kind === "reps" ? `${l.reps}` : `${fmtNum(toDisp(l.weightLb, unit))}×${l.reps}`))
+          .join(" · ")
+      : "";
+    const rows = ex.logs
+      .map((l) => {
+        const wDisp = per ? perSideDisp(l.weightLb, unit) : toDisp(l.weightLb, unit);
+        let inputs;
+        if (kind === "time")
+          inputs = `<span class="sess-target mono">${esc(ex.reps)}</span>
+            <input class="sess-input mono grow" inputmode="decimal" data-sf="time" data-set="${l.set}" value="${l.timeSeconds ? mmss(l.timeSeconds) : ""}" placeholder="2:15" aria-label="Time" />`;
+        else if (kind === "reps")
+          inputs = `<input class="sess-input mono grow" inputmode="numeric" data-sf="reps" data-set="${l.set}" value="${l.reps || ""}" placeholder="reps" aria-label="Reps" />`;
+        else
+          inputs = `<input class="sess-input mono grow" inputmode="decimal" data-sf="weight" data-set="${l.set}" value="${wDisp ? fmtNum(wDisp) : ""}" placeholder="${per ? "per side" : unit}" aria-label="Weight" />
+            <input class="sess-input mono reps" inputmode="numeric" data-sf="reps" data-set="${l.set}" value="${l.reps || ""}" placeholder="reps" aria-label="Reps" />`;
+        const plates = per ? `<div class="plate-wrap" data-pw="${l.set}">${platesHtml(l, unit)}</div>` : "";
+        return `<li class="set-row${l.done ? " done" : ""}">
+            <div class="set-main"><span class="set-n mono">${l.set}</span>${inputs}
+              <button type="button" class="btn ${l.done ? "accent" : "secondary"} btn-sm set-log" data-act="log" data-set="${l.set}">${l.done ? "Logged" : "Log"}</button></div>
+            ${plates}</li>`;
+      })
+      .join("");
+    const rest = S.rest
+      ? `<div class="rest-bar" id="rest-bar"><span>Rest</span><strong class="mono" id="rest-left">${mmss(Math.ceil((S.rest.until - Date.now()) / 1000))}</strong>
+           <button type="button" class="btn ghost btn-sm" data-act="rest-add">+15s</button><button type="button" class="btn ghost btn-sm" data-act="rest-skip">Skip</button></div>`
+      : "";
+    return `
+      <header class="sess-head">
+        <div>
+          <button type="button" class="steal-back" data-act="sess-leave">‹ Mine</button>
+          <p class="steal-kicker">${doneMoves}/${exs.length} · <span class="mono" id="sess-clock">${fmtDur(Date.now() - new Date(sess.startedAt).getTime())}</span></p>
+          <h2 class="sess-title">${esc(sess.name)}</h2>
+        </div>
+        <button type="button" class="btn ghost btn-sm" data-act="sess-finish">Finish</button>
+      </header>
+      ${
+        kind === "lift"
+          ? `<div class="seg-row">
+              <button type="button" class="seg-btn${unit === "lb" ? " on" : ""}" data-act="unit" data-unit="lb">lb</button>
+              <button type="button" class="seg-btn${unit === "kg" ? " on" : ""}" data-act="unit" data-unit="kg">kg</button>
+              ${ex.isBarbell ? `<button type="button" class="seg-btn${S.perSide ? " on" : ""}" data-act="perside">one side</button>` : ""}
+            </div>`
+          : ""
+      }
+      <article class="sess-card">
+        <p class="steal-kicker">${idx + 1} of ${exs.length} · ${esc(ex.muscle || "")}</p>
+        <h3 class="sess-move">${esc(ex.name)}</h3>
+        ${lastTxt ? `<p class="hint sess-last">Last time: ${esc(lastTxt)}</p>` : ""}
+        <input class="ex-setup" data-sf="setup" value="${esc(ex.setup || "")}" placeholder="${kind === "lift" ? "Cable 4 · bench 30°" : "Damper · fan · note"}" aria-label="Setup note" />
+        <div class="ex-row">
+          <div class="stepper">
+            <button type="button" data-act="sess-sets" data-d="-1" aria-label="Fewer sets">−</button>
+            <span class="mono">${ex.logs.length}</span>
+            <button type="button" data-act="sess-sets" data-d="1" aria-label="More sets">+</button>
+          </div>
+          <span class="ex-x-sign">×</span>
+          <input class="ex-reps mono" data-sf="target" value="${esc(ex.reps)}" placeholder="${kind === "time" ? "500m" : "6-8"}" aria-label="Target reps" />
+          <span class="hint rest-note">${ex.restSeconds ?? 60}s rest</span>
+        </div>
+        ${clip ? `<button type="button" class="ex-clip sess-clip" data-act="clip" data-vid="${esc(clip.videoId)}" data-start="${clip.start}" data-name="${esc(ex.name)}">▶ Watch demo · ${mmss(clip.start)}</button>` : ""}
+      </article>
+      <ul class="set-list">${rows}</ul>
+      ${rest}
+      <div class="sess-nav">
+        <button type="button" class="btn secondary" data-act="sess-prev" ${idx === 0 ? "disabled" : ""}>Previous</button>
+        ${
+          idx < exs.length - 1
+            ? `<button type="button" class="btn accent" data-act="sess-next">Next move</button>`
+            : `<button type="button" class="btn accent" data-act="sess-finish">Done</button>`
+        }
+      </div>`;
+  }
+
+  function renderHistory() {
+    const w = S.workouts.find((x) => x.id === S.historyFor);
+    const list = S.sessions
+      .filter((x) => x.finishedAt && x.workoutId === S.historyFor)
+      .sort((a, b) => (a.finishedAt < b.finishedAt ? 1 : -1));
+    const items = list.length
+      ? `<ul class="hist-list">${list
+          .map((x) => {
+            const dur = fmtDur(new Date(x.finishedAt) - new Date(x.startedAt));
+            const sets = x.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
+            const lines = x.exercises
+              .map((e) => {
+                const done = e.logs.filter((l) => l.done);
+                if (!done.length) return "";
+                const k = kindOf(e);
+                const txt = done
+                  .map((l) => (k === "time" ? mmss(l.timeSeconds) : k === "reps" ? `${l.reps}` : `${fmtNum(toDisp(l.weightLb, x.unit))}×${l.reps}`))
+                  .join(", ");
+                return `<li><span>${esc(e.name)}</span><span class="mono">${esc(txt)}</span></li>`;
+              })
+              .join("");
+            return `<li class="hist-item">
+                <p class="hist-when">${esc(new Date(x.finishedAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }))}
+                  <span class="hint">· ${dur} · ${sets} sets · ${esc(x.unit)}</span></p>
+                <ul class="hist-moves">${lines || `<li><span class="hint">No sets logged</span></li>`}</ul></li>`;
+          })
+          .join("")}</ul>`
+      : `<p class="hint">No finished sessions yet. Hit it, then Finish to log one.</p>`;
+    return `
+      <header class="steal-head">
+        <button type="button" class="steal-back" data-act="hist-back">‹ Mine</button>
+        <p class="steal-kicker">History</p>
+        <h2 class="steal-title">${esc(w ? w.name : "Workout")}</h2>
+        <p class="steal-sub">${list.length} session${list.length === 1 ? "" : "s"}</p>
+      </header>
+      ${items}`;
+  }
+
+  function sessEx() {
+    const s = S.active;
+    return s ? s.exercises[Math.min(S.sessIdx, s.exercises.length - 1)] : null;
+  }
+  function rerenderKeep() {
+    const y = window.scrollY;
+    render();
+    window.scrollTo(0, y);
+  }
+
+  async function finishSession() {
+    const sess = S.active;
+    if (!sess) return;
+    const logged = sess.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
+    if (!logged) {
+      // Nothing logged — don't create an empty history entry or bump "last done".
+      S.active = null;
+      S.rest = null;
+      S.view = "list";
+      persistActive();
+      render();
+      window.scrollTo(0, 0);
+      setStatus("Nothing logged — session discarded.", "");
+      return;
+    }
+    const now = new Date().toISOString();
+    sess.finishedAt = now;
+    const draft = sess.draft;
+    delete sess.draft;
+    let w = sess.workoutId ? S.workouts.find((x) => x.id === sess.workoutId) : null;
+    if (!w && draft && S.workouts.length < MAX_WORKOUTS) {
+      // Finishing an unsaved build logs it as a workout (same as Steal).
+      w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
+      S.workouts = [w, ...S.workouts];
+      sess.workoutId = w.id;
+    }
+    if (w) {
+      w.lastDoneAt = now;
+      // Carry setup notes / target reps tweaks made mid-session back to the workout.
+      const byId = new Map(sess.exercises.map((e) => [e.id, e]));
+      w.exercises = (w.exercises || []).map((e) => {
+        const se = byId.get(e.id);
+        return se ? { ...e, setup: se.setup || "", reps: String(se.reps || e.reps), sets: se.logs.length } : e;
+      });
+    }
+    S.sessions = [...S.sessions.filter((x) => x.id !== sess.id), sess];
+    S.active = null;
+    S.rest = null;
+    S.view = "list";
+    persistActive();
+    render();
+    window.scrollTo(0, 0);
+    try {
+      const where = await Store.saveSession(sess, S.sessions);
+      if (w) await Store.saveWorkout(w, S.workouts);
+      const sets = sess.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
+      setStatus(`Logged “${sess.name}” · ${sets} sets${where === "cloud" ? "" : " (on this device)"}`, "ok");
+    } catch (err) {
+      console.warn("[mine] session save failed", err);
+      setStatus("Couldn’t save the session to your account — kept on this device.", "err");
+    }
+  }
+
+  Object.assign(HOOKS, {
+    hitItButton: (w) => `<button type="button" class="btn accent btn-sm" data-act="hit" data-id="${esc(w.id)}" ${(w.exercises || []).length ? "" : "disabled"}>Hit it</button>`,
+    historyButton: (w) => {
+      const n = S.sessions.filter((x) => x.finishedAt && x.workoutId === w.id).length;
+      return `<button type="button" class="btn ghost btn-sm" data-act="history" data-id="${esc(w.id)}">History${n ? ` · ${n}` : ""}</button>`;
+    },
+    hitItDraftButton: (d) => `<button type="button" class="btn accent wide-btn" data-act="hit-draft" ${d.exercises.length ? "" : "disabled"}>Hit it</button>`,
+    resumeBanner: () =>
+      S.active
+        ? `<button type="button" class="resume-banner" data-act="sess-resume"><span>In progress · ${esc(S.active.name)}</span><strong>Resume ›</strong></button>`
+        : "",
+    renderView: (v) => (v === "session" && S.active ? renderSession() : v === "history" && S.historyFor ? renderHistory() : ""),
+    async afterLoad() {
+      const a = Store.readLocal("active", null);
+      if (a && Array.isArray(a.exercises) && !a.finishedAt) {
+        S.sessIdx = a._idx || 0;
+        delete a._idx;
+        S.active = a;
+        startTicker();
+      }
+      S.sessions = Store.readLocal("sessions", []) || [];
+      try {
+        S.sessions = await Store.loadSessions();
+      } catch (err) {
+        console.warn("[mine] sessions load failed", err);
+      }
+    },
+    onAction(act, el) {
+      const sess = S.active;
+      switch (act) {
+        case "hit": {
+          const w = S.workouts.find((x) => x.id === el.dataset.id);
+          if (w) startSession(w, w.id);
+          return true;
+        }
+        case "hit-draft": {
+          const d = S.draft;
+          if (!d) return true;
+          const existing = d.id && S.workouts.some((x) => x.id === d.id);
+          startSession(d, existing ? d.id : null);
+          return true;
+        }
+        case "history":
+          S.historyFor = el.dataset.id;
+          S.view = "history";
+          render();
+          window.scrollTo(0, 0);
+          return true;
+        case "hist-back":
+          S.historyFor = null;
+          S.view = "list";
+          render();
+          return true;
+        case "sess-resume":
+          S.view = "session";
+          render();
+          window.scrollTo(0, 0);
+          return true;
+        case "sess-leave":
+          S.view = "list";
+          render();
+          return true;
+        case "sess-finish":
+          finishSession();
+          return true;
+      }
+      if (!sess) return false;
+      const ex = sessEx();
+      switch (act) {
+        case "sess-prev":
+          S.sessIdx = Math.max(0, S.sessIdx - 1);
+          S.rest = null;
+          persistActive();
+          render();
+          window.scrollTo(0, 0);
+          return true;
+        case "sess-next":
+          S.sessIdx = Math.min(sess.exercises.length - 1, S.sessIdx + 1);
+          S.rest = null;
+          persistActive();
+          render();
+          window.scrollTo(0, 0);
+          return true;
+        case "unit":
+          sess.unit = el.dataset.unit === "kg" ? "kg" : "lb";
+          Store.writeLocal("unit", sess.unit);
+          break;
+        case "perside":
+          S.perSide = !S.perSide;
+          break;
+        case "sess-sets": {
+          const n = Math.min(8, Math.max(1, ex.logs.length + Number(el.dataset.d)));
+          if (n > ex.logs.length) {
+            const last = ex.logs[ex.logs.length - 1];
+            ex.logs.push({ set: n, weightLb: last ? last.weightLb : 0, reps: last ? last.reps : 8, timeSeconds: null, done: false });
+          } else if (n < ex.logs.length) ex.logs = ex.logs.slice(0, n);
+          ex.sets = ex.logs.length;
+          break;
+        }
+        case "log": {
+          const l = ex.logs.find((x) => x.set === Number(el.dataset.set));
+          if (!l) return true;
+          l.done = !l.done;
+          if (l.done && (ex.restSeconds ?? 60) > 0) S.rest = { until: Date.now() + (ex.restSeconds ?? 60) * 1000 };
+          if (l.done) {
+            // carry weight/reps forward to the next untouched set
+            const nx = ex.logs.find((x) => x.set === l.set + 1);
+            if (nx && !nx.done && !nx.weightLb) nx.weightLb = l.weightLb;
+          }
+          break;
+        }
+        case "rest-add":
+          if (S.rest) S.rest.until += 15000;
+          break;
+        case "rest-skip":
+          S.rest = null;
+          break;
+        default:
+          return false;
+      }
+      persistActive();
+      rerenderKeep();
+      return true;
+    },
+    onInput(e) {
+      const t = e.target;
+      const f = t.dataset && t.dataset.sf;
+      if (!f || !S.active) return false;
+      const ex = sessEx();
+      if (!ex) return true;
+      const unit = S.active.unit;
+      const per = S.perSide && ex.isBarbell && kindOf(ex) === "lift";
+      const l = t.dataset.set ? ex.logs.find((x) => x.set === Number(t.dataset.set)) : null;
+      if (f === "setup") ex.setup = t.value;
+      else if (f === "target") ex.reps = t.value;
+      else if (l && f === "reps") l.reps = Number.parseInt(t.value, 10) || 0;
+      else if (l && f === "time") {
+        const v = parseTime(t.value);
+        if (v != null) l.timeSeconds = v;
+      } else if (l && f === "weight") {
+        if (t.value.trim() === "") l.weightLb = 0;
+        else if (!Number.isNaN(Number(t.value))) l.weightLb = per ? fromPerSide(t.value, unit) : fromDisp(t.value, unit);
+        const pw = per && document.querySelector(`[data-pw="${l.set}"]`);
+        if (pw) pw.innerHTML = platesHtml(l, unit); // in place — a re-render would eat the Log tap
+      }
+      persistActive();
+      return true;
+    },
+    onChange() {
+      /* inputs update state + plate math in place (onInput); no re-render on blur so taps on Log aren't lost */
+    },
+  });
 
   // ——— Data load per user ———
   async function loadForUser() {
@@ -694,6 +1196,10 @@
     document.addEventListener("input", (e) => {
       const root = $("steal-root");
       if (root && root.contains(e.target)) onMineInput(e);
+    });
+    document.addEventListener("change", (e) => {
+      const root = $("steal-root");
+      if (root && root.contains(e.target) && HOOKS.onChange) HOOKS.onChange(e);
     });
     setTab("eddys", { keepScroll: true });
     const Auth = window.EddysHellAuth;

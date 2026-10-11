@@ -177,3 +177,51 @@ body.tab-gym .foot { display: none !important; }
 .clip-head .hint { margin: 0; font-size: 0.75rem; }
 .clip-frame { position: relative; padding-top: 56.25%; border-radius: 10px; overflow: hidden; background: #000; }
 .clip-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+/* Hit it — session logger */
+.resume-banner { appearance: none; font: inherit; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--text); font-size: 0.9rem; }
+.resume-banner strong { color: var(--accent); }
+.sess-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.sess-head > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sess-title { margin: 0; font-size: 1.5rem; line-height: 1.15; letter-spacing: -0.02em; }
+.seg-row { display: flex; gap: 8px; }
+.seg-btn { appearance: none; font: inherit; font-size: 0.85rem; font-weight: 600; height: 38px; padding: 0 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim); cursor: pointer; }
+.seg-btn.on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.sess-card { border: 1px solid var(--border); background: var(--bg-card); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.sess-card .steal-kicker { text-transform: uppercase; }
+.sess-move { margin: 0; font-size: 1.6rem; line-height: 1.15; letter-spacing: -0.02em; }
+.sess-last { margin: 0; font-family: var(--mono); font-size: 0.78rem; }
+.sess-clip { align-self: flex-start; }
+.rest-note { margin: 0; white-space: nowrap; font-size: 0.75rem; }
+.set-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.set-row { border: 1px solid var(--border); background: var(--bg-card); border-radius: 12px; padding: 10px; }
+.set-row.done { border-color: rgba(61, 214, 140, 0.45); background: var(--ok-soft); }
+.set-main { display: flex; align-items: center; gap: 8px; }
+.set-n { width: 22px; color: var(--text-mute); font-size: 0.85rem; text-align: center; }
+.sess-input { height: 44px; }
+.sess-input.grow { flex: 1; }
+.sess-input.reps { width: 72px; }
+.sess-target { width: 54px; font-size: 0.75rem; color: var(--text-dim); }
+.set-log { width: 76px; justify-content: center; }
+.plate-wrap { padding-left: 30px; margin-top: 8px; }
+.plates { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px; }
+.plates .hint { margin: 0 0 0 4px; font-size: 0.72rem; }
+.plate { display: inline-flex; align-items: center; justify-content: center; height: 28px; min-width: 24px; padding: 0 4px; border-radius: 4px; border: 1px solid var(--border-strong); background: var(--bg-elev); font-family: var(--mono); font-size: 0.72rem; }
+.plate.p45, .plate.p25, .plate.p20 { min-width: 36px; height: 34px; border-color: var(--accent); }
+.plate.p35, .plate.p15, .plate.p10 { min-width: 30px; height: 31px; }
+.plate-math { margin: 4px 0 0; font-size: 0.72rem; color: var(--text-mute); font-family: var(--mono); }
+.rest-bar { position: sticky; bottom: calc(72px + var(--safe-b)); z-index: 5; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--accent); background: rgba(22, 29, 40, 0.97); box-shadow: var(--shadow); }
+.rest-bar > span { color: var(--text-dim); font-size: 0.85rem; }
+.rest-bar strong { flex: 1; font-size: 1.3rem; color: var(--accent); }
+.rest-bar.rest-done { border-color: var(--ok); }
+.rest-bar.rest-done strong { color: var(--ok); }
+.sess-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* History */
+.hist-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.hist-item { border: 1px solid var(--border); background: var(--bg-card); border-radius: var(--radius); padding: 12px 14px; }
+.hist-when { margin: 0 0 8px; font-weight: 600; }
+.hist-when .hint { font-weight: 400; margin: 0; display: inline; }
+.hist-moves { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
+.hist-moves li { display: flex; justify-content: space-between; gap: 10px; }
+.hist-moves .mono { color: var(--text-dim); font-size: 0.78rem; text-align: right; }

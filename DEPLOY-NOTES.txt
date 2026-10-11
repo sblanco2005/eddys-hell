@@ -299,3 +299,15 @@ Slack admin self-DM unchanged.
 - Cache-bust ?v=20261011-push-prod, build push-prod-20261011. Hosting: stable + beta (REST).
 - Members must Add to Home Screen from eddy-s-hell.web.app and Enable again (subscriptions
   are per-site; beta subs don't carry over).
+
+## 2026-10-11 ~7:00 PM ET — beta only: Steal merge (Mine | Gym | Eddy's) — branch beta-steal-merge
+- Bottom tab bar Mine | Gym | Eddy's (default Eddy's; Eddy's = existing This week / Admin · Rule, Admin still
+  behind Face ID). New code: steal-data.js (93 moves + demo clips, 6 gear groups/32 items, split rules),
+  steal.js, steal.css. auth.js only gains getCloudHandle().
+- Per-user Firestore: users/{uid}/gym/kit, users/{uid}/workouts/{id}, users/{uid}/sessions/{id}.
+  Rules: additive users/{uid}/... own-uid only (live ruleset 437d0e1b-…, was f6ced67a-…; prod-compatible).
+- Phase 1 Gym + gear import; Phase 2 Mine builder + workouts import; Phase 3 Hit it logger + per-workout history.
+- Import: scripts/import-steal-snapshot.mjs (merge-only). Santiago uid Yv9iwvUTwVSsKVo2DJxCKp7sIC92:
+  gym 14 items; workouts: Efficient Pull Day (Push/Pull never-saved drafts + 2 Stolen extracts skipped).
+- Cache-bust v=20261011-steal-p1 → p2 → p3; sw.js EH_SW_VERSION. REST deploy to eddy-s-hell-beta only.
+  Prod Hosting untouched. No pushes; config/thisWeek|nextWeek untouched.
