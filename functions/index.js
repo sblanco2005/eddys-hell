@@ -12,6 +12,7 @@
  *   firebase functions:secrets:set VAPID_SUBJECT --project eddy-s-hell
  */
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
@@ -49,6 +50,11 @@ exports.onCheckinFeedCreate = onDocumentCreated(
     const snap = event.data;
     if (!snap) return;
     const row = snap.data() || {};
+    // Beta-only: prod check-ins carry no host field (or a non-beta host) → skip.
+    if (!PUSH_HOSTS.has(String(row.host || ""))) {
+      logger.info("skip non-beta check-in", { docId: event.params && event.params.docId, host: row.host || null });
+      return;
+    }
     const db = getFirestore();
     const checkerUid = String(row.uid || "");
     const checkerEmail = String(row.email || "").toLowerCase();
@@ -144,5 +150,102 @@ exports.onCheckinFeedCreate = onDocumentCreated(
     } catch (err) {
       logger.warn("activityLog write failed", { message: err && err.message });
     }
+  }
+);
+
+/** Mirrors firestore.rules isAdmin() / data/admins.json. */
+const ADMIN_EMAILS = new Set(["sblanco2005@gmail.com"]);
+
+/**
+ * sendTestPush (callable, admin only): sends a test notification to the
+ * CALLER's own enabled beta subscriptions. Never writes checkins/checkinFeed,
+ * never notifies anyone else.
+ */
+exports.sendTestPush = onCall(
+  {
+    region: "us-central1",
+    secrets: [VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT],
+    memory: "256MiB",
+    maxInstances: 2,
+  },
+  async (request) => {
+    const auth = request.auth;
+    if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "Sign in first.");
+    const email = String((auth.token && auth.token.email) || "").toLowerCase();
+    if (!email || !ADMIN_EMAILS.has(email) || (auth.token && auth.token.email_verified === false)) {
+      throw new HttpsError("permission-denied", "Admins only.");
+    }
+    const pub = (VAPID_PUBLIC.value() || "").trim();
+    const priv = (VAPID_PRIVATE.value() || "").trim();
+    const subject = (VAPID_SUBJECT.value() || "").trim() || "mailto:sblanco2005@gmail.com";
+    if (!pub || !priv) throw new HttpsError("failed-precondition", "Push keys not configured.");
+    webpush.setVapidDetails(subject, pub, priv);
+
+    const db = getFirestore();
+    const [byUid, byEmail] = await Promise.all([
+      db.collection("pushSubscriptions").where("uid", "==", auth.uid).get(),
+      db.collection("pushSubscriptions").where("email", "==", email).get(),
+    ]);
+    const docs = new Map();
+    for (const d of [...byUid.docs, ...byEmail.docs]) docs.set(d.id, d);
+
+    const name = shortName(auth.token && auth.token.name, email);
+    const payload = JSON.stringify({
+      title: `🔥 Test — ${name} just did Eddy’s Hell`,
+      body: "Your turn — this week’s workout is waiting.",
+      tag: `test-push-${Date.now()}`,
+      url: CLICK_URL,
+    });
+
+    const jobs = [];
+    for (const doc of docs.values()) {
+      const sub = doc.data() || {};
+      if (sub.enabled === false) continue;
+      if (!PUSH_HOSTS.has(String(sub.host || ""))) continue;
+      // Belt and braces: only the caller's own subscriptions.
+      if (sub.uid !== auth.uid && String(sub.email || "").toLowerCase() !== email) continue;
+      if (!sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) continue;
+      jobs.push(
+        webpush
+          .sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
+            payload,
+            { TTL: TTL_SECONDS, urgency: "high" }
+          )
+          .then(() => true)
+          .catch(async (err) => {
+            const status = err && (err.statusCode || err.status);
+            logger.warn("test push fail", { id: doc.id, status, message: err && err.message });
+            if (status === 404 || status === 410) {
+              try {
+                await doc.ref.set(
+                  { enabled: false, disabledAt: new Date().toISOString(), disableReason: String(status) },
+                  { merge: true }
+                );
+              } catch (_) {
+                /* ok */
+              }
+            }
+            return false;
+          })
+      );
+    }
+    const results = await Promise.all(jobs);
+    const sent = results.filter(Boolean).length;
+    const out = { sent, failed: results.length - sent, subscriptions: results.length };
+    logger.info("test push", { email, ...out });
+    try {
+      await db.collection("activityLog").add({
+        at: new Date().toISOString(),
+        action: "test-push",
+        source: "cloud-function",
+        actor: email,
+        detail: `Test push → ${sent}/${results.length} of own beta devices`,
+        ...out,
+      });
+    } catch (_) {
+      /* best-effort */
+    }
+    return out;
   }
 );

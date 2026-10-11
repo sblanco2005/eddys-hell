@@ -2496,7 +2496,64 @@
     paintPushNotifyBox();
   }
 
+  let testPushBound = false;
+  function paintTestPushCard() {
+    const card = $("test-push-card");
+    if (!card) return;
+    const Auth = window.EddysHellAuth;
+    const show = !!(
+      Auth && Auth.isBetaHost && Auth.isBetaHost() && Auth.sendTestPush &&
+      authUser && authUser.role === "admin"
+    );
+    card.hidden = !show;
+    if (!show || testPushBound) return;
+    testPushBound = true;
+    const btn = $("btn-test-push");
+    const toast = $("test-push-toast");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      const label = btn.textContent;
+      btn.textContent = "Sending…";
+      if (toast) {
+        toast.hidden = true;
+        toast.classList.remove("toast-warn");
+      }
+      let msg;
+      let warn = false;
+      try {
+        const r = await window.EddysHellAuth.sendTestPush();
+        if (!r || !r.subscriptions) {
+          msg = "No notification-enabled device — open the Home Screen app and Enable first.";
+          warn = true;
+        } else if (r.sent) {
+          msg = "Sent to " + r.sent + " device" + (r.sent === 1 ? "" : "s") + (r.failed ? " (" + r.failed + " failed)" : "") + ".";
+        } else {
+          msg = "Couldn’t deliver to " + r.failed + " device" + (r.failed === 1 ? "" : "s") + " — re-enable notifications on that device.";
+          warn = true;
+        }
+      } catch (err) {
+        msg = "Test push failed: " + ((err && err.message) || String(err));
+        warn = true;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = label;
+      }
+      if (toast) {
+        toast.textContent = msg;
+        toast.classList.toggle("toast-warn", warn);
+        toast.hidden = false;
+      }
+      try {
+        refreshActivityLog();
+      } catch (_) {
+        /* ok */
+      }
+    });
+  }
+
   function renderAdminShell(preferredView) {
+    paintTestPushCard();
     $("admin-tabs").hidden = false;
     $("brand-sub").textContent = "Thursday workout admin";
     const view = preferredView || "rule";

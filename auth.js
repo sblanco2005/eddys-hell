@@ -543,6 +543,8 @@
           pickId: row.pickId,
           at: row.at,
           notes: row.notes || "",
+          // Source site (beta-only build) — lets backend logic tell beta vs prod check-ins.
+          host: (typeof location !== "undefined" && location.hostname) || "",
         };
         if (row.difficulty) payload.difficulty = row.difficulty;
         await firestoreSetDoc(
@@ -900,7 +902,8 @@
         const id = checkinFeedDocId(pickId, row.email);
         await firestoreSetDoc(
           firestoreDoc(fbDb, "checkinFeed", id),
-          scrubUndefined(row),
+          // host: source site; Cloud Function only pushes for eddy-s-hell-beta.web.app.
+          scrubUndefined({ ...row, host: (typeof location !== "undefined" && location.hostname) || "" }),
           { merge: true }
         );
         firestoreStatus = "cloud";
@@ -1237,6 +1240,38 @@
     }
     await savePushSubscriptionToCloud(sub);
     return { enabled: true, permission };
+  }
+
+  /**
+   * Admin-only (beta): ask Cloud Function sendTestPush to notify the caller's own
+   * enabled beta devices. Callable protocol over fetch (no extra SDK load).
+   * @returns {Promise<{sent:number, failed:number, subscriptions:number}>}
+   */
+  async function sendTestPush() {
+    if (!currentUser || !currentUser.getIdToken) {
+      const err = new Error("Sign in first.");
+      err.code = "push-auth";
+      throw err;
+    }
+    const idToken = await currentUser.getIdToken();
+    const res = await fetch("https://us-central1-eddy-s-hell.cloudfunctions.net/sendTestPush", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },
+      body: JSON.stringify({ data: {} }),
+    });
+    let json = null;
+    try {
+      json = await res.json();
+    } catch (_) {
+      /* non-JSON */
+    }
+    if (!res.ok || !json || json.error) {
+      const msg = (json && json.error && json.error.message) || "Test push failed (HTTP " + res.status + ")";
+      const err = new Error(msg);
+      err.code = (json && json.error && json.error.status) || "test-push-failed";
+      throw err;
+    }
+    return json.result || json.data || { sent: 0, failed: 0, subscriptions: 0 };
   }
 
   /** Disable Web Push for this device. */
@@ -2353,6 +2388,7 @@
     enableCheckinPush,
     disableCheckinPush,
     getCheckinPushStatus,
+    sendTestPush,
     loadVapidPublicKey,
     PUSH_PREF_KEY,
     isFirestoreReady: () => firestoreReady,
