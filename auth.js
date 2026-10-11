@@ -1248,12 +1248,19 @@
    * @returns {Promise<{sent:number, failed:number, subscriptions:number}>}
    */
   async function sendTestPush() {
-    if (!currentUser || !currentUser.getIdToken) {
-      const err = new Error("Sign in first.");
+    // currentUser is our normalized plain profile (no SDK methods) — the ID token
+    // must come from the Firebase Auth SDK user on fbAuth (same app instance).
+    const fbUser = fbAuth && fbAuth.currentUser;
+    if (!fbUser || typeof fbUser.getIdToken !== "function") {
+      const err = new Error(
+        currentUser
+          ? "Firebase sign-in isn’t ready yet — reload the page and try again."
+          : "Sign in first."
+      );
       err.code = "push-auth";
       throw err;
     }
-    const idToken = await currentUser.getIdToken();
+    const idToken = await fbUser.getIdToken(true);
     const res = await fetch("https://us-central1-eddy-s-hell.cloudfunctions.net/sendTestPush", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + idToken },

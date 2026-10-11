@@ -17,6 +17,7 @@ const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
 const webpush = require("web-push");
 
 initializeApp();
@@ -169,7 +170,20 @@ exports.sendTestPush = onCall(
     maxInstances: 2,
   },
   async (request) => {
-    const auth = request.auth;
+    let auth = request.auth;
+    if (!auth || !auth.uid) {
+      // Fallback: verify a Bearer ID token ourselves (callable normally does this).
+      const hdr = String((request.rawRequest && request.rawRequest.headers && request.rawRequest.headers.authorization) || "");
+      const m = hdr.match(/^Bearer\s+(.+)$/i);
+      if (m) {
+        try {
+          const token = await getAuth().verifyIdToken(m[1]);
+          auth = { uid: token.uid, token };
+        } catch (err) {
+          logger.warn("sendTestPush bearer verify failed", { message: err && err.message });
+        }
+      }
+    }
     if (!auth || !auth.uid) throw new HttpsError("unauthenticated", "Sign in first.");
     const email = String((auth.token && auth.token.email) || "").toLowerCase();
     if (!email || !ADMIN_EMAILS.has(email) || (auth.token && auth.token.email_verified === false)) {
