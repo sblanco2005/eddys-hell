@@ -243,3 +243,19 @@ body.tab-gym .foot { display: none !important; }
 .steal-toast[hidden] { display: none !important; }
 .plan-last { font-family: var(--font); font-size: 0.68rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
 .plan-setup { font-family: var(--font); font-style: italic; }
+
+/* Editor targets: Sets | Reps | Weight (one row), Rest + Setup below */
+.ex-targets { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; align-items: end; }
+.ex-targets.free { grid-template-columns: auto minmax(0, 1fr); }
+.ex-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ex-lbl { font-size: 0.64rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ex-hint { font-style: normal; text-transform: none; letter-spacing: 0; color: var(--accent); font-weight: 500; margin-left: 2px; }
+.ex-targets .stepper button { min-width: 32px; }
+.ex-targets .stepper .mono { min-width: 22px; }
+.ex-weight { width: 100%; min-width: 0; height: 38px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); font-size: 16px; text-align: center; }
+.ex-weight:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.ex-weight::placeholder { color: var(--text-mute); }
+.ex-targets .ex-reps { width: 100%; }
+.ex-row-2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: end; }
+.ex-row-2 .ex-setup { height: 38px; }
+.ex-row-2 .ex-setup { font-size: 15px; padding: 0 10px; border-radius: 8px; }

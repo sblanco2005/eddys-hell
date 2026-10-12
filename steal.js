@@ -157,7 +157,8 @@
       equipment: m.equipment,
       isBarbell: !!m.isBarbell,
       sets: m.sets,
-      reps: String(m.reps),
+      reps: m.muscle === "cardio" || /\d\s*(s|sec|secs|min)\b/i.test(String(m.reps)) ? String(m.reps) : String(DEFAULT_REPS),
+      targetWeightLb: null,
       restSeconds: m.muscle === "cardio" ? 60 : 90,
       setup: "",
       notes: "",
@@ -165,6 +166,57 @@
       startSeconds: m.videoId ? m.start || 0 : null,
     };
   }
+  // ——— Lift targets: reps number (default 8) + planned weight (stored in lb) ———
+  const DEFAULT_REPS = 8;
+  const BW_EQUIP = new Set(["bodyweight", "pullup-bar", "dip-station", "bench"]);
+  function isBodyweight(ex) {
+    return BW_EQUIP.has(ex.equipment) || /pull-?up|chin-?up|\bdips?\b|push-?up/i.test(ex.name || "");
+  }
+  /** Editor kind: 'lift' gets Sets | Reps | Weight; cardio + timed holds (e.g. plank 30-45s) keep free text. */
+  function editKind(ex) {
+    if (ex.muscle === "cardio") return "free";
+    if (/\d\s*(s|sec|secs|min)\b/i.test(String(ex.reps || ""))) return "free";
+    return "lift";
+  }
+  /** '8' stays 8; a range like '5-8' / '8-12' → his default 8. */
+  function migrateReps(r) {
+    const t = String(r == null ? "" : r).trim();
+    if (/^\d{1,3}$/.test(t)) return Number(t);
+    return DEFAULT_REPS;
+  }
+  /** Heaviest logged set from the most recent finished session that has this move. */
+  function lastWeightFor(name) {
+    const sessions = (S.sessions || [])
+      .filter((x) => x.finishedAt)
+      .sort((a, b) => (a.finishedAt < b.finishedAt ? 1 : -1));
+    for (const x of sessions) {
+      const e = (x.exercises || []).find((y) => y.name === name);
+      if (!e) continue;
+      const done = (e.logs || []).filter((l) => l.done && l.weightLb > 0);
+      if (!done.length) continue;
+      const top = done.reduce((a, b) => (b.weightLb > a.weightLb ? b : a));
+      return { weightLb: top.weightLb, reps: top.reps };
+    }
+    return null;
+  }
+  /** Normalize a move to the new shape (idempotent). fillLast: prefill weight from last time. */
+  function normalizeEx(ex, fillLast) {
+    const out = { ...ex };
+    if (editKind(out) === "lift") {
+      out.reps = String(migrateReps(out.reps));
+      if (out.targetWeightLb === undefined) out.targetWeightLb = null;
+      if (fillLast && (out.targetWeightLb == null || out.targetWeightFrom === "last")) {
+        const last = lastWeightFor(out.name);
+        if (last) {
+          out.targetWeightLb = last.weightLb;
+          out.targetWeightFrom = "last";
+        }
+      }
+    }
+    return out;
+  }
+  const userUnit = () => Store.readLocal("unit", "lb");
+
   /** Deterministic split auto-fill: per slot, first move your kit supports (no dup names). */
   function fillSplit(split, gear) {
     const used = new Set();
@@ -173,7 +225,7 @@
       const m = slot.map((id) => LIB_BY_ID.get(id)).find((x) => x && fits(x, gear) && !used.has(x.name));
       if (m) {
         used.add(m.name);
-        out.push(toExercise(m));
+        out.push(normalizeEx(toExercise(m), true));
       }
     }
     return out;
@@ -385,22 +437,71 @@
             <button type="button" class="ex-x" data-act="rm-ex" data-ex="${esc(ex.id)}" aria-label="Remove move">×</button>
           </div>
         </div>
-        <div class="ex-row">
-          <div class="stepper">
-            <button type="button" data-act="sets" data-d="-1" data-ex="${esc(ex.id)}" aria-label="Fewer sets">−</button>
-            <span class="mono">${ex.sets}</span>
-            <button type="button" data-act="sets" data-d="1" data-ex="${esc(ex.id)}" aria-label="More sets">+</button>
+        ${editKind(ex) === "lift" ? renderLiftTargets(ex) : renderFreeTargets(ex)}
+        <div class="ex-row ex-row-2">
+          <div class="ex-field ex-rest">
+            <span class="ex-lbl">Rest</span>
+            <div class="stepper">
+              <button type="button" data-act="rest" data-d="-15" data-ex="${esc(ex.id)}" aria-label="Less rest">−</button>
+              <span class="mono rest">${ex.restSeconds ?? 60}s</span>
+              <button type="button" data-act="rest" data-d="15" data-ex="${esc(ex.id)}" aria-label="More rest">+</button>
+            </div>
           </div>
-          <span class="ex-x-sign">×</span>
-          <input class="ex-reps mono" data-field="reps" data-ex="${esc(ex.id)}" value="${esc(ex.reps)}" placeholder="6-8" aria-label="Reps" />
-          <div class="stepper">
-            <button type="button" data-act="rest" data-d="-15" data-ex="${esc(ex.id)}" aria-label="Less rest">−</button>
-            <span class="mono rest">${ex.restSeconds ?? 60}s</span>
-            <button type="button" data-act="rest" data-d="15" data-ex="${esc(ex.id)}" aria-label="More rest">+</button>
+          <div class="ex-field ex-note">
+            <span class="ex-lbl">Setup</span>
+            <input class="ex-setup" data-field="setup" data-ex="${esc(ex.id)}" value="${esc(ex.setup || "")}" placeholder="hole 4 · bench 30°" aria-label="Setup note" />
           </div>
         </div>
-        <input class="ex-setup" data-field="setup" data-ex="${esc(ex.id)}" value="${esc(ex.setup || "")}" placeholder="Setup note · hole 4, bench 30°" aria-label="Setup note" />
       </li>`;
+  }
+
+  function renderLiftTargets(ex) {
+    const unit = userUnit();
+    const bw = isBodyweight(ex);
+    const w = ex.targetWeightLb != null && ex.targetWeightLb > 0 ? fmtNum(toDisp(ex.targetWeightLb, unit)) : "";
+    const last = lastWeightFor(ex.name);
+    const hint = last ? `last: ${fmtNum(toDisp(last.weightLb, unit))}` : bw ? "optional" : "";
+    return `
+        <div class="ex-targets">
+          <div class="ex-field">
+            <span class="ex-lbl">Sets</span>
+            <div class="stepper">
+              <button type="button" data-act="sets" data-d="-1" data-ex="${esc(ex.id)}" aria-label="Fewer sets">−</button>
+              <span class="mono">${ex.sets}</span>
+              <button type="button" data-act="sets" data-d="1" data-ex="${esc(ex.id)}" aria-label="More sets">+</button>
+            </div>
+          </div>
+          <div class="ex-field">
+            <span class="ex-lbl">Reps</span>
+            <div class="stepper">
+              <button type="button" data-act="reps" data-d="-1" data-ex="${esc(ex.id)}" aria-label="Fewer reps">−</button>
+              <span class="mono">${esc(ex.reps)}</span>
+              <button type="button" data-act="reps" data-d="1" data-ex="${esc(ex.id)}" aria-label="More reps">+</button>
+            </div>
+          </div>
+          <div class="ex-field">
+            <span class="ex-lbl">Weight · ${unit}${hint ? ` <em class="ex-hint" data-hint="${esc(ex.id)}">${esc(hint)}</em>` : ""}</span>
+            <input class="ex-weight mono" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-field="weight" data-ex="${esc(ex.id)}" value="${esc(w)}" placeholder="${bw ? "BW" : "—"}" aria-label="Weight in ${unit}" />
+          </div>
+        </div>`;
+  }
+
+  function renderFreeTargets(ex) {
+    return `
+        <div class="ex-targets free">
+          <div class="ex-field">
+            <span class="ex-lbl">Sets</span>
+            <div class="stepper">
+              <button type="button" data-act="sets" data-d="-1" data-ex="${esc(ex.id)}" aria-label="Fewer sets">−</button>
+              <span class="mono">${ex.sets}</span>
+              <button type="button" data-act="sets" data-d="1" data-ex="${esc(ex.id)}" aria-label="More sets">+</button>
+            </div>
+          </div>
+          <div class="ex-field grow">
+            <span class="ex-lbl">${ex.muscle === "cardio" ? "Target" : "Reps / time"}</span>
+            <input class="ex-reps mono" data-field="reps" data-ex="${esc(ex.id)}" value="${esc(ex.reps)}" placeholder="6-8" aria-label="Target" />
+          </div>
+        </div>`;
   }
 
   function renderEditor() {
@@ -474,6 +575,7 @@
     Store.writeLocal("draft", S.view === "edit" ? S.draft : null);
   }
   function openDraft(d) {
+    d.exercises = (d.exercises || []).map((e) => normalizeEx(e, true));
     S.draft = d;
     S.view = "edit";
     S.addOpen = false;
@@ -601,6 +703,12 @@
         ex.sets = Math.min(8, Math.max(1, (Number(ex.sets) || 1) + Number(el.dataset.d)));
         break;
       }
+      case "reps": {
+        const ex = findEx(el.dataset.ex);
+        if (!ex) return;
+        ex.reps = String(Math.min(50, Math.max(1, migrateReps(ex.reps) + Number(el.dataset.d))));
+        break;
+      }
       case "rest": {
         const ex = findEx(el.dataset.ex);
         if (!ex) return;
@@ -616,7 +724,7 @@
       case "add-move": {
         const m = LIB_BY_ID.get(el.dataset.lib);
         if (!d || !m) return;
-        d.exercises = [...d.exercises, toExercise(m)];
+        d.exercises = [...d.exercises, normalizeEx(toExercise(m), true)];
         setStatus(`Added ${m.name}`, "ok");
         break;
       }
@@ -651,6 +759,16 @@
       if (!ex) return;
       if (f === "reps") ex.reps = t.value;
       if (f === "setup") ex.setup = t.value;
+      if (f === "weight") {
+        const v = t.value.trim().replace(",", ".");
+        if (v === "") {
+          ex.targetWeightLb = null;
+          ex.targetWeightFrom = null;
+        } else if (!Number.isNaN(Number(v))) {
+          ex.targetWeightLb = fromDisp(Number(v), userUnit());
+          ex.targetWeightFrom = "planned";
+        }
+      }
     }
     persistDraft();
   }
@@ -722,17 +840,21 @@
       startedAt: new Date().toISOString(),
       finishedAt: null,
       unit,
-      exercises: w.exercises.map((e) => {
+      exercises: w.exercises.map((e0) => {
+        const e = normalizeEx(e0, true);
         const prior = map.get(e.name) || [];
         return {
           ...e,
           setup: e.setup || "",
           logs: Array.from({ length: Math.max(1, Number(e.sets) || 1) }, (_, i) => {
             const p = prior[i] || prior[prior.length - 1];
+            const lift = editKind(e) === "lift";
+            const planned = lift && e.targetWeightLb > 0 ? e.targetWeightLb : null;
             return {
               set: i + 1,
-              weightLb: p ? p.weightLb || 0 : 0,
-              reps: p && p.reps ? p.reps : Number.parseInt(e.reps, 10) || 8,
+              // planned target weight wins; else last time's set
+              weightLb: planned != null ? planned : p ? p.weightLb || 0 : 0,
+              reps: lift ? migrateReps(e.reps) : p && p.reps ? p.reps : Number.parseInt(e.reps, 10) || 8,
               timeSeconds: null,
               done: false,
             };
@@ -1136,6 +1258,22 @@
       } catch (err) {
         console.warn("[mine] sessions load failed", err);
       }
+      // Migrate saved workouts to the Sets | Reps (number) | Weight shape and save it back.
+      const changed = [];
+      S.workouts = S.workouts.map((w) => {
+        const exs = (w.exercises || []).map((e) => normalizeEx(e, false));
+        if (JSON.stringify(exs) === JSON.stringify(w.exercises || [])) return w;
+        const nw = { ...w, exercises: exs };
+        changed.push(nw);
+        return nw;
+      });
+      for (const w of changed) {
+        try {
+          await Store.saveWorkout(w, S.workouts);
+        } catch (err) {
+          console.warn("[mine] migrate save failed", err);
+        }
+      }
     },
     onAction(act, el) {
       const sess = S.active;
@@ -1325,7 +1463,7 @@
     if (!pl) return null;
     if (pl.src === "workout") {
       const w = S.workouts.find((x) => x.id === pl.id);
-      return w ? { workoutId: w.id, name: w.name, exercises: w.exercises || [] } : null;
+      return w ? { workoutId: w.id, name: w.name, exercises: (w.exercises || []).map((e) => normalizeEx(e, true)) } : null;
     }
     const d = S.draft;
     if (!d) return null;
@@ -1338,18 +1476,26 @@
     const moves = src.exercises.map((e) => {
       const k = kindOf(e);
       const prior = (map.get(e.name) || []).filter((l) => l.done);
+      const lift = editKind(e) === "lift";
       const m = {
         name: e.name,
         kind: k,
         sets: Number(e.sets) || 1,
-        targetReps: String(e.reps || ""),
+        targetReps: lift ? migrateReps(e.reps) : String(e.reps || ""),
         restSec: e.restSeconds ?? 60,
         note: e.setup || "",
       };
-      if (k === "lift" && prior.length && prior[0].weightLb) {
-        m.targetWeight = toDisp(prior[0].weightLb, unit);
-        m.targetWeightSource = "last time";
+      if (lift && e.targetWeightLb > 0) {
+        m.targetWeight = toDisp(e.targetWeightLb, unit);
+        m.targetWeightSource = e.targetWeightFrom === "last" ? "last time" : "planned";
+      } else if (lift && !isBodyweight(e)) {
+        const last = lastWeightFor(e.name) || (prior.length && prior[0].weightLb ? { weightLb: prior[0].weightLb } : null);
+        if (last) {
+          m.targetWeight = toDisp(last.weightLb, unit);
+          m.targetWeightSource = "last time";
+        }
       }
+      if (lift && isBodyweight(e) && m.targetWeight == null) m.bodyweight = true;
       return m;
     });
     return { workoutName: src.name, workoutId: src.workoutId, unit, moves, note: "", plannedAt: new Date().toISOString() };
@@ -1378,7 +1524,12 @@
     const moves = sum.moves
       .map((m) => {
         const tgt = m.kind === "time" ? `${m.sets} × ${esc(m.targetReps)}` : `${m.sets} × ${esc(m.targetReps)}`;
-        const wt = m.targetWeight != null ? ` · ${fmtNum(m.targetWeight)}${esc(sum.unit)} <span class="plan-last">last time</span>` : "";
+        const wt =
+          m.targetWeight != null
+            ? ` · ${fmtNum(m.targetWeight)}${esc(sum.unit)} <span class="plan-last">${esc(m.targetWeightSource)}</span>`
+            : m.bodyweight
+              ? " · BW"
+              : "";
         return `<li><span class="fin-move">${esc(m.name)}</span>
           <span class="mono fin-sets">${tgt}${wt} · ${m.restSec}s rest</span>
           ${m.note ? `<span class="fin-sets plan-setup">${esc(m.note)}</span>` : ""}</li>`;

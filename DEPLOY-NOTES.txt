@@ -325,3 +325,11 @@ Slack admin self-DM unchanged.
 - Buttons: saved-workout card (beside Hit it) + editor (under Hit it). Confirm modal → trainerQueue type:"plan"; session sends now type:"session".
 - Rules unchanged (type already allowed). trainer-queue.mjs list shows type (missing → session).
 - Cache-bust v=20261011-steal-p6-plan; beta Hosting only.
+
+## 2026-10-11 beta-steal-p7-targets (BETA only)
+- Editor: lift moves show Sets | Reps (stepper, default 8) | Weight (user unit, prefilled from last time, "last: N" hint); Rest + Setup below.
+- Bodyweight moves: optional weight, placeholder BW. Timed/cardio moves keep free-text reps.
+- Migration on load: rep ranges (e.g. 5-8, 8-12) -> 8, single numbers kept; targetWeightLb added; changed workouts saved back.
+- Hit it prefills planned weight/reps (planned beats last time). Plan summary: numeric targetReps, targetWeight + targetWeightSource planned|last time.
+- Weight stored as total lb (targetWeightLb); last time = heaviest done set of latest finished session.
+- Cache-bust 20261011-steal-p7-targets. Prod untouched (push-prod-20261011).
