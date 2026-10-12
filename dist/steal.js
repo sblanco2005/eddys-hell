@@ -216,6 +216,15 @@
     return out;
   }
   const userUnit = () => Store.readLocal("unit", "lb");
+  /** Barbell move? Per-move override (ex.barbell, set from the Hit it switch) beats library data. */
+  function isBarbellEx(ex) {
+    if (!ex) return false;
+    if (typeof ex.barbell === "boolean") return ex.barbell;
+    if (typeof ex.isBarbell === "boolean") return ex.isBarbell;
+    return ex.equipment === "barbell" || /\bbarbell\b|deadlift|back squat|front squat/i.test(ex.name || "");
+  }
+  const DEFAULT_BAR_LB = 45;
+  const barLbOf = (ex) => (ex && ex.barLb != null && Number.isFinite(Number(ex.barLb)) ? Math.max(0, Number(ex.barLb)) : DEFAULT_BAR_LB);
 
   /** Deterministic split auto-fill: per slot, first move your kit supports (no dup names). */
   function fillSplit(split, gear) {
@@ -480,10 +489,24 @@
             </div>
           </div>
           <div class="ex-field">
-            <span class="ex-lbl">Weight · ${unit}${hint ? ` <em class="ex-hint" data-hint="${esc(ex.id)}">${esc(hint)}</em>` : ""}</span>
+            <span class="ex-lbl">Weight</span>
             <input class="ex-weight mono" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-field="weight" data-ex="${esc(ex.id)}" value="${esc(w)}" placeholder="${bw ? "BW" : "—"}" aria-label="Weight in ${unit}" />
           </div>
-        </div>`;
+        </div>
+        <p class="ex-perside">${last ? `<em class="ex-hint" data-hint="${esc(ex.id)}">${esc(hint)} ${unit}</em>` : ""}${
+          isBarbellEx(ex)
+            ? `<span class="mono" data-ps="${esc(ex.id)}">${esc(editorSideTxt(ex))}</span>`
+            : `<span>${bw && !last ? `Bodyweight — add ${unit} only if loaded` : `Weight in ${unit}`}</span>`
+        }</p>`;
+  }
+  /** '225 lb = 90/side + 45 bar' (editor hint for barbell moves). */
+  function editorSideTxt(ex) {
+    const unit = userUnit();
+    const t = ex.targetWeightLb;
+    const bar = barLbOf(ex);
+    if (!(t > 0)) return `Barbell · enter total — bar is ${fmtNum(disp1(bar, unit))} ${unit}`;
+    if (t < bar) return `${fmtNum(disp1(t, unit))} ${unit} is lighter than the ${fmtNum(disp1(bar, unit))} ${unit} bar`;
+    return `${fmtNum(disp1(t, unit))} ${unit} = ${fmtNum(disp1((t - bar) / 2, unit))}/side + ${fmtNum(disp1(bar, unit))} bar`;
   }
 
   function renderFreeTargets(ex) {
@@ -768,6 +791,8 @@
           ex.targetWeightLb = fromDisp(Number(v), userUnit());
           ex.targetWeightFrom = "planned";
         }
+        const ps = document.querySelector(`[data-ps="${ex.id}"]`);
+        if (ps) ps.textContent = editorSideTxt(ex);
       }
     }
     persistDraft();
@@ -786,8 +811,41 @@
     const n = Math.max(0, Number(v) || 0);
     return unit === "kg" ? Math.round(n * LB_PER_KG * 10) / 10 : n;
   };
-  const perSideDisp = (lb, unit) => Math.max(0, Math.round((toDisp(lb, unit) - barFor(unit)) * 10) / 10) / 2;
-  const fromPerSide = (ps, unit) => fromDisp(Math.max(0, Number(ps) || 0) * 2 + barFor(unit), unit);
+  /** lb → display unit, 0.1 precision (Hit it math: 135 lb → 61.2 kg, 45 lb bar → 20.4 kg). */
+  const disp1 = (lb, unit) => Math.round((unit === "kg" ? (lb || 0) / LB_PER_KG : lb || 0) * 10) / 10;
+  const toLb = (v, unit) => (unit === "kg" ? (Number(v) || 0) * LB_PER_KG : Number(v) || 0);
+  const round1 = (n) => Math.round(n * 10) / 10;
+  const other = (unit) => (unit === "kg" ? "lb" : "kg");
+  /** Per-side plates in the current unit: the typed value if it was typed in this unit on this bar, else (total − bar) / 2. */
+  /** A logged set keeps the bar it was lifted on; open sets follow the move's current bar. */
+  const barOfLog = (l, ex) => (l.done && l.barLb != null && Number.isFinite(Number(l.barLb)) ? Number(l.barLb) : barLbOf(ex));
+  function sideOf(l, ex, unit) {
+    const bar = barOfLog(l, ex);
+    if (l.perSide != null && l.unit === unit && Number(l.barLb) === bar) return Number(l.perSide);
+    if (!(l.weightLb > 0)) return null;
+    return Math.max(0, disp1((l.weightLb - bar) / 2, unit));
+  }
+  /** New bar weight for a move: plates on unlogged sets stay the same, totals follow. */
+  function changeBar(ex, barLb, unit) {
+    if (!Number.isFinite(barLb)) return;
+    const keep = ex.logs.filter((l) => !l.done).map((l) => [l, sideOf(l, ex, unit)]);
+    ex.barLb = Math.max(0, barLb);
+    for (const [l, side] of keep) if (side != null) setSide(l, ex, unit, side);
+  }
+  /** Total lb = 2 × side (entered unit) + bar (lb). */
+  const totalLbFrom = (side, unit, barLb) => round1(2 * toLb(Math.max(0, Number(side) || 0), unit) + barLb);
+  function setSide(l, ex, unit, side) {
+    const bar = barLbOf(ex);
+    if (side == null || side === "") {
+      l.perSide = null;
+      l.weightLb = 0;
+    } else {
+      l.perSide = Math.max(0, Number(side) || 0);
+      l.weightLb = totalLbFrom(l.perSide, unit, bar);
+    }
+    l.unit = unit;
+    l.barLb = bar;
+  }
   function plateList(ps, unit) {
     let r = Math.round(ps * 100) / 100;
     const out = [];
@@ -845,6 +903,8 @@
         const prior = map.get(e.name) || [];
         return {
           ...e,
+          barbell: isBarbellEx(e),
+          barLb: barLbOf(e),
           setup: e.setup || "",
           logs: Array.from({ length: Math.max(1, Number(e.sets) || 1) }, (_, i) => {
             const p = prior[i] || prior[prior.length - 1];
@@ -903,15 +963,26 @@
     }, 500);
   }
 
-  function platesHtml(l, unit) {
-    const ps = perSideDisp(l.weightLb, unit);
-    const list = plateList(ps, unit);
-    const total = l.weightLb ? toDisp(l.weightLb, unit) : barFor(unit);
-    return `<div class="plates">${
-      list.length
-        ? list.map((p) => `<span class="plate p${String(p).replace(".", "_")}">${fmtNum(p)}</span>`).join("") + `<span class="hint">/ side</span>`
-        : `<span class="hint">Empty bar</span>`
-    }</div><p class="plate-math">Bar ${barFor(unit)}${unit} + 2 × ${fmtNum(ps)}${unit} = ${fmtNum(total)}${unit}</p>`;
+  /** Live total under a barbell set: plates per side + 'Total: 2×45 + 45 bar = 135 lb (61.2 kg)'. */
+  function platesHtml(l, unit, ex) {
+    const ex0 = ex || sessEx();
+    const bar = barOfLog(l, ex0);
+    const side = sideOf(l, ex0, unit);
+    if (side == null) return `<p class="sess-total muted">Enter plates on <strong>one side</strong> — bar ${fmtNum(disp1(bar, unit))} ${unit} added for you</p>`;
+    const list = plateList(side, unit);
+    const tot = l.weightLb || bar;
+    return `<p class="sess-total"><span class="tot-lbl">Total</span> <span class="mono">2×${fmtNum(side)} + ${fmtNum(disp1(bar, unit))} bar =</span>
+        <strong class="mono tot-main">${fmtNum(disp1(tot, unit))} ${unit}</strong> <span class="mono tot-alt">(${fmtNum(disp1(tot, other(unit)))} ${other(unit)})</span></p>
+      <div class="plates">${
+        list.length
+          ? list.map((p) => `<span class="plate p${String(p).replace(".", "_")}">${fmtNum(p)}</span>`).join("") + `<span class="hint">/ side</span>`
+          : `<span class="hint">Empty bar</span>`
+      }</div>`;
+  }
+  /** Non-barbell: just the conversion ('= 22.7 kg'). */
+  function convHtml(l, unit) {
+    if (!(l.weightLb > 0)) return "";
+    return `<p class="sess-conv mono">= ${fmtNum(disp1(l.weightLb, other(unit)))} ${other(unit)}</p>`;
   }
 
   function renderSession() {
@@ -922,19 +993,20 @@
     const ex = exs[idx];
     const unit = sess.unit;
     const kind = kindOf(ex);
-    const per = S.perSide && ex.isBarbell && kind === "lift";
+    const per = kind === "lift" && isBarbellEx(ex);
+    const bar = barLbOf(ex);
     const doneMoves = exs.filter((e) => e.logs.every((l) => l.done)).length;
     const clip = clipFor(ex);
     const { map } = lastLogsFor(sess.workoutId);
     const prior = (map.get(ex.name) || []).filter((l) => l.done);
     const lastTxt = prior.length
       ? prior
-          .map((l) => (kind === "time" ? mmss(l.timeSeconds) : kind === "reps" ? `${l.reps}` : `${fmtNum(toDisp(l.weightLb, unit))}×${l.reps}`))
+          .map((l) => (kind === "time" ? mmss(l.timeSeconds) : kind === "reps" ? `${l.reps}` : `${fmtNum(disp1(l.weightLb, unit))}×${l.reps}`))
           .join(" · ")
       : "";
     const rows = ex.logs
       .map((l) => {
-        const wDisp = per ? perSideDisp(l.weightLb, unit) : toDisp(l.weightLb, unit);
+        const wDisp = per ? sideOf(l, ex, unit) : l.weightLb > 0 ? disp1(l.weightLb, unit) : null;
         let inputs;
         if (kind === "time")
           inputs = `<span class="sess-target mono">${esc(ex.reps)}</span>
@@ -942,9 +1014,12 @@
         else if (kind === "reps")
           inputs = `<input class="sess-input mono grow" inputmode="numeric" data-sf="reps" data-set="${l.set}" value="${l.reps || ""}" placeholder="reps" aria-label="Reps" />`;
         else
-          inputs = `<input class="sess-input mono grow" inputmode="decimal" data-sf="weight" data-set="${l.set}" value="${wDisp ? fmtNum(wDisp) : ""}" placeholder="${per ? "per side" : unit}" aria-label="Weight" />
-            <input class="sess-input mono reps" inputmode="numeric" data-sf="reps" data-set="${l.set}" value="${l.reps || ""}" placeholder="reps" aria-label="Reps" />`;
-        const plates = per ? `<div class="plate-wrap" data-pw="${l.set}">${platesHtml(l, unit)}</div>` : "";
+          inputs = `<label class="sess-wfield grow"><span class="sess-flbl">${per ? `One side · ${unit}` : `Weight · ${unit}`}</span>
+              <input class="sess-input mono" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-sf="weight" data-set="${l.set}" value="${wDisp != null ? fmtNum(wDisp) : ""}" placeholder="${per ? "per side" : isBodyweight(ex) ? "BW" : unit}" aria-label="${per ? `Weight on one side in ${unit}` : `Weight in ${unit}`}" /></label>
+            <label class="sess-wfield reps"><span class="sess-flbl">Reps</span>
+              <input class="sess-input mono" inputmode="numeric" enterkeyhint="done" data-sf="reps" data-set="${l.set}" value="${l.reps || ""}" placeholder="reps" aria-label="Reps" /></label>`;
+        const plates =
+          kind !== "lift" ? "" : per ? `<div class="plate-wrap" data-pw="${l.set}">${platesHtml(l, unit, ex)}</div>` : `<div class="plate-wrap" data-pw="${l.set}">${convHtml(l, unit)}</div>`;
         return `<li class="set-row${l.done ? " done" : ""}">
             <div class="set-main"><span class="set-n mono">${l.set}</span>${inputs}
               <button type="button" class="btn ${l.done ? "accent" : "secondary"} btn-sm set-log" data-act="log" data-set="${l.set}">${l.done ? "Logged" : "Log"}</button></div>
@@ -967,10 +1042,24 @@
       ${
         kind === "lift"
           ? `<div class="seg-row">
-              <button type="button" class="seg-btn${unit === "lb" ? " on" : ""}" data-act="unit" data-unit="lb">lb</button>
-              <button type="button" class="seg-btn${unit === "kg" ? " on" : ""}" data-act="unit" data-unit="kg">kg</button>
-              ${ex.isBarbell ? `<button type="button" class="seg-btn${S.perSide ? " on" : ""}" data-act="perside">one side</button>` : ""}
-            </div>`
+              <div class="seg-pair" role="group" aria-label="Units">
+                <button type="button" class="seg-btn${unit === "lb" ? " on" : ""}" data-act="unit" data-unit="lb" aria-pressed="${unit === "lb"}">lb</button>
+                <button type="button" class="seg-btn${unit === "kg" ? " on" : ""}" data-act="unit" data-unit="kg" aria-pressed="${unit === "kg"}">kg</button>
+              </div>
+              <button type="button" class="seg-btn bb-switch${per ? " on" : ""}" data-act="barbell" aria-pressed="${per}">${per ? "✓ " : ""}Barbell</button>
+            </div>
+            ${
+              per
+                ? `<div class="bar-row">
+                    <label class="bar-lbl" for="bar-in">Bar</label>
+                    <input id="bar-in" class="sess-input mono bar-in" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-sf="bar" value="${fmtNum(disp1(bar, unit))}" aria-label="Bar weight in ${unit}" />
+                    <span class="bar-unit">${unit}</span>
+                    <button type="button" class="seg-btn sm${bar === 45 ? " on" : ""}" data-act="bar" data-lb="45">${unit === "kg" ? "20.4" : "45"}</button>
+                    <button type="button" class="seg-btn sm${bar === 35 ? " on" : ""}" data-act="bar" data-lb="35">${unit === "kg" ? "15.9" : "35"}</button>
+                    <button type="button" class="seg-btn sm${bar === 0 ? " on" : ""}" data-act="bar" data-lb="0">None</button>
+                  </div>`
+                : ""
+            }`
           : ""
       }
       <article class="sess-card">
@@ -1067,9 +1156,19 @@
         sets: done.map((l) => {
           if (k === "time") return { t: l.timeSeconds || 0 };
           if (k === "reps") return { r: l.reps || 0 };
-          const w = toDisp(l.weightLb, unit);
+          const w = disp1(l.weightLb, unit);
           totalVolume += w * (l.reps || 0);
-          return { w, r: l.reps || 0 };
+          const st = { w, r: l.reps || 0, totalLb: l.weightLb || 0 };
+          if (isBarbellEx(e) && l.weightLb > 0) {
+            // per side + bar in the unit he typed them in (falls back to the summary unit)
+            const pu = l.perSide != null && (l.unit === "kg" || l.unit === "lb") ? l.unit : unit;
+            st.ps = sideOf(l, e, pu);
+            st.bar = disp1(barOfLog(l, e), pu);
+            st.psUnit = pu;
+            const tail = pu === unit ? `${fmtNum(st.ps)}/side + ${fmtNum(st.bar)} bar` : `${fmtNum(st.ps)} ${pu}/side + ${fmtNum(st.bar)} ${pu} bar`;
+            st.txt = `${fmtNum(w)} ${unit} total (${tail}) × ${st.r}`;
+          } else st.txt = `${w ? fmtNum(w) + " " + unit : "BW"} × ${st.r}`;
+          return st;
         }),
       });
     }
@@ -1086,7 +1185,8 @@
       totalVolume: Math.round(totalVolume),
     };
   }
-  const setTxt = (st, unit) => (st.t != null ? mmss(st.t) : st.w != null ? `${st.w ? fmtNum(st.w) + unit : "BW"} × ${st.r}` : `${st.r} reps`);
+  const setTxt = (st, unit) =>
+    st.t != null ? mmss(st.t) : st.w != null ? `${st.w ? fmtNum(st.w) + unit : "BW"}${st.ps != null ? ` (${fmtNum(st.ps)}${st.psUnit && st.psUnit !== unit ? " " + st.psUnit : ""}/side)` : ""} × ${st.r}` : `${st.r} reps`;
 
   function renderFinishModal() {
     const sess = S.active;
@@ -1382,14 +1482,19 @@
           sess.unit = el.dataset.unit === "kg" ? "kg" : "lb";
           Store.writeLocal("unit", sess.unit);
           break;
-        case "perside":
-          S.perSide = !S.perSide;
+        case "barbell":
+          ex.barbell = !isBarbellEx(ex);
+          break;
+        case "bar":
+          changeBar(ex, Number(el.dataset.lb), sess.unit);
           break;
         case "sess-sets": {
           const n = Math.min(8, Math.max(1, ex.logs.length + Number(el.dataset.d)));
           if (n > ex.logs.length) {
             const last = ex.logs[ex.logs.length - 1];
-            ex.logs.push({ set: n, weightLb: last ? last.weightLb : 0, reps: last ? last.reps : 8, timeSeconds: null, done: false });
+            const nl = { set: n, weightLb: last ? last.weightLb : 0, reps: last ? last.reps : 8, timeSeconds: null, done: false };
+            if (last && last.perSide != null) Object.assign(nl, { perSide: last.perSide, unit: last.unit, barLb: last.barLb });
+            ex.logs.push(nl);
           } else if (n < ex.logs.length) ex.logs = ex.logs.slice(0, n);
           ex.sets = ex.logs.length;
           break;
@@ -1398,11 +1503,20 @@
           const l = ex.logs.find((x) => x.set === Number(el.dataset.set));
           if (!l) return true;
           l.done = !l.done;
+          if (l.done && kindOf(ex) === "lift" && isBarbellEx(ex) && l.weightLb > 0 && sideOf(l, ex, sess.unit) != null) {
+            // record what was on the bar (keep the exact total when the side was derived, not typed)
+            l.perSide = sideOf(l, ex, sess.unit);
+            l.barLb = barLbOf(ex);
+          }
+          if (l.done && kindOf(ex) === "lift") l.unit = sess.unit;
           if (l.done && (ex.restSeconds ?? 60) > 0) S.rest = { until: Date.now() + (ex.restSeconds ?? 60) * 1000 };
           if (l.done) {
             // carry weight/reps forward to the next untouched set
             const nx = ex.logs.find((x) => x.set === l.set + 1);
-            if (nx && !nx.done && !nx.weightLb) nx.weightLb = l.weightLb;
+            if (nx && !nx.done && !nx.weightLb) {
+              nx.weightLb = l.weightLb;
+              if (l.perSide != null) Object.assign(nx, { perSide: l.perSide, unit: l.unit, barLb: l.barLb });
+            }
           }
           break;
         }
@@ -1434,7 +1548,7 @@
       const ex = sessEx();
       if (!ex) return true;
       const unit = S.active.unit;
-      const per = S.perSide && ex.isBarbell && kindOf(ex) === "lift";
+      const per = kindOf(ex) === "lift" && isBarbellEx(ex);
       const l = t.dataset.set ? ex.logs.find((x) => x.set === Number(t.dataset.set)) : null;
       if (f === "setup") ex.setup = t.value;
       else if (f === "target") ex.reps = t.value;
@@ -1443,10 +1557,26 @@
         const v = parseTime(t.value);
         if (v != null) l.timeSeconds = v;
       } else if (l && f === "weight") {
-        if (t.value.trim() === "") l.weightLb = 0;
-        else if (!Number.isNaN(Number(t.value))) l.weightLb = per ? fromPerSide(t.value, unit) : fromDisp(t.value, unit);
-        const pw = per && document.querySelector(`[data-pw="${l.set}"]`);
-        if (pw) pw.innerHTML = platesHtml(l, unit); // in place — a re-render would eat the Log tap
+        const v = t.value.trim().replace(",", ".");
+        if (per) {
+          if (v === "") setSide(l, ex, unit, null);
+          else if (!Number.isNaN(Number(v))) setSide(l, ex, unit, Number(v));
+        } else {
+          if (v === "") l.weightLb = 0;
+          else if (!Number.isNaN(Number(v))) l.weightLb = round1(toLb(Math.max(0, Number(v)), unit));
+          l.unit = unit;
+        }
+        const pw = document.querySelector(`[data-pw="${l.set}"]`);
+        if (pw) pw.innerHTML = per ? platesHtml(l, unit, ex) : convHtml(l, unit); // in place — a re-render would eat the Log tap
+      } else if (f === "bar" && per) {
+        const v = t.value.trim().replace(",", ".");
+        if (v === "" || Number.isNaN(Number(v))) return true;
+        changeBar(ex, round1(toLb(Math.max(0, Number(v)), unit)), unit);
+        for (const x of ex.logs) {
+          const pw = document.querySelector(`[data-pw="${x.set}"]`);
+          if (pw) pw.innerHTML = platesHtml(x, unit, ex);
+        }
+        document.querySelectorAll('[data-act="bar"]').forEach((b) => b.classList.toggle("on", Number(b.dataset.lb) === barLbOf(ex)));
       }
       persistActive();
       return true;
@@ -1496,6 +1626,14 @@
         }
       }
       if (lift && isBodyweight(e) && m.targetWeight == null) m.bodyweight = true;
+      if (lift && m.targetWeight != null && isBarbellEx(e)) {
+        const tl = e.targetWeightLb > 0 ? e.targetWeightLb : toLb(m.targetWeight, unit);
+        const bar = barLbOf(e);
+        if (tl >= bar) {
+          m.targetPerSide = disp1((tl - bar) / 2, unit);
+          m.barWeight = disp1(bar, unit);
+        }
+      }
       return m;
     });
     return { workoutName: src.name, workoutId: src.workoutId, unit, moves, note: "", plannedAt: new Date().toISOString() };
@@ -1526,7 +1664,7 @@
         const tgt = m.kind === "time" ? `${m.sets} × ${esc(m.targetReps)}` : `${m.sets} × ${esc(m.targetReps)}`;
         const wt =
           m.targetWeight != null
-            ? ` · ${fmtNum(m.targetWeight)}${esc(sum.unit)} <span class="plan-last">${esc(m.targetWeightSource)}</span>`
+            ? ` · ${fmtNum(m.targetWeight)}${esc(sum.unit)}${m.targetPerSide != null ? ` (${fmtNum(m.targetPerSide)}/side)` : ""} <span class="plan-last">${esc(m.targetWeightSource)}</span>`
             : m.bodyweight
               ? " · BW"
               : "";
