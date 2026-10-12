@@ -333,3 +333,18 @@ Slack admin self-DM unchanged.
 - Hit it prefills planned weight/reps (planned beats last time). Plan summary: numeric targetReps, targetWeight + targetWeightSource planned|last time.
 - Weight stored as total lb (targetWeightLb); last time = heaviest done set of latest finished session.
 - Cache-bust 20261011-steal-p7-targets. Prod untouched (push-prod-20261011).
+
+## 2026-10-11 ~8:55 PM ET — beta-steal-p8-plates (BETA only)
+- Readability (Mine/Gym only, scoped to .steal-root): the global .mono rule (0.75rem !important) was shrinking every
+  Mine number/input to ~11px — overridden. Inputs 17–20px (no iOS zoom), labels 16px sentence case, brighter
+  dim/mute text + placeholders, steppers 44px tap targets, Hit it set inputs 48px tall with field labels.
+- Hit it, barbell moves: weight entry = ONE side. lb|kg toggle (remembered in local "unit"), Barbell switch per move
+  (default from library isBarbell / equipment), Bar field + presets 45 / 35 / None (default 45 lb = 20.4 kg shown in kg).
+  Live line: "Total 2×side + bar = X lb (Y kg)". Prefill side = (total − bar) / 2.
+- Log data: weightLb still = total lb (history/last time/trainer unchanged); barbell sets also store perSide, barLb, unit.
+  Logged sets keep their own bar; changing the bar re-totals open sets only (plates per side kept).
+- Non-barbell lifts: plain weight in current unit + "= N kg/lb" conversion; BW placeholder for bodyweight.
+- Trainer session summary sets add totalLb, ps (per side), bar, psUnit, txt e.g. "135 lb total (45/side + 45 bar) × 8".
+  Plan summary adds targetPerSide + barWeight for barbell moves. Editor: "225 lb = 90/side + 45 bar" under barbell moves.
+- Cache-bust 20261011-steal-p8-plates (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p8-plates-20261011).
+  Deployed hosting:beta via npx firebase-tools@latest (installed CLI: Premature close). Prod untouched (push-prod-20261011).

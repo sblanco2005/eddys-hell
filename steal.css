@@ -259,3 +259,82 @@ body.tab-gym .foot { display: none !important; }
 .ex-row-2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: end; }
 .ex-row-2 .ex-setup { height: 38px; }
 .ex-row-2 .ex-setup { font-size: 15px; padding: 0 10px; border-radius: 8px; }
+
+/* p8 — readability (Mine + Gym only): brighter secondary text, 16px+ inputs, bigger steppers */
+.steal-root { --text-dim: #b9c6d5; --text-mute: #93a3b6; }
+.steal-root .hint { color: var(--text-dim); }
+.steal-root input::placeholder, .steal-root textarea::placeholder { color: #7f90a5; opacity: 1; }
+.steal-root .steal-kicker { font-size: 0.78rem; }
+.steal-root .steal-back { font-size: 0.85rem; padding: 6px 0; }
+.ex-name { font-size: 1.12rem; }
+.ex-muscle { font-size: 0.85rem; }
+.ex-lbl { font-size: 0.78rem; letter-spacing: 0.06em; color: var(--text-dim); }
+.ex-hint { font-size: 0.85rem; font-weight: 600; }
+.ex-move button, .ex-x, .stepper button { min-width: 44px; height: 44px; font-size: 1.35rem; color: var(--text); }
+.ex-targets .stepper button { min-width: 40px; }
+.stepper .mono, .ex-targets .stepper .mono { min-width: 28px; font-size: 1.1rem; font-weight: 600; color: var(--text); }
+.stepper .rest { min-width: 46px; font-size: 1rem; color: var(--text); }
+.ex-reps, .ex-setup, .sess-input, .ex-weight, .ex-row-2 .ex-setup { font-size: 17px; height: 44px; }
+.ex-weight { font-size: 18px; font-weight: 600; }
+.ex-clip { font-size: 0.85rem; height: 40px; }
+.ex-perside { margin: -2px 0 0; font-size: 0.9rem; color: var(--text-dim); }
+.add-move { font-size: 1rem; }
+.add-move .mono { font-size: 0.85rem; }
+.mine-item-meta { font-size: 0.88rem; }
+.split-blurb { font-size: 0.88rem; }
+/* Hit it */
+.seg-row { align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.seg-pair { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; }
+.seg-pair .seg-btn { border: 0; border-radius: 0; min-width: 64px; }
+.seg-btn { font-size: 1.05rem; height: 44px; padding: 0 16px; color: var(--text); }
+.seg-btn.sm { height: 40px; padding: 0 12px; font-size: 0.95rem; }
+.bb-switch:not(.on) { color: var(--text-dim); }
+.bar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bar-lbl, .bar-unit { font-size: 1rem; color: var(--text-dim); font-weight: 600; }
+.sess-input.bar-in { width: 76px; text-align: center; }
+.sess-move { font-size: 1.7rem; }
+.sess-last { font-size: 0.95rem; color: var(--text-dim); }
+.rest-note { font-size: 0.9rem; color: var(--text-dim); }
+.set-main { align-items: flex-end; }
+.set-n { font-size: 1.05rem; color: var(--text-dim); font-weight: 600; padding-bottom: 12px; }
+.sess-wfield { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sess-wfield.grow { flex: 1; }
+.sess-wfield.reps { width: 76px; }
+.sess-flbl { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); white-space: nowrap; }
+.sess-wfield .sess-input { width: 100%; height: 48px; font-size: 20px; font-weight: 600; text-align: center; }
+.set-log { width: 80px; height: 48px; font-size: 1rem; }
+.plate-wrap { padding-left: 0; margin-top: 10px; }
+.sess-total { margin: 0 0 6px; font-size: 1rem; color: var(--text-dim); line-height: 1.4; }
+.sess-total.muted { font-size: 0.92rem; }
+.sess-total strong { color: var(--text); }
+.tot-lbl { font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; }
+.tot-main { font-size: 1.25rem; color: var(--accent) !important; white-space: nowrap; }
+.tot-alt { white-space: nowrap; color: var(--text); }
+.sess-conv { margin: 0; font-size: 1rem; color: var(--text-dim); }
+.plates .hint { font-size: 0.85rem; }
+.plate { font-size: 0.85rem; height: 30px; min-width: 28px; }
+.hist-moves { font-size: 0.95rem; }
+.hist-moves .mono { font-size: 0.88rem; }
+.fin-list { font-size: 0.95rem; }
+.fin-sets { font-size: 0.88rem; }
+.fin-meta { font-size: 0.88rem; }
+.gym-chip { font-size: 0.95rem; min-height: 44px; }
+/* The global .mono rule (styles.css: 0.75rem !important, dim) shrank every Mine number to ~11px — override inside Mine/Gym. */
+.steal-root .mono { font-size: 0.95em !important; color: inherit !important; }
+.steal-root input.mono, .steal-root textarea.mono { font-size: 17px !important; color: var(--text) !important; }
+.steal-root .ex-weight.mono { font-size: 18px !important; }
+.steal-root .sess-wfield .sess-input.mono { font-size: 20px !important; }
+.steal-root .stepper .mono { font-size: 1.1rem !important; color: var(--text) !important; }
+.steal-root .stepper .rest.mono { font-size: 1rem !important; }
+.steal-root .set-n.mono { font-size: 1.05rem !important; color: var(--text-dim) !important; }
+.steal-root .tot-main.mono { font-size: 1.25rem !important; color: var(--accent) !important; }
+.steal-root .tot-alt.mono { color: var(--text) !important; }
+.steal-root .sess-total .mono, .steal-root .sess-conv, .steal-root .ex-perside.mono { color: var(--text-dim) !important; }
+.steal-root .fin-sets.mono, .steal-root .hist-moves .mono, .steal-root .add-move .mono { color: var(--text-dim) !important; font-size: 0.9rem !important; }
+.steal-root .sess-target.mono { font-size: 0.95rem !important; color: var(--text-dim) !important; }
+/* field labels: 16px sentence case (uppercase 11px was the hard-to-read part) */
+.steal-root .ex-lbl, .steal-root .sess-flbl { font-size: 16px; text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--text-dim); }
+.steal-root .ex-hint { font-size: 15px; }
+.steal-root .ex-targets { gap: 10px 8px; }
+.steal-root .ex-perside { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: -2px 0 0; font-size: 15px; color: var(--text-dim); }
+.steal-root .ex-perside .ex-hint { margin: 0; }

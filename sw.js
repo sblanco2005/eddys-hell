@@ -1,7 +1,7 @@
 /* Eddy's Hell — Web Push service worker. Cache-bust via Hosting headers. */
 /* eslint-disable no-undef */
 // SW version — bump to force an update on installed Home Screen apps.
-const EH_SW_VERSION = "20261011-steal-p7-targets";
+const EH_SW_VERSION = "20261011-steal-p8-plates";
 self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
