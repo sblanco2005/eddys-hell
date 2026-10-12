@@ -111,6 +111,15 @@
       this.writeLocal("sessions", list.slice(-200));
       return list;
     },
+    async queueForTrainer(doc) {
+      const c = await this.cloud();
+      if (!c) throw new Error("not-signed-in-to-cloud");
+      const { createdAt, ...rest } = doc;
+      const data = clean({ ...rest, uid: c.uid, sessionPath: `users/${c.uid}/sessions/${doc.sessionId}` });
+      data.createdAt = createdAt || c.fs.serverTimestamp(); // sentinel must not go through JSON
+      const ref = await c.fs.addDoc(c.fs.collection(c.db, "trainerQueue"), data);
+      return ref.id;
+    },
     async saveSession(sess, all) {
       this.writeLocal("sessions", all.slice(-200));
       const c = await this.cloud();
@@ -688,7 +697,7 @@
     return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
   };
 
-  Object.assign(S, { sessions: [], active: null, sessIdx: 0, perSide: true, rest: null, historyFor: null });
+  Object.assign(S, { sessions: [], active: null, sessIdx: 0, perSide: true, rest: null, historyFor: null, finishOpen: false, finishNote: "", finishBusy: false });
 
   /** Last finished session's logs for this workout, keyed by move name. */
   function lastLogsFor(workoutId) {
@@ -917,9 +926,103 @@
     window.scrollTo(0, y);
   }
 
-  async function finishSession() {
+  /** Compact summary of logged sets — shown in the Finish modal and sent to the trainer. */
+  function sessionSummary(sess, finishedAt) {
+    const unit = sess.unit;
+    let totalSets = 0;
+    let totalVolume = 0;
+    const moves = [];
+    for (const e of sess.exercises) {
+      const k = kindOf(e);
+      const done = e.logs.filter((l) => l.done);
+      if (!done.length) continue;
+      totalSets += done.length;
+      moves.push({
+        name: e.name,
+        kind: k,
+        sets: done.map((l) => {
+          if (k === "time") return { t: l.timeSeconds || 0 };
+          if (k === "reps") return { r: l.reps || 0 };
+          const w = toDisp(l.weightLb, unit);
+          totalVolume += w * (l.reps || 0);
+          return { w, r: l.reps || 0 };
+        }),
+      });
+    }
+    const end = finishedAt || new Date().toISOString();
+    return {
+      workoutName: sess.name,
+      startedAt: sess.startedAt,
+      finishedAt: end,
+      durationMin: Math.max(0, Math.round((new Date(end) - new Date(sess.startedAt)) / 60000)),
+      unit,
+      moves, // only moves with ≥1 logged set; only logged sets (planned/unlogged excluded)
+      totalSets,
+      loggedSetCount: totalSets,
+      totalVolume: Math.round(totalVolume),
+    };
+  }
+  const setTxt = (st, unit) => (st.t != null ? mmss(st.t) : st.w != null ? `${st.w ? fmtNum(st.w) + unit : "BW"} × ${st.r}` : `${st.r} reps`);
+
+  function renderFinishModal() {
+    const sess = S.active;
+    if (!sess || !S.finishOpen) return "";
+    const sum = sessionSummary(sess);
+    const empty = !sum.totalSets;
+    const moves = sum.moves
+      .map((m) => `<li><span class="fin-move">${esc(m.name)}</span><span class="mono fin-sets">${m.sets.map((st) => esc(setTxt(st, sum.unit))).join(", ")}</span></li>`)
+      .join("");
+    return `
+      <div class="eh-modal fin-modal" role="dialog" aria-modal="true" aria-labelledby="fin-title">
+        <div class="eh-modal-backdrop" data-act="fin-cancel"></div>
+        <div class="eh-modal-card fin-card">
+          <p class="steal-kicker">Finish workout?</p>
+          <h3 id="fin-title" class="fin-title">${esc(sum.workoutName)}</h3>
+          <p class="hint fin-meta">${fmtDur(Date.now() - new Date(sess.startedAt).getTime())} · ${sum.totalSets} sets${
+            sum.totalVolume ? ` · ${sum.totalVolume.toLocaleString()} ${esc(sum.unit)} volume` : ""
+          }</p>
+          ${
+            empty
+              ? `<p class="hint">Nothing logged yet — finishing now discards this session.</p>`
+              : `<ul class="fin-list">${moves}</ul>
+                 <label class="field-label" for="fin-note">How did it feel?</label>
+                 <textarea id="fin-note" class="fin-note" data-fn="note" rows="3" maxlength="1000" placeholder="Optional — energy, pain, what to change…">${esc(S.finishNote || "")}</textarea>`
+          }
+          <div class="fin-actions">
+            ${
+              empty
+                ? `<button type="button" class="btn accent wide-btn" data-act="fin-only">Discard session</button>`
+                : `<button type="button" class="btn accent wide-btn" data-act="fin-send" ${S.finishBusy ? "disabled" : ""}>${S.finishBusy ? "Saving…" : "Finish &amp; send to trainer"}</button>
+                   <button type="button" class="btn secondary wide-btn" data-act="fin-only" ${S.finishBusy ? "disabled" : ""}>Finish only</button>`
+            }
+            <button type="button" class="btn ghost wide-btn" data-act="fin-cancel">Keep going</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function toast(msg, kind) {
+    let el = $("steal-toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "steal-toast";
+      el.setAttribute("role", "status");
+      document.body.appendChild(el);
+    }
+    el.className = "steal-toast" + (kind ? " " + kind : "");
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => (el.hidden = true), 4500);
+  }
+
+  async function finishSession(opts) {
+    const send = !!(opts && opts.send);
+    const note = String((opts && opts.note) || "").trim();
     const sess = S.active;
     if (!sess) return;
+    S.finishOpen = false;
+    S.finishNote = "";
     const logged = sess.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
     if (!logged) {
       // Nothing logged — don't create an empty history entry or bump "last done".
@@ -934,6 +1037,11 @@
     }
     const now = new Date().toISOString();
     sess.finishedAt = now;
+    if (note) sess.note = note;
+    if (send) {
+      sess.shareWithTrainer = true;
+      sess.trainerStatus = "pending";
+    }
     const draft = sess.draft;
     delete sess.draft;
     let w = sess.workoutId ? S.workouts.find((x) => x.id === sess.workoutId) : null;
@@ -959,14 +1067,38 @@
     persistActive();
     render();
     window.scrollTo(0, 0);
+    let where = "device";
     try {
-      const where = await Store.saveSession(sess, S.sessions);
+      where = await Store.saveSession(sess, S.sessions);
       if (w) await Store.saveWorkout(w, S.workouts);
-      const sets = sess.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
-      setStatus(`Logged “${sess.name}” · ${sets} sets${where === "cloud" ? "" : " (on this device)"}`, "ok");
     } catch (err) {
       console.warn("[mine] session save failed", err);
-      setStatus("Couldn’t save the session to your account — kept on this device.", "err");
+      toast("Couldn’t save the session to your account — kept on this device.", "err");
+      return;
+    }
+    if (!send) {
+      toast(`Logged “${sess.name}” · ${logged} sets${where === "cloud" ? "" : " (on this device)"}`, "ok");
+      return;
+    }
+    try {
+      const summary = sessionSummary(sess, now);
+      if (!summary.loggedSetCount) return; // only performed work goes to the trainer
+      if (note) summary.note = note;
+      const fs = (await Store.cloud()).fs;
+      await Store.queueForTrainer({
+        email: (user && user.email) || "",
+        displayName: (user && user.displayName) || "",
+        sessionId: sess.id,
+        createdAt: fs.serverTimestamp(),
+        status: "pending",
+        summary,
+      });
+      toast("Saved — your trainer will get it shortly", "ok");
+    } catch (err) {
+      console.warn("[mine] trainer queue failed", err);
+      sess.trainerStatus = "failed";
+      Store.saveSession(sess, S.sessions).catch(() => {});
+      toast("Saved, but couldn’t queue it for your trainer" + (where === "cloud" ? " — try again later." : " (offline)."), "err");
     }
   }
 
@@ -981,7 +1113,7 @@
       S.active
         ? `<button type="button" class="resume-banner" data-act="sess-resume"><span>In progress · ${esc(S.active.name)}</span><strong>Resume ›</strong></button>`
         : "",
-    renderView: (v) => (v === "session" && S.active ? renderSession() : v === "history" && S.historyFor ? renderHistory() : ""),
+    renderView: (v) => (v === "session" && S.active ? renderSession() + renderFinishModal() : v === "history" && S.historyFor ? renderHistory() : ""),
     async afterLoad() {
       const a = Store.readLocal("active", null);
       if (a && Array.isArray(a.exercises) && !a.finishedAt) {
@@ -1033,7 +1165,24 @@
           render();
           return true;
         case "sess-finish":
-          finishSession();
+          if (!S.active) return true;
+          S.finishOpen = true;
+          S.finishBusy = false;
+          rerenderKeep();
+          setTimeout(() => {
+            const n = $("fin-note");
+            if (n) n.blur();
+          }, 0);
+          return true;
+        case "fin-cancel":
+          S.finishOpen = false;
+          rerenderKeep();
+          return true;
+        case "fin-send":
+        case "fin-only":
+          if (S.finishBusy) return true;
+          S.finishBusy = true;
+          finishSession({ send: act === "fin-send", note: S.finishNote });
           return true;
       }
       if (!sess) return false;
@@ -1096,6 +1245,10 @@
     },
     onInput(e) {
       const t = e.target;
+      if (t.dataset && t.dataset.fn === "note") {
+        S.finishNote = t.value;
+        return true;
+      }
       const f = t.dataset && t.dataset.sf;
       if (!f || !S.active) return false;
       const ex = sessEx();

@@ -311,3 +311,12 @@ Slack admin self-DM unchanged.
   gym 14 items; workouts: Efficient Pull Day (Push/Pull never-saved drafts + 2 Stolen extracts skipped).
 - Cache-bust v=20261011-steal-p1 → p2 → p3; sw.js EH_SW_VERSION. REST deploy to eddy-s-hell-beta only.
   Prod Hosting untouched. No pushes; config/thisWeek|nextWeek untouched.
+
+## 2026-10-11 ~8:30 PM ET — beta only: Finish confirmation + trainer hand-off
+- Hit it → Finish opens in-app modal (summary of LOGGED sets only, note "How did it feel?"):
+  Finish & send to trainer | Finish only | Keep going. Send hidden when nothing logged (Finish discards).
+- Send: session gets shareWithTrainer/trainerStatus:'pending'/note; queue doc trainerQueue/{autoId}.
+- Rules additive: trainerQueue create if uid == auth.uid && status=='pending'; read/update admin; no delete.
+  Live ruleset f64aa471-… (prev 437d0e1b-…).
+- Box: node scripts/trainer-queue.mjs list | mark <id> sent|failed [reason]
+- Cache-bust v=20261011-steal-p5-trainer; beta Hosting only.

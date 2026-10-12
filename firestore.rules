@@ -123,6 +123,16 @@ service cloud.firestore {
       }
     }
 
+    // Trainer hand-off queue (beta). A user may enqueue only their own finished
+    // session; the box script (admin creds) reads and marks items sent/failed.
+    match /trainerQueue/{id} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow read, update: if isAdmin();
+      allow delete: if false;
+    }
+
 
   }
 }
