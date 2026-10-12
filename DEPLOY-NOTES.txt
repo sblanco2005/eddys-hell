@@ -320,3 +320,8 @@ Slack admin self-DM unchanged.
   Live ruleset f64aa471-… (prev 437d0e1b-…).
 - Box: node scripts/trainer-queue.mjs list | mark <id> sent|failed [reason]
 - Cache-bust v=20261011-steal-p5-trainer; beta Hosting only.
+
+## 2026-10-11 ~8:40 PM ET — beta only: Send plan to trainer (before starting)
+- Buttons: saved-workout card (beside Hit it) + editor (under Hit it). Confirm modal → trainerQueue type:"plan"; session sends now type:"session".
+- Rules unchanged (type already allowed). trainer-queue.mjs list shows type (missing → session).
+- Cache-bust v=20261011-steal-p6-plan; beta Hosting only.

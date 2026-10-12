@@ -241,3 +241,5 @@ body.tab-gym .foot { display: none !important; }
 .steal-toast.ok { border-color: rgba(61, 214, 140, 0.6); }
 .steal-toast.err { border-color: var(--warn); color: var(--warn); }
 .steal-toast[hidden] { display: none !important; }
+.plan-last { font-family: var(--font); font-size: 0.68rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+.plan-setup { font-family: var(--font); font-style: italic; }

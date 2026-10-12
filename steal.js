@@ -115,7 +115,9 @@
       const c = await this.cloud();
       if (!c) throw new Error("not-signed-in-to-cloud");
       const { createdAt, ...rest } = doc;
-      const data = clean({ ...rest, uid: c.uid, sessionPath: `users/${c.uid}/sessions/${doc.sessionId}` });
+      const data = clean({ type: "session", ...rest, uid: c.uid });
+      if (doc.sessionId) data.sessionPath = `users/${c.uid}/sessions/${doc.sessionId}`;
+      if (doc.workoutId) data.workoutPath = `users/${c.uid}/workouts/${doc.workoutId}`;
       data.createdAt = createdAt || c.fs.serverTimestamp(); // sentinel must not go through JSON
       const ref = await c.fs.addDoc(c.fs.collection(c.db, "trainerQueue"), data);
       return ref.id;
@@ -303,7 +305,7 @@
     else if (HOOKS.renderView && (html = HOOKS.renderView(S.view))) {
       /* session / history (phase 3) */
     } else html = renderMineList();
-    return html + renderClip() + `<p class="steal-status" id="steal-status" hidden></p>`;
+    return html + renderClip() + (HOOKS.renderPlanModal ? HOOKS.renderPlanModal() : "") + `<p class="steal-status" id="steal-status" hidden></p>`;
   }
 
   function sortedWorkouts() {
@@ -1088,6 +1090,7 @@
       await Store.queueForTrainer({
         email: (user && user.email) || "",
         displayName: (user && user.displayName) || "",
+        type: "session",
         sessionId: sess.id,
         createdAt: fs.serverTimestamp(),
         status: "pending",
@@ -1103,12 +1106,17 @@
   }
 
   Object.assign(HOOKS, {
-    hitItButton: (w) => `<button type="button" class="btn accent btn-sm" data-act="hit" data-id="${esc(w.id)}" ${(w.exercises || []).length ? "" : "disabled"}>Hit it</button>`,
+    hitItButton: (w) =>
+      `<button type="button" class="btn accent btn-sm" data-act="hit" data-id="${esc(w.id)}" ${(w.exercises || []).length ? "" : "disabled"}>Hit it</button>` +
+      `<button type="button" class="btn secondary btn-sm" data-act="plan-open" data-src="workout" data-id="${esc(w.id)}" ${(w.exercises || []).length ? "" : "disabled"}>Send plan to trainer</button>`,
     historyButton: (w) => {
       const n = S.sessions.filter((x) => x.finishedAt && x.workoutId === w.id).length;
       return `<button type="button" class="btn ghost btn-sm" data-act="history" data-id="${esc(w.id)}">History${n ? ` · ${n}` : ""}</button>`;
     },
-    hitItDraftButton: (d) => `<button type="button" class="btn accent wide-btn" data-act="hit-draft" ${d.exercises.length ? "" : "disabled"}>Hit it</button>`,
+    hitItDraftButton: (d) =>
+      `<button type="button" class="btn accent wide-btn" data-act="hit-draft" ${d.exercises.length ? "" : "disabled"}>Hit it</button>` +
+      `<button type="button" class="btn secondary wide-btn" data-act="plan-open" data-src="draft" ${d.exercises.length ? "" : "disabled"}>Send plan to trainer</button>`,
+    renderPlanModal: () => renderPlanModal(),
     resumeBanner: () =>
       S.active
         ? `<button type="button" class="resume-banner" data-act="sess-resume"><span>In progress · ${esc(S.active.name)}</span><strong>Resume ›</strong></button>`
@@ -1135,6 +1143,36 @@
         case "hit": {
           const w = S.workouts.find((x) => x.id === el.dataset.id);
           if (w) startSession(w, w.id);
+          return true;
+        }
+        case "plan-open": {
+          const src = el.dataset.src === "draft" ? "draft" : "workout";
+          if (src === "workout" && !S.workouts.some((x) => x.id === el.dataset.id)) return true;
+          if (src === "draft" && !S.draft) return true;
+          S.plan = { src, id: el.dataset.id || null, sent: false, busy: false };
+          S.planNote = "";
+          rerenderKeep();
+          return true;
+        }
+        case "plan-cancel":
+          S.plan = null;
+          rerenderKeep();
+          return true;
+        case "plan-send":
+          sendPlan();
+          return true;
+        case "plan-start": {
+          const pl = S.plan;
+          S.plan = null;
+          if (!pl) return true;
+          if (pl.src === "workout") {
+            const w = S.workouts.find((x) => x.id === pl.id);
+            if (w) startSession(w, w.id);
+          } else if (S.draft) {
+            const d = S.draft;
+            const existing = d.id && S.workouts.some((x) => x.id === d.id);
+            startSession(d, existing ? d.id : null);
+          }
           return true;
         }
         case "hit-draft": {
@@ -1245,6 +1283,10 @@
     },
     onInput(e) {
       const t = e.target;
+      if (t.dataset && t.dataset.fn === "plan-note") {
+        S.planNote = t.value;
+        return true;
+      }
       if (t.dataset && t.dataset.fn === "note") {
         S.finishNote = t.value;
         return true;
@@ -1275,6 +1317,122 @@
       /* inputs update state + plate math in place (onInput); no re-render on blur so taps on Log aren't lost */
     },
   });
+
+
+  // ——— Send plan to trainer (before starting) ———
+  Object.assign(S, { plan: null, planNote: "" });
+  function planSource(pl) {
+    if (!pl) return null;
+    if (pl.src === "workout") {
+      const w = S.workouts.find((x) => x.id === pl.id);
+      return w ? { workoutId: w.id, name: w.name, exercises: w.exercises || [] } : null;
+    }
+    const d = S.draft;
+    if (!d) return null;
+    const existing = d.id && S.workouts.some((x) => x.id === d.id);
+    return { workoutId: existing ? d.id : null, name: (d.name || "").trim() || "My workout", exercises: d.exercises || [] };
+  }
+  function planSummary(src) {
+    const unit = Store.readLocal("unit", "lb");
+    const { map } = lastLogsFor(src.workoutId);
+    const moves = src.exercises.map((e) => {
+      const k = kindOf(e);
+      const prior = (map.get(e.name) || []).filter((l) => l.done);
+      const m = {
+        name: e.name,
+        kind: k,
+        sets: Number(e.sets) || 1,
+        targetReps: String(e.reps || ""),
+        restSec: e.restSeconds ?? 60,
+        note: e.setup || "",
+      };
+      if (k === "lift" && prior.length && prior[0].weightLb) {
+        m.targetWeight = toDisp(prior[0].weightLb, unit);
+        m.targetWeightSource = "last time";
+      }
+      return m;
+    });
+    return { workoutName: src.name, workoutId: src.workoutId, unit, moves, note: "", plannedAt: new Date().toISOString() };
+  }
+  function renderPlanModal() {
+    const pl = S.plan;
+    if (!pl) return "";
+    const src = planSource(pl);
+    if (!src) return "";
+    if (pl.sent) {
+      return `
+      <div class="eh-modal fin-modal" role="dialog" aria-modal="true" aria-labelledby="plan-title">
+        <div class="eh-modal-backdrop" data-act="plan-cancel"></div>
+        <div class="eh-modal-card fin-card">
+          <p class="steal-kicker">Plan sent</p>
+          <h3 id="plan-title" class="fin-title">${esc(src.name)}</h3>
+          <p class="hint">Your trainer will get it shortly.</p>
+          <div class="fin-actions">
+            <button type="button" class="btn accent wide-btn" data-act="plan-start">Start now</button>
+            <button type="button" class="btn ghost wide-btn" data-act="plan-cancel">Done</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    const sum = planSummary(src);
+    const moves = sum.moves
+      .map((m) => {
+        const tgt = m.kind === "time" ? `${m.sets} × ${esc(m.targetReps)}` : `${m.sets} × ${esc(m.targetReps)}`;
+        const wt = m.targetWeight != null ? ` · ${fmtNum(m.targetWeight)}${esc(sum.unit)} <span class="plan-last">last time</span>` : "";
+        return `<li><span class="fin-move">${esc(m.name)}</span>
+          <span class="mono fin-sets">${tgt}${wt} · ${m.restSec}s rest</span>
+          ${m.note ? `<span class="fin-sets plan-setup">${esc(m.note)}</span>` : ""}</li>`;
+      })
+      .join("");
+    return `
+      <div class="eh-modal fin-modal" role="dialog" aria-modal="true" aria-labelledby="plan-title">
+        <div class="eh-modal-backdrop" data-act="plan-cancel"></div>
+        <div class="eh-modal-card fin-card">
+          <p class="steal-kicker">Send plan to trainer?</p>
+          <h3 id="plan-title" class="fin-title">${esc(sum.workoutName)}</h3>
+          <p class="hint fin-meta">${sum.moves.length} moves · ${sum.moves.reduce((n, m) => n + m.sets, 0)} planned sets</p>
+          <ul class="fin-list">${moves}</ul>
+          <label class="field-label" for="plan-note">Anything to flag?</label>
+          <textarea id="plan-note" class="fin-note" data-fn="plan-note" rows="3" maxlength="1000" placeholder="e.g. shoulder tight">${esc(S.planNote || "")}</textarea>
+          <div class="fin-actions">
+            <button type="button" class="btn accent wide-btn" data-act="plan-send" ${pl.busy ? "disabled" : ""}>${pl.busy ? "Sending…" : "Send plan"}</button>
+            <button type="button" class="btn ghost wide-btn" data-act="plan-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>`;
+  }
+  async function sendPlan() {
+    const pl = S.plan;
+    const src = planSource(pl);
+    if (!pl || !src || pl.busy || !src.exercises.length) return;
+    pl.busy = true;
+    rerenderKeep();
+    try {
+      const summary = planSummary(src);
+      summary.note = String(S.planNote || "").trim();
+      const c = await Store.cloud();
+      if (!c) throw new Error("not-signed-in-to-cloud");
+      await Store.queueForTrainer({
+        type: "plan",
+        email: (user && user.email) || "",
+        displayName: (user && user.displayName) || "",
+        workoutId: src.workoutId || null,
+        createdAt: c.fs.serverTimestamp(),
+        status: "pending",
+        summary,
+      });
+      pl.busy = false;
+      pl.sent = true;
+      S.planNote = "";
+      rerenderKeep();
+      toast("Plan sent — your trainer will get it shortly", "ok");
+    } catch (err) {
+      console.warn("[mine] plan send failed", err);
+      pl.busy = false;
+      rerenderKeep();
+      toast("Couldn’t send the plan — check your connection and try again.", "err");
+    }
+  }
 
   // ——— Data load per user ———
   async function loadForUser() {

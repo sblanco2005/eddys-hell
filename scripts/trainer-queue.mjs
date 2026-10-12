@@ -5,7 +5,7 @@
  *
  * Usage:
  *   node scripts/trainer-queue.mjs list
- *     → prints a JSON array of pending items ({id, ...doc}) oldest first, or NONE (exit 0)
+ *     → prints a JSON array of pending items ({id, type, ...doc}; type 'plan'|'session', missing → 'session') oldest first, or NONE (exit 0)
  *   node scripts/trainer-queue.mjs mark <id> sent|failed [reason...]
  *     → trainerQueue/<id>: status, sentAt (ISO), reason (if given), updatedAt
  *       and users/{uid}/sessions/{sid} (from sessionPath): trainerStatus, trainerSentAt
@@ -60,7 +60,10 @@ async function list(token) {
   });
   const items = (rows || [])
     .filter((r) => r.document)
-    .map((r) => ({ id: r.document.name.split("/").pop(), ...fromFields(r.document.fields) }))
+    .map((r) => {
+      const d = fromFields(r.document.fields);
+      return { id: r.document.name.split("/").pop(), type: d.type || "session", ...d, ...(d.type ? {} : { type: "session" }) };
+    })
     .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   console.log(items.length ? JSON.stringify(items, null, 2) : "NONE");
 }
