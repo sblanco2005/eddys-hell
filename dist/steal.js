@@ -545,7 +545,10 @@
     const add = S.addOpen
       ? `
         <section class="add-panel">
-          <div class="add-head"><p class="steal-kicker">Your machines</p><button type="button" class="btn ghost btn-sm" data-act="add-close">Done</button></div>
+          <div class="add-head"><p class="steal-kicker">Add a move</p><button type="button" class="btn ghost btn-sm" data-act="add-close">Done</button></div>
+          <input class="repl-search" type="search" data-field="add-q" value="${esc(S.addQ || "")}" placeholder="Search ${D.LIB.length} moves — e.g. barbell lunges" aria-label="Search moves" autocomplete="off" enterkeyhint="search" />
+          <div class="add-results">${S.addQ ? HOOKS.addListHtml(S.addQ) : ""}</div>
+          <div class="add-groups"${S.addQ ? " hidden" : ""}><p class="steal-kicker">Your machines</p>
           ${
             machinesByMuscle(S.gym)
               .map(
@@ -562,6 +565,7 @@
               )
               .join("") || `<p class="hint">Mark your kit in Gym first.</p>`
           }
+          </div>
         </section>`
       : `<button type="button" class="btn secondary wide-btn" data-act="add-open">Add a move</button>`;
     return `
@@ -1761,6 +1765,146 @@
 
   // ——— Wiring ———
 
+
+  // ——— p11: forgiving search + movement patterns + custom moves ———
+  const SYN = { bb: "barbell", db: "dumbbell", kb: "kettlebell", rdl: "romanian deadlift", sldl: "stiff leg deadlift", ohp: "overhead press", ez: "ez bar",
+    bss: "bulgarian split squat", dl: "deadlift", sm: "smith", ghr: "glute ham raise", tbar: "t bar", pulldown: "pulldown", pullup: "pull up", chinup: "chin up", pushup: "push up",
+    situp: "sit up", stepup: "step up", tri: "tricep", tris: "tricep", bi: "bicep", bis: "bicep", delt: "delt", lat: "lat", abs: "core", ab: "ab", hammy: "hamstring" };
+  // name-side aliases so "overhead press" finds "Standing barbell press", "military" etc.
+  const ALIAS = [[/standing barbell press|seated dumbbell press|standing dumbbell press|shoulder press|military/i, "overhead press ohp"], [/romanian|rdl/i, "romanian deadlift rdl"], [/dumbbell/i, "db"], [/barbell/i, "bb"], [/pull-?up/i, "pullup"], [/chin-?up/i, "chinup"], [/push-?up/i, "pushup"]];
+  const stem = (w) => (w.length > 4 && w.endsWith("ies") ? w.slice(0, -3) + "y" : w.length > 3 && /(ches|shes|sses|xes)$/.test(w) ? w.slice(0, -2) : w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w);
+  const words = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  function queryTokens(q) {
+    const out = [];
+    for (const w of words(q)) for (const x of words(SYN[w] || SYN[stem(w)] || w)) out.push(stem(x));
+    return out;
+  }
+  const HAY = new WeakMap();
+  function hayOf(m) {
+    let h = HAY.get(m);
+    if (!h) {
+      let txt = m.name + " " + m.muscle + " " + m.equipment + " " + (m.pattern || "");
+      for (const [re, add] of ALIAS) if (re.test(m.name)) txt += " " + add;
+      h = { name: words(m.name).map(stem), all: words(txt).map(stem) };
+      HAY.set(m, h);
+    }
+    return h;
+  }
+  /** -1 = no match; else rank (lower = better). Every query word must prefix-match some word (any order). */
+  function searchRank(m, toks) {
+    if (!toks.length) return 0;
+    const h = hayOf(m);
+    let rank = 0;
+    for (const t of toks) {
+      if (h.name.some((w) => w === t)) continue;
+      if (h.name.some((w) => w.startsWith(t))) rank += 1;
+      else if (h.all.some((w) => w.startsWith(t))) rank += 3;
+      else return -1;
+    }
+    return rank + h.name.length * 0.05;
+  }
+  function searchLib(q) {
+    const toks = queryTokens(q);
+    return D.LIB.map((m, i) => ({ m, r: searchRank(m, toks), i })).filter((x) => x.r >= 0);
+  }
+  function patternOf(m) {
+    if (!m) return "";
+    if (m.pattern) return m.pattern;
+    const n = m.name.toLowerCase();
+    const P = [[/lunge|split squat|step-?up|step-over/, "lunge"], [/squat|leg press/, "squat"], [/deadlift|rdl|good morning/, "hinge"], [/hip thrust|glute bridge/, "hip-ext"],
+      [/leg curl/, "knee-flex"], [/leg extension/, "knee-ext"], [/calf/, "calf"], [/incline.*(press)|low-to-high cable press/, "incline-push"], [/fly|pec deck/, "fly"],
+      [/bench press|chest press|floor press|push-up|decline/, "h-push"], [/standing barbell press|dumbbell press|shoulder press|landmine press/, "v-push"], [/lateral raise/, "lateral"],
+      [/face pull|rear delt/, "rear-delt"], [/pull-?up|chin-?up|pulldown/, "v-pull"], [/row/, "h-pull"], [/shrug/, "shrug"], [/curl/, "curl"],
+      [/pushdown|skull|extension|french|dip|close-grip/, "tri-ext"], [/crunch|knee raise/, "core-flex"], [/plank/, "anti-ext"], [/carry/, "carry"]];
+    for (const [re, p] of P) if (re.test(n)) return p;
+    return "";
+  }
+  // Custom moves (per user): local mirror + users/{uid}/gym/custom {items}
+  const CUSTOM_EQUIP = ["barbell", "dumbbells", "kettlebells", "cables", "machine", "smith", "bodyweight", "bands", "ez-bar", "trap-bar", "landmine", "other"];
+  function guessEquip(name) {
+    const n = name.toLowerCase();
+    const G = [[/\b(bb|barbell)\b/, "barbell"], [/\b(db|dumbbells?)\b/, "dumbbells"], [/\b(kb|kettlebells?)\b/, "kettlebells"], [/\bcable|rope\b/, "cables"], [/smith/, "smith"], [/machine|press machine|pec deck/, "machine"], [/\bbands?\b/, "bands"], [/ez/, "ez-bar"], [/trap.?bar|hex/, "trap-bar"], [/landmine/, "landmine"]];
+    for (const [re, e] of G) if (re.test(n)) return e;
+    return "bodyweight";
+  }
+  function guessMuscle(name, fallback) {
+    const n = name.toLowerCase();
+    const G = [[/lunge|squat|leg press|step|extension(?!.*tri)|quad/, "quads"], [/rdl|romanian|deadlift|good morning|leg curl|hamstring|nordic/, "hamstrings"], [/hip thrust|glute|bridge|kickback|abduct/, "glutes"],
+      [/calf/, "calves"], [/bench|chest|fly|push-?up|pec/, "chest"], [/shoulder|overhead press|ohp|lateral|delt|arnold/, "shoulders"], [/row|pull|lat|shrug|chin/, "back"],
+      [/curl/, "biceps"], [/tricep|pushdown|skull|dip/, "triceps"], [/crunch|plank|ab|core|twist|sit-?up/, "core"], [/run|bike|row erg|jump|sprint|cardio/, "cardio"]];
+    for (const [re, m] of G) if (re.test(n)) return m;
+    return fallback || "quads";
+  }
+  function addCustomToLib(m) {
+    if (LIB_BY_ID.has(m.id)) return;
+    D.LIB.push(m);
+    LIB_BY_ID.set(m.id, m);
+    if (!LIB_BY_NAME.has(m.name.toLowerCase())) LIB_BY_NAME.set(m.name.toLowerCase(), m);
+  }
+  Object.assign(Store, {
+    async loadCustom() {
+      const local = this.readLocal("custom", []) || [];
+      const c = await this.cloud();
+      if (!c) return local;
+      const snap = await c.fs.getDoc(c.fs.doc(c.db, "users", c.uid, "gym", "custom"));
+      const items = snap.exists() && Array.isArray(snap.data().items) ? snap.data().items : local;
+      this.writeLocal("custom", items);
+      return items;
+    },
+    async saveCustom(items) {
+      this.writeLocal("custom", items);
+      const c = await this.cloud();
+      if (!c) return "device";
+      await c.fs.setDoc(c.fs.doc(c.db, "users", c.uid, "gym", "custom"), clean({ items }), { merge: true });
+      return "cloud";
+    },
+  });
+  S.custom = [];
+  const prevAfterLoad = HOOKS.afterLoad;
+  HOOKS.afterLoad = async function () {
+    if (prevAfterLoad) await prevAfterLoad();
+    try {
+      S.custom = (await Store.loadCustom()) || [];
+    } catch (err) {
+      console.warn("[mine] custom moves load failed", err);
+      S.custom = Store.readLocal("custom", []) || [];
+    }
+    S.custom.forEach(addCustomToLib);
+  };
+  async function createCustom(name, muscle, equipment) {
+    const nm = String(name || "").trim().replace(/\s+/g, " ").slice(0, 60);
+    if (!nm) return null;
+    const exist = LIB_BY_NAME.get(nm.toLowerCase());
+    if (exist) return exist;
+    const nice = nm.charAt(0).toUpperCase() + nm.slice(1);
+    const bb = equipment === "barbell" || /\b(bb|barbell)\b|deadlift|back squat|front squat/i.test(nm);
+    const m = { id: "c-" + uuid().slice(0, 8), name: nice, muscle, equipment, needs: [], isBarbell: bb, sets: 3, reps: muscle === "cardio" ? "10 min" : "8", custom: true };
+    m.pattern = patternOf(m);
+    addCustomToLib(m);
+    S.custom = [...S.custom, m];
+    try {
+      await Store.saveCustom(S.custom);
+    } catch (err) {
+      console.warn("[mine] custom save failed", err);
+    }
+    return m;
+  }
+  /** "Add as custom move" offer + quick form (muscle / equipment). where: 'repl' | 'add'. */
+  function customHtml(q, where, fallbackMuscle) {
+    const nm = String(q || "").trim();
+    if (!nm) return "";
+    const st = S.customForm && S.customForm.where === where && S.customForm.name === nm ? S.customForm : null;
+    if (!st) return `<button type="button" class="btn secondary wide-btn custom-offer" data-act="custom-open" data-where="${where}" data-name="${esc(nm)}" data-mu="${esc(fallbackMuscle || "")}">+ Add “${esc(nm)}” as a custom move</button>`;
+    return `<div class="custom-form">
+        <p class="steal-kicker">New move · ${esc(nm)}</p>
+        <label class="ex-lbl" for="cm-mu">Muscle group</label>
+        <select id="cm-mu" class="repl-search" data-field="cm-mu">${D.MUSCLES.map((x) => `<option value="${x}"${x === st.muscle ? " selected" : ""}>${x}</option>`).join("")}</select>
+        <label class="ex-lbl" for="cm-eq">Equipment</label>
+        <select id="cm-eq" class="repl-search" data-field="cm-eq">${CUSTOM_EQUIP.map((x) => `<option value="${x}"${x === st.equipment ? " selected" : ""}>${x}</option>`).join("")}</select>
+        <button type="button" class="btn accent wide-btn" data-act="custom-save" data-where="${where}">Save move</button>
+      </div>`;
+  }
+  S.customForm = null;
   // ——— Replace a move (editor + Hit it) — beta p9 ———
   Object.assign(S, { repl: null });
   const SLOT_IDS = Object.values(D.SPLIT_RULES);
@@ -1773,15 +1917,16 @@
     const name = String(ex.name || "").toLowerCase();
     const pattern = new Set();
     if (cur) for (const day of SLOT_IDS) for (const slot of day) if (slot.includes(cur.id)) slot.forEach((id) => pattern.add(id));
+    const pat = patternOf(cur || { name: ex.name });
+    if (pat) for (const m of D.LIB) if (patternOf(m) === pat) pattern.add(m.id);
     const muscle = (cur && cur.muscle) || ex.muscle;
     // hide the move being replaced and anything already in this workout
     const inWorkout = ((S.repl && S.repl.ctx === "sess" ? S.active && S.active.exercises : S.draft && S.draft.exercises) || []).map((e) => String(e.name || "").toLowerCase());
     const seen = new Set([name, ...inWorkout]);
     const score = (m) => (fits(m, S.gym) ? 0 : 10) + (pattern.has(m.id) ? 0 : m.muscle === muscle ? 2 : 5);
-    const ql = String(q || "").trim().toLowerCase();
-    let list = D.LIB.filter((m) => (ql ? (m.name + " " + m.muscle + " " + m.equipment).toLowerCase().includes(ql) : pattern.has(m.id) || m.muscle === muscle));
+    const ql = String(q || "").trim();
+    let list = ql ? searchLib(ql).map((x) => ({ m: x.m, s: x.r * 20 + score(x.m), i: x.i })) : D.LIB.filter((m) => pattern.has(m.id) || m.muscle === muscle).map((m, i) => ({ m, s: score(m), i }));
     list = list
-      .map((m, i) => ({ m, s: score(m), i }))
       .sort((a, b) => a.s - b.s || a.i - b.i)
       .map((x) => x.m)
       .filter((m) => {
@@ -1898,7 +2043,7 @@
   const replKicker = (q) => (q ? "Matches" : "Suggested — same muscle, your kit first");
   function replListHtml(ex, q) {
     const opts = replOptions(ex, q);
-    return opts.length
+    return (opts.length
       ? opts
           .slice(0, 40)
           .map(
@@ -1907,7 +2052,37 @@
               ${similar && !q ? `<span class="repl-tag">similar</span>` : ""}</button>`
           )
           .join("")
-      : `<p class="hint">No moves match “${esc(q)}”.</p>`;
+      : `<p class="hint">No moves match “${esc(q)}”.</p>`) + offerCustom(q, "repl", (replTarget() || {}).muscle);
+  }
+  function offerCustom(q, where, mu) {
+    const nm = String(q || "").trim();
+    return nm && !LIB_BY_NAME.has(nm.toLowerCase()) ? customHtml(nm, where, mu) : "";
+  }
+  /** Editor "Add a move": search results (same forgiving search) — empty query keeps the by-muscle list. */
+  function addListHtml(q) {
+    const inW = new Set(((S.draft && S.draft.exercises) || []).map((e) => String(e.name || "").toLowerCase()));
+    const seen = new Set();
+    const res = searchLib(q)
+      .map((x) => ({ ...x, s: x.r * 20 + (fits(x.m, S.gym) ? 0 : 10) }))
+      .sort((a, b) => a.s - b.s || a.i - b.i)
+      .map((x) => x.m)
+      .filter((m) => {
+        const k = m.name.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .slice(0, 40);
+    return (
+      (res.length
+        ? res
+            .map(
+              (m) => `<button type="button" class="add-move repl-opt${fits(m, S.gym) ? "" : " no-kit"}" data-act="add-move" data-lib="${esc(m.id)}">
+            <span class="repl-name">${esc(m.name)}<small>${esc(m.muscle)} · ${esc(m.equipment)}${fits(m, S.gym) ? "" : " · not in your Gym"}${inW.has(m.name.toLowerCase()) ? " · in this workout" : ""}</small></span></button>`
+            )
+            .join("")
+        : `<p class="hint">No moves match “${esc(q)}”.</p>`) + offerCustom(q, "add", guessMuscle(q))
+    );
   }
   function renderReplace() {
     const r = S.repl;
@@ -1961,6 +2136,7 @@
       </div>`;
   }
   HOOKS.renderReplace = renderReplace;
+  HOOKS.addListHtml = addListHtml;
   const prevOnAction = HOOKS.onAction;
   HOOKS.onAction = (act, el) => {
     switch (act) {
@@ -1997,12 +2173,52 @@
       case "repl-confirm":
         applySessionReplace();
         return true;
+      case "custom-open": {
+        const nm = el.dataset.name || "";
+        S.customForm = { where: el.dataset.where, name: nm, muscle: guessMuscle(nm, el.dataset.mu), equipment: guessEquip(nm) };
+        rerenderKeep();
+        return true;
+      }
+      case "custom-save": {
+        const f = S.customForm;
+        if (!f) return true;
+        S.customForm = null;
+        createCustom(f.name, f.muscle, f.equipment).then((m) => {
+          if (!m) return;
+          if (f.where === "repl" && S.repl) {
+            if (S.repl.ctx === "edit") applyEditorReplace(m);
+            else {
+              S.repl.pick = m.id;
+              rerenderKeep();
+            }
+          } else if (S.draft) {
+            S.draft.exercises = [...S.draft.exercises, normalizeEx(toExercise(m), true)];
+            S.addQ = "";
+            persistDraft();
+            rerenderKeep();
+          }
+          setStatus(`Saved custom move “${m.name}”`, "ok");
+        });
+        return true;
+      }
     }
     return prevOnAction ? prevOnAction(act, el) : false;
   };
   const prevOnInput = HOOKS.onInput;
   HOOKS.onInput = (e) => {
     const t = e.target;
+    if (t.dataset && (t.dataset.field === "cm-mu" || t.dataset.field === "cm-eq") && S.customForm) {
+      S.customForm[t.dataset.field === "cm-mu" ? "muscle" : "equipment"] = t.value;
+      return true;
+    }
+    if (t.dataset && t.dataset.field === "add-q") {
+      S.addQ = t.value;
+      const box = document.querySelector(".add-results");
+      const grp = document.querySelector(".add-groups");
+      if (box) box.innerHTML = S.addQ.trim() ? addListHtml(S.addQ) : "";
+      if (grp) grp.hidden = !!S.addQ.trim();
+      return true;
+    }
     if (t.dataset && t.dataset.field === "repl-q" && S.repl) {
       S.repl.q = t.value;
       const ex = replTarget();

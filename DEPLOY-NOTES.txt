@@ -368,3 +368,13 @@ Slack admin self-DM unchanged.
   ("Chest-supported dumbbell row (swapped from Barbell row)"), keeps raw name in `moveName`, and adds
   summary.movesText (one ready-to-send line per move). Script no longer runs its CLI when imported.
 - Cache-bust 20261012-steal-p10 (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p10-20261012).
+
+## 2026-10-12 ~9:10 PM ET — beta-steal-p11-library (BETA only)
+- Move library 93 → 330 (237 new, ids x-<slug>, no demo clips; existing ids/names untouched so history/last time match).
+  New moves carry muscle, equipment, needs (Gym kit), isBarbell, pattern (lunge/squat/hinge/h-push/v-pull/...).
+- Forgiving search (Replace picker + editor Add a move): case-insensitive, plural→singular, any word order, prefix match,
+  synonyms bb/db/kb/rdl/ohp/bss/sldl/dl/ez, name aliases (OHP finds standing/seated presses).
+- Replace suggestions also use movement pattern (lunge ↔ split squat ↔ step-up).
+- Custom moves: "+ Add “<text>” as a custom move" (muscle + equipment guessed from name, editable; barbell auto-detected).
+  Saved to users/{uid}/gym/custom {items} + local mirror; loaded on start; show in all searches.
+- Cache-bust 20261012-steal-p11-library.

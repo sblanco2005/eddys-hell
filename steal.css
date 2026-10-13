@@ -358,3 +358,9 @@ body.tab-gym .foot { display: none !important; }
 .repl-seg { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 14px; }
 .repl-seg .seg-btn { height: auto; min-height: 48px; padding: 8px 14px; text-align: left; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
 .repl-seg .seg-btn small { font-size: 0.85rem; font-weight: 400; opacity: 0.85; }
+
+/* ——— p11: library search + custom moves ——— */
+.add-results { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.custom-offer { margin-top: 8px; }
+.custom-form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 12px; border: 1px dashed var(--accent); border-radius: 10px; }
+.custom-form select.repl-search { margin-bottom: 4px; }
