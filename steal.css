@@ -364,3 +364,8 @@ body.tab-gym .foot { display: none !important; }
 .custom-offer { margin-top: 8px; }
 .custom-form { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 12px; border: 1px dashed var(--accent); border-radius: 10px; }
 .custom-form select.repl-search { margin-bottom: 4px; }
+
+/* p12: plate row never more than 2 lines */
+.plates { flex-wrap: wrap; max-height: calc(2 * 34px + 6px); overflow: hidden; }
+.plate-sum { font-size: 1rem; font-weight: 700; }
+.sess-input { min-width: 0; }

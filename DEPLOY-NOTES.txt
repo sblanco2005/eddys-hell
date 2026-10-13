@@ -381,3 +381,9 @@ Slack admin self-DM unchanged.
 - p11b (same evening): Mine number fields (editor weight; Hit it per-side/weight/reps/time/bar) now CLEAR on tap, old value
   shown dimmed as placeholder; totals keep the old value while empty (typed-then-erased replays the old value); blur with
   nothing typed restores it, typed value commits. Replaces p9 select-all. Cache-bust 20261012-steal-p11b-clear.
+
+## 2026-10-12 ~9:20 PM ET — beta-steal-p12-cap (BETA only)
+- Mine number caps as you type (extra keystroke is rejected): weight / per-side / bar / editor weight ≤ 3 digits + one
+  decimal (e.g. 47.5, 102.5, max 999.x); reps ≤ 99; time m:ss ≤ 99:59 (or ≤ 4 digits).
+- Plate row: > 8 plates per side collapses to a summary like "22×45 + 5 + 2.5"; row capped at 2 lines.
+- Cache-bust 20261012-steal-p12-cap.

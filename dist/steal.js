@@ -979,10 +979,18 @@
     return `<p class="sess-total"><span class="tot-lbl">Total</span> <span class="mono">2×${fmtNum(side)} + ${fmtNum(disp1(bar, unit))} bar =</span>
         <strong class="mono tot-main">${fmtNum(disp1(tot, unit))} ${unit}</strong> <span class="mono tot-alt">(${fmtNum(disp1(tot, other(unit)))} ${other(unit)})</span></p>
       <div class="plates">${
-        list.length
+        list.length > 8
+          ? `<span class="plate-sum mono">${esc(plateSummary(list))}</span><span class="hint">/ side</span>`
+          : list.length
           ? list.map((p) => `<span class="plate p${String(p).replace(".", "_")}">${fmtNum(p)}</span>`).join("") + `<span class="hint">/ side</span>`
           : `<span class="hint">Empty bar</span>`
       }</div>`;
+  }
+  /** Many plates → '6×45 + 25 + 10' so the row never wraps past 2 lines. */
+  function plateSummary(list) {
+    const c = new Map();
+    for (const p of list) c.set(p, (c.get(p) || 0) + 1);
+    return [...c].map(([p, n]) => (n > 1 ? `${n}×${fmtNum(p)}` : fmtNum(p))).join(" + ");
   }
   /** Non-barbell: just the conversion ('= 22.7 kg'). */
   function convHtml(l, unit) {
@@ -2287,6 +2295,7 @@
       "input",
       (e) => {
         const t = e.target;
+        if (isNum(t) && !t.dataset.replay) capNum(t);
         if (!isNum(t) || t.dataset.prev == null || t.dataset.replay) return;
         if (t.value.trim() !== "") {
           t.dataset.typed = "1";
@@ -2298,6 +2307,24 @@
       },
       true
     );
+    // p12: caps — weight/per-side/bar ≤ 3 digits + one decimal (999.5), reps ≤ 99, time m:ss ≤ 99:59
+    function capNum(t) {
+      const f = t.dataset.sf || t.dataset.field || "";
+      const v = t.value;
+      const ok = f === "reps" ? /^\d{0,2}$/.test(v) : f === "time" ? /^\d{0,2}(:\d{0,2})?$/.test(v) || /^\d{0,4}$/.test(v) : /^\d{0,3}([.,]\d?)?$/.test(v);
+      if (ok) {
+        t.dataset.good = v;
+        return;
+      }
+      const good = t.dataset.good != null ? t.dataset.good : "";
+      t.value = good;
+      try {
+        t.setSelectionRange(good.length, good.length);
+      } catch (_) {}
+    }
+    document.addEventListener("focusin", (e) => {
+      if (isNum(e.target)) e.target.dataset.good = "";
+    });
     function replayPrev(t) {
       t.dataset.replay = "1";
       t.value = t.dataset.prev;
