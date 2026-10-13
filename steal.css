@@ -338,3 +338,23 @@ body.tab-gym .foot { display: none !important; }
 .steal-root .ex-targets { gap: 10px 8px; }
 .steal-root .ex-perside { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin: -2px 0 0; font-size: 15px; color: var(--text-dim); }
 .steal-root .ex-perside .ex-hint { margin: 0; }
+
+/* ——— p9: Replace a move ——— */
+.ex-swap { appearance: none; font: inherit; font-size: 0.95rem; font-weight: 700; margin-top: 6px; padding: 6px 12px; min-height: 38px; border-radius: 8px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+.sess-move-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sess-move-row .ex-swap { margin-top: 0; flex: none; }
+.sess-swapped, .fin-swap { font-size: 0.9rem; font-style: italic; color: var(--text-dim); }
+.fin-swap { display: block; font-weight: 400; }
+.repl-card { max-height: 86vh; overflow-y: auto; }
+.repl-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+.repl-search { width: 100%; box-sizing: border-box; font: inherit; font-size: 1.05rem; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); margin-bottom: 8px; }
+.repl-list { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 10px; }
+.repl-opt { align-items: center; font-size: 1.05rem; min-height: 52px; }
+.repl-opt.no-kit { opacity: 0.6; }
+.repl-name { display: flex; flex-direction: column; gap: 2px; }
+.repl-name small { font-size: 0.85rem; color: var(--text-dim); }
+.repl-tag { flex: none; font-size: 0.8rem; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 2px 8px; }
+.repl-from { font-size: 1.1rem; margin: 4px 0 12px; }
+.repl-seg { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 14px; }
+.repl-seg .seg-btn { height: auto; min-height: 48px; padding: 8px 14px; text-align: left; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; }
+.repl-seg .seg-btn small { font-size: 0.85rem; font-weight: 400; opacity: 0.85; }

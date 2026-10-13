@@ -366,7 +366,7 @@
     else if (HOOKS.renderView && (html = HOOKS.renderView(S.view))) {
       /* session / history (phase 3) */
     } else html = renderMineList();
-    return html + renderClip() + (HOOKS.renderPlanModal ? HOOKS.renderPlanModal() : "") + `<p class="steal-status" id="steal-status" hidden></p>`;
+    return html + renderClip() + (HOOKS.renderReplace ? HOOKS.renderReplace() : "") + (HOOKS.renderPlanModal ? HOOKS.renderPlanModal() : "") + `<p class="steal-status" id="steal-status" hidden></p>`;
   }
 
   function sortedWorkouts() {
@@ -432,6 +432,7 @@
           <div class="ex-name-wrap">
             <p class="ex-name">${i + 1}. ${esc(ex.name)}</p>
             <p class="ex-muscle">${esc(ex.muscle || "")}${ex.equipment ? " · " + esc(ex.equipment) : ""}</p>
+            <button type="button" class="ex-swap" data-act="repl-open" data-ctx="edit" data-ex="${esc(ex.id)}" aria-label="Replace ${esc(ex.name)}">⇄ Replace</button>
           </div>
           <div class="ex-tools">
             <div class="ex-move">
@@ -1064,7 +1065,9 @@
       }
       <article class="sess-card">
         <p class="steal-kicker">${idx + 1} of ${exs.length} · ${esc(ex.muscle || "")}</p>
-        <h3 class="sess-move">${esc(ex.name)}</h3>
+        <div class="sess-move-row"><h3 class="sess-move">${esc(ex.name)}</h3>
+          <button type="button" class="ex-swap" data-act="repl-open" data-ctx="sess" data-ex="${esc(ex.id)}" aria-label="Replace ${esc(ex.name)}">⇄ Replace</button></div>
+        ${ex.swappedFrom ? `<p class="hint sess-swapped">Swapped from ${esc(ex.swappedFrom)}</p>` : ""}
         ${lastTxt ? `<p class="hint sess-last">Last time: ${esc(lastTxt)}</p>` : ""}
         <input class="ex-setup" data-sf="setup" value="${esc(ex.setup || "")}" placeholder="${kind === "lift" ? "Cable 4 · bench 30°" : "Damper · fan · note"}" aria-label="Setup note" />
         <div class="ex-row">
@@ -1109,7 +1112,7 @@
                 const txt = done
                   .map((l) => (k === "time" ? mmss(l.timeSeconds) : k === "reps" ? `${l.reps}` : `${fmtNum(toDisp(l.weightLb, x.unit))}×${l.reps}`))
                   .join(", ");
-                return `<li><span>${esc(e.name)}</span><span class="mono">${esc(txt)}</span></li>`;
+                return `<li><span>${esc(e.name)}${e.swappedFrom ? ` <em class="hint">(swapped from ${esc(e.swappedFrom)})</em>` : ""}</span><span class="mono">${esc(txt)}</span></li>`;
               })
               .join("");
             return `<li class="hist-item">
@@ -1152,6 +1155,7 @@
       totalSets += done.length;
       moves.push({
         name: e.name,
+        ...(e.swappedFrom ? { swappedFrom: e.swappedFrom, label: `${e.name} (swapped from ${e.swappedFrom})` } : {}),
         kind: k,
         sets: done.map((l) => {
           if (k === "time") return { t: l.timeSeconds || 0 };
@@ -1194,7 +1198,7 @@
     const sum = sessionSummary(sess);
     const empty = !sum.totalSets;
     const moves = sum.moves
-      .map((m) => `<li><span class="fin-move">${esc(m.name)}</span><span class="mono fin-sets">${m.sets.map((st) => esc(setTxt(st, sum.unit))).join(", ")}</span></li>`)
+      .map((m) => `<li><span class="fin-move">${esc(m.name)}${m.swappedFrom ? `<em class="fin-swap">swapped from ${esc(m.swappedFrom)}</em>` : ""}</span><span class="mono fin-sets">${m.sets.map((st) => esc(setTxt(st, sum.unit))).join(", ")}</span></li>`)
       .join("");
     return `
       <div class="eh-modal fin-modal" role="dialog" aria-modal="true" aria-labelledby="fin-title">
@@ -1281,7 +1285,7 @@
       const byId = new Map(sess.exercises.map((e) => [e.id, e]));
       w.exercises = (w.exercises || []).map((e) => {
         const se = byId.get(e.id);
-        return se ? { ...e, setup: se.setup || "", reps: String(se.reps || e.reps), sets: se.logs.length } : e;
+        return se ? { ...e, setup: se.setup || "", reps: String(se.reps || e.reps), sets: se.swappedFrom ? e.sets : se.logs.length } : e;
       });
     }
     S.sessions = [...S.sessions.filter((x) => x.id !== sess.id), sess];
@@ -1756,6 +1760,260 @@
   }
 
   // ——— Wiring ———
+
+  // ——— Replace a move (editor + Hit it) — beta p9 ———
+  Object.assign(S, { repl: null });
+  const SLOT_IDS = Object.values(D.SPLIT_RULES);
+  function libOf(ex) {
+    return (ex.libId && LIB_BY_ID.get(ex.libId)) || LIB_BY_NAME.get(String(ex.name || "").toLowerCase()) || null;
+  }
+  /** Alternatives: same movement slot first (bench ↔ DB bench ↔ chest press), then same muscle; kit you have first. */
+  function replOptions(ex, q) {
+    const cur = libOf(ex);
+    const name = String(ex.name || "").toLowerCase();
+    const pattern = new Set();
+    if (cur) for (const day of SLOT_IDS) for (const slot of day) if (slot.includes(cur.id)) slot.forEach((id) => pattern.add(id));
+    const muscle = (cur && cur.muscle) || ex.muscle;
+    const seen = new Set([name]);
+    const score = (m) => (fits(m, S.gym) ? 0 : 10) + (pattern.has(m.id) ? 0 : m.muscle === muscle ? 2 : 5);
+    const ql = String(q || "").trim().toLowerCase();
+    let list = D.LIB.filter((m) => (ql ? (m.name + " " + m.muscle + " " + m.equipment).toLowerCase().includes(ql) : pattern.has(m.id) || m.muscle === muscle));
+    list = list
+      .map((m, i) => ({ m, s: score(m), i }))
+      .sort((a, b) => a.s - b.s || a.i - b.i)
+      .map((x) => x.m)
+      .filter((m) => {
+        const k = m.name.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    return list.map((m) => ({ m, have: fits(m, S.gym), similar: pattern.has(m.id) || m.muscle === muscle }));
+  }
+  /** New move from the library, keeping the old move's sets/reps/rest; weight re-prefills from the new move's last time. */
+  function swapEx(old, m) {
+    const base = toExercise(m);
+    const nx = { ...base, sets: old.sets, restSeconds: old.restSeconds ?? base.restSeconds };
+    if (editKind(nx) === "lift" && editKind(old) === "lift") nx.reps = String(migrateReps(old.reps));
+    return normalizeEx(nx, true);
+  }
+  function replTarget() {
+    const r = S.repl;
+    if (!r) return null;
+    if (r.ctx === "edit") return S.draft && S.draft.exercises.find((e) => e.id === r.exId);
+    return S.active && S.active.exercises.find((e) => e.id === r.exId);
+  }
+  function freshLogs(nx, n, from) {
+    const lift = editKind(nx) === "lift";
+    return Array.from({ length: Math.max(1, n) }, (_, i) => ({
+      set: i + 1,
+      weightLb: lift && nx.targetWeightLb > 0 ? nx.targetWeightLb : 0,
+      reps: lift ? migrateReps(nx.reps) : (from && from.reps) || Number.parseInt(nx.reps, 10) || 8,
+      timeSeconds: null,
+      done: false,
+    }));
+  }
+  /** Routine-shaped copy of a session move (no logs / swap marker). */
+  function routineCopy(e) {
+    const { logs, swappedFrom, barbell, ...rest } = e;
+    return { ...rest, sets: e.sets, setup: e.setup || "", reps: String(e.reps || "") };
+  }
+  function applyEditorReplace(m) {
+    const d = S.draft;
+    const i = d ? d.exercises.findIndex((e) => e.id === S.repl.exId) : -1;
+    if (i < 0) return;
+    const old = d.exercises[i];
+    const nx = swapEx(old, m);
+    d.exercises = d.exercises.map((e, j) => (j === i ? nx : e));
+    S.repl = null;
+    persistDraft();
+    rerenderKeep();
+    setStatus(`Replaced ${old.name} with ${nx.name}`, "ok");
+  }
+  async function applySessionReplace() {
+    const r = S.repl;
+    const sess = S.active;
+    const m = r && LIB_BY_ID.get(r.pick);
+    const i = sess && m ? sess.exercises.findIndex((e) => e.id === r.exId) : -1;
+    if (i < 0) return;
+    const old = sess.exercises[i];
+    const logged = old.logs.filter((l) => l.done);
+    const partial = logged.length > 0 && r.mode !== "whole";
+    const nx0 = swapEx(old, m);
+    const remaining = partial ? Math.max(1, old.logs.length - logged.length) : old.logs.length;
+    const nx = {
+      ...nx0,
+      sets: remaining,
+      barbell: isBarbellEx(nx0),
+      barLb: barLbOf(nx0),
+      setup: "",
+      swappedFrom: old.swappedFrom && !partial ? old.swappedFrom : old.name,
+      logs: freshLogs(nx0, remaining, old.logs[0]),
+    };
+    const exs = sess.exercises.slice();
+    if (partial) {
+      const kept = { ...old, logs: logged.map((l, k) => ({ ...l, set: k + 1 })), sets: logged.length };
+      exs.splice(i, 1, kept, nx);
+      S.sessIdx = i + 1;
+    } else {
+      exs.splice(i, 1, nx);
+      S.sessIdx = i;
+    }
+    sess.exercises = exs;
+    S.rest = null;
+    const scope = r.scope === "routine" ? "routine" : "today";
+    S.repl = null;
+    if (sess.draft && Array.isArray(sess.draft.exercises)) {
+      // unsaved build: keep its draft in step so finishing logs what was actually done
+      sess.draft.exercises = sess.draft.exercises.map((e) => (e.id === old.id ? { ...routineCopy(nx), sets: old.logs.length } : e));
+    }
+    persistActive();
+    rerenderKeep();
+    window.scrollTo(0, 0);
+    let msg = `Swapped to ${nx.name}${partial ? ` for the last ${remaining} set${remaining === 1 ? "" : "s"}` : ""}`;
+    if (scope === "routine" && sess.workoutId) {
+      const w = S.workouts.find((x) => x.id === sess.workoutId);
+      if (w) {
+        const has = (w.exercises || []).some((e) => e.id === old.id);
+        const nw = {
+          ...w,
+          exercises: has
+            ? w.exercises.map((e) => (e.id === old.id ? { ...routineCopy(nx), sets: e.sets } : e))
+            : [...(w.exercises || []), routineCopy(nx)],
+        };
+        S.workouts = S.workouts.map((x) => (x.id === w.id ? nw : x));
+        msg += " · routine updated";
+        try {
+          await Store.saveWorkout(nw, S.workouts);
+        } catch (err) {
+          console.warn("[mine] routine update failed", err);
+          msg += " (on this device)";
+        }
+      }
+    }
+    toast(msg, "ok");
+  }
+  const replKicker = (q) => (q ? "Matches" : "Suggested — same muscle, your kit first");
+  function replListHtml(ex, q) {
+    const opts = replOptions(ex, q);
+    return opts.length
+      ? opts
+          .slice(0, 40)
+          .map(
+            ({ m, have, similar }) => `<button type="button" class="add-move repl-opt${have ? "" : " no-kit"}" data-act="repl-pick" data-lib="${esc(m.id)}">
+              <span class="repl-name">${esc(m.name)}<small>${esc(m.muscle)} · ${esc(m.equipment)}${have ? "" : " · not in your Gym"}</small></span>
+              ${similar && !q ? `<span class="repl-tag">similar</span>` : ""}</button>`
+          )
+          .join("")
+      : `<p class="hint">No moves match “${esc(q)}”.</p>`;
+  }
+  function renderReplace() {
+    const r = S.repl;
+    const ex = replTarget();
+    if (!r || !ex) return "";
+    let body;
+    if (r.pick) {
+      const m = LIB_BY_ID.get(r.pick);
+      const logged = ex.logs ? ex.logs.filter((l) => l.done).length : 0;
+      const sess = S.active;
+      const left = ex.logs ? Math.max(1, ex.logs.length - logged) : 0;
+      body = `
+        <p class="repl-from">${esc(ex.name)} <span aria-hidden="true">→</span> <strong>${esc(m ? m.name : "")}</strong></p>
+        ${
+          logged
+            ? `<p class="steal-kicker">You logged ${logged} set${logged === 1 ? "" : "s"} already</p>
+               <div class="repl-seg" role="group" aria-label="What to replace">
+                 <button type="button" class="seg-btn${r.mode !== "whole" ? " on" : ""}" data-act="repl-mode" data-v="rest" aria-pressed="${r.mode !== "whole"}">Replace remaining sets<small>keep ${logged} logged · ${left} left</small></button>
+                 <button type="button" class="seg-btn${r.mode === "whole" ? " on" : ""}" data-act="repl-mode" data-v="whole" aria-pressed="${r.mode === "whole"}">Replace whole move<small>discard logged sets</small></button>
+               </div>`
+            : ""
+        }
+        ${
+          sess && sess.workoutId
+            ? `<p class="steal-kicker">Saved routine</p>
+               <div class="repl-seg" role="group" aria-label="Update routine?">
+                 <button type="button" class="seg-btn${r.scope !== "routine" ? " on" : ""}" data-act="repl-scope" data-v="today" aria-pressed="${r.scope !== "routine"}">Just today</button>
+                 <button type="button" class="seg-btn${r.scope === "routine" ? " on" : ""}" data-act="repl-scope" data-v="routine" aria-pressed="${r.scope === "routine"}">Update routine</button>
+               </div>`
+            : ""
+        }
+        <div class="fin-actions">
+          <button type="button" class="btn accent wide-btn" data-act="repl-confirm">Replace</button>
+          <button type="button" class="btn ghost wide-btn" data-act="repl-back">‹ Pick another</button>
+        </div>`;
+    } else {
+      body = `
+        <input class="repl-search" type="search" data-field="repl-q" value="${esc(r.q || "")}" placeholder="Search all moves" aria-label="Search moves" autocomplete="off" enterkeyhint="search" />
+        <p class="steal-kicker repl-kick">${replKicker(r.q)}</p>
+        <div class="repl-list">${replListHtml(ex, r.q)}</div>
+        <p class="hint">Keeps ${esc(String(ex.logs ? ex.logs.length : ex.sets))} sets × ${esc(String(ex.reps))}. Weight fills from that move’s last time.</p>`;
+    }
+    return `
+      <div class="eh-modal repl-modal" role="dialog" aria-modal="true" aria-labelledby="repl-title">
+        <div class="eh-modal-backdrop" data-act="repl-close"></div>
+        <div class="eh-modal-card repl-card">
+          <div class="repl-head"><div><p class="steal-kicker">Replace</p><h3 id="repl-title" class="fin-title">${esc(ex.name)}</h3></div>
+            <button type="button" class="ex-x" data-act="repl-close" aria-label="Close">×</button></div>
+          ${body}
+        </div>
+      </div>`;
+  }
+  HOOKS.renderReplace = renderReplace;
+  const prevOnAction = HOOKS.onAction;
+  HOOKS.onAction = (act, el) => {
+    switch (act) {
+      case "repl-open":
+        S.repl = { ctx: el.dataset.ctx === "sess" ? "sess" : "edit", exId: el.dataset.ex, q: "", pick: null, mode: "rest", scope: "today" };
+        rerenderKeep();
+        return true;
+      case "repl-close":
+        S.repl = null;
+        rerenderKeep();
+        return true;
+      case "repl-pick": {
+        const m = LIB_BY_ID.get(el.dataset.lib);
+        if (!S.repl || !m) return true;
+        if (S.repl.ctx === "edit") applyEditorReplace(m);
+        else {
+          S.repl.pick = m.id;
+          rerenderKeep();
+        }
+        return true;
+      }
+      case "repl-back":
+        if (S.repl) S.repl.pick = null;
+        rerenderKeep();
+        return true;
+      case "repl-mode":
+        if (S.repl) S.repl.mode = el.dataset.v === "whole" ? "whole" : "rest";
+        rerenderKeep();
+        return true;
+      case "repl-scope":
+        if (S.repl) S.repl.scope = el.dataset.v === "routine" ? "routine" : "today";
+        rerenderKeep();
+        return true;
+      case "repl-confirm":
+        applySessionReplace();
+        return true;
+    }
+    return prevOnAction ? prevOnAction(act, el) : false;
+  };
+  const prevOnInput = HOOKS.onInput;
+  HOOKS.onInput = (e) => {
+    const t = e.target;
+    if (t.dataset && t.dataset.field === "repl-q" && S.repl) {
+      S.repl.q = t.value;
+      const ex = replTarget();
+      const list = document.querySelector(".repl-list");
+      const kick = document.querySelector(".repl-kick");
+      // update just the list so the search box keeps focus
+      if (list && ex) list.innerHTML = replListHtml(ex, S.repl.q);
+      if (kick) kick.textContent = replKicker(S.repl.q);
+      return true;
+    }
+    return prevOnInput ? prevOnInput(e) : false;
+  };
+
   function onClick(e) {
     const nav = e.target.closest(".bnav-btn");
     if (nav) {
@@ -1793,6 +2051,39 @@
 
   function boot() {
     document.addEventListener("click", onClick);
+    // p9: numeric inputs select their whole value on tap (iOS Safari needs the deferred select), blank on leave → restore.
+    const isNum = (t) => t && t.tagName === "INPUT" && /^(decimal|numeric)$/.test(t.getAttribute("inputmode") || "") && !!t.closest("#steal-root");
+    const selAll = (t) => {
+      try {
+        t.select();
+        t.setSelectionRange(0, t.value.length);
+      } catch (_) {}
+    };
+    document.addEventListener("focusin", (e) => {
+      const t = e.target;
+      if (!isNum(t)) return;
+      t.dataset.prev = t.value;
+      selAll(t);
+      setTimeout(() => document.activeElement === t && selAll(t), 0);
+      setTimeout(() => document.activeElement === t && selAll(t), 60);
+    });
+    // a tap on an already-focused field would drop the caret mid-number — keep it all selected
+    document.addEventListener("mouseup", (e) => {
+      if (isNum(e.target) && e.target.dataset.fresh !== "0") {
+        e.preventDefault();
+        e.target.dataset.fresh = "0";
+      }
+    });
+    document.addEventListener("focusout", (e) => {
+      const t = e.target;
+      if (!isNum(t)) return;
+      delete t.dataset.fresh;
+      const prev = t.dataset.prev;
+      if (t.value.trim() === "" && prev != null && prev.trim() !== "") {
+        t.value = prev;
+        t.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
     document.addEventListener("input", (e) => {
       const root = $("steal-root");
       if (root && root.contains(e.target)) onMineInput(e);

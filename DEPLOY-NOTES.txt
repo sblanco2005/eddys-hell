@@ -348,3 +348,16 @@ Slack admin self-DM unchanged.
   Plan summary adds targetPerSide + barWeight for barbell moves. Editor: "225 lb = 90/side + 45 bar" under barbell moves.
 - Cache-bust 20261011-steal-p8-plates (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p8-plates-20261011).
   Deployed hosting:beta via npx firebase-tools@latest (installed CLI: Premature close). Prod untouched (push-prod-20261011).
+
+## 2026-10-12 ~8:50 PM ET — beta-steal-p9-replace (BETA only)
+- Mine editor: "⇄ Replace" on every move → picker (search all moves; suggested = same movement slot from split rules,
+  then same muscle; kit marked in Gym first, others dimmed "not in your Gym"). Swap in place keeping sets/reps/rest;
+  weight re-prefills from the new move's last time (or empty); barbell detection follows the new move.
+- Hit it: same Replace. No sets logged → swap in place. Sets logged → choice "Replace remaining sets" (default; logged sets
+  stay under the original move, replacement inserted right after for the remaining sets) vs "Replace whole move" (discard).
+  Saved routine: "Just today" (default) vs "Update routine" (replaces that move in the workout immediately, same id).
+- Session moves carry swappedFrom; trainer summary moves add swappedFrom + label "X (swapped from Y)"; Finish modal +
+  History show it. Finish carry-back no longer shrinks routine sets for swapped moves.
+- iPhone numeric inputs (editor weight, Hit it per-side/weight/reps/time, bar): tap selects the whole value (deferred
+  select + setSelectionRange for iOS), typing replaces; leaving it blank restores the previous value.
+- Cache-bust 20261012-steal-p9-replace (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p9-replace-20261012).
