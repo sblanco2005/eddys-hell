@@ -485,7 +485,7 @@
           return `
           <li class="mine-item">
             <button type="button" class="mine-item-main" data-act="edit" data-id="${esc(w.id)}">
-              <span class="mine-item-name">${esc(w.name)}</span>
+              <span class="mine-item-name">${esc(w.name)}${HOOKS.coachBadge ? HOOKS.coachBadge(w) : ""}</span>
               <span class="mine-item-meta">${(w.exercises || []).length} moves${esc(meta)}</span>
             </button>
             <div class="mine-item-actions">
@@ -672,6 +672,7 @@
           ? `<div class="twin-note"><span>This is a fresh ${esc(d.name)} template — not your saved “${esc(tw.name)}”.</span><button type="button" class="btn ghost btn-sm" data-act="open-twin" data-id="${esc(tw.id)}">Open my ${esc(tw.name)}</button></div>`
           : "";
       })()}
+      ${HOOKS.coachCard && existing ? HOOKS.coachCard(d.id) : ""}
       ${splitPicker}
       <ul class="ex-list">${(() => {
         const labels = ssLabels(d.exercises);
@@ -1236,6 +1237,7 @@
         </div>
         <button type="button" class="btn ghost btn-sm" data-act="sess-finish">Finish</button>
       </header>
+      ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
       ${
         kind === "lift"
           ? `<div class="seg-row">
@@ -1325,6 +1327,7 @@
         <h2 class="steal-title">${esc(w ? w.name : "Workout")}</h2>
         <p class="steal-sub">${list.length} session${list.length === 1 ? "" : "s"}</p>
       </header>
+      ${HOOKS.coachHistory ? HOOKS.coachHistory(S.historyFor) : ""}
       ${items}`;
   }
 
@@ -2616,6 +2619,119 @@
     const Auth = window.EddysHellAuth;
     if (Auth && Auth.onAuthChange) Auth.onAuthChange(onAuth);
   }
+
+  // ——— p14: Coach notes from Arni (users/{uid}/coachNotes, written by scripts/coach-note.mjs) ———
+  (function coachNotes() {
+    S.coachNotes = [];
+    S.coachOpen = {};
+    const tsOf = (v) => (v && typeof v === "object" && v.seconds != null ? new Date(v.seconds * 1000).toISOString() : v && v.toDate ? v.toDate().toISOString() : v || "");
+    const notesFor = (wid) => S.coachNotes.filter((n) => n.workoutId === wid).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    Object.assign(Store, {
+      async loadCoachNotes() {
+        const c = await this.cloud();
+        if (!c) return this.readLocal("coachNotes", []) || [];
+        const snap = await c.fs.getDocs(c.fs.collection(c.db, "users", c.uid, "coachNotes"));
+        const list = [];
+        snap.forEach((d) => {
+          const x = d.data();
+          list.push({ ...x, id: d.id, createdAt: tsOf(x.createdAt), readAt: tsOf(x.readAt) || null });
+        });
+        this.writeLocal("coachNotes", list.slice(-100));
+        return list;
+      },
+      async markCoachRead(ids, at) {
+        this.writeLocal("coachNotes", S.coachNotes.slice(-100));
+        const c = await this.cloud();
+        if (!c) return;
+        // rules: owner may only change readAt
+        await Promise.all(ids.map((id) => c.fs.setDoc(c.fs.doc(c.db, "users", c.uid, "coachNotes", id), { readAt: at }, { merge: true })));
+      },
+    });
+    let markTimer = null;
+    function markRead(wid) {
+      const unread = notesFor(wid).filter((n) => !n.readAt);
+      if (!unread.length) return;
+      clearTimeout(markTimer);
+      markTimer = setTimeout(() => {
+        const at = new Date().toISOString();
+        unread.forEach((n) => (n.readAt = at));
+        Store.markCoachRead(unread.map((n) => n.id), at).catch((err) => console.warn("[coach] mark read failed", err));
+      }, 1200); // badge clears on next render; the card keeps "New" for this view
+    }
+    const when = (iso) => {
+      try {
+        return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+      } catch (_) {
+        return "";
+      }
+    };
+    const body = (t) => esc(String(t || "").trim()).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>");
+    HOOKS.coachBadge = (w) => {
+      const ns = notesFor(w.id);
+      if (!ns.length) return "";
+      const unread = ns.some((n) => !n.readAt);
+      return ` <span class="coach-badge${unread ? " new" : ""}">Coach notes${unread ? " · new" : ""}</span>`;
+    };
+    HOOKS.coachCard = (wid) => {
+      const ns = notesFor(wid);
+      if (!ns.length) return "";
+      const n = ns[0];
+      const isNew = !n.readAt;
+      markRead(wid);
+      const full = String(n.text || "").trim();
+      const long = full.length > 220 || full.split("\n").length > 4;
+      const open = !!S.coachOpen[n.id];
+      const shown = long && !open ? full.slice(0, 200).replace(/\s+\S*$/, "") + "…" : full;
+      return `<section class="coach-card${isNew ? " new" : ""}" aria-label="Coach notes from Arni">
+          <p class="coach-head"><span class="coach-title">Coach notes from Arni</span>${isNew ? `<span class="coach-new">New</span>` : ""}</p>
+          <p class="coach-meta">${esc(when(n.createdAt))}${n.kind === "plan" ? " · on your plan" : " · after your session"}${ns.length > 1 ? ` · ${ns.length - 1} older in History` : ""}</p>
+          <div class="coach-text">${body(shown)}</div>
+          ${long ? `<button type="button" class="btn ghost btn-sm coach-more" data-act="coach-toggle" data-id="${esc(n.id)}">${open ? "Show less" : "Show all"}</button>` : ""}
+        </section>`;
+    };
+    HOOKS.coachHistory = (wid) => {
+      const ns = notesFor(wid);
+      if (!ns.length) return "";
+      markRead(wid);
+      return `<section class="coach-hist"><p class="steal-kicker">Coach notes from Arni · ${ns.length}</p><ul class="coach-hist-list">${ns
+        .map((n) => `<li class="coach-hist-item"><p class="coach-meta">${esc(when(n.createdAt))}${n.kind === "plan" ? " · plan" : " · session"}</p><div class="coach-text">${body(n.text)}</div></li>`)
+        .join("")}</ul></section>`;
+    };
+    const prevAction = HOOKS.onAction;
+    HOOKS.onAction = (act, el) => {
+      if (act === "coach-toggle") {
+        S.coachOpen[el.dataset.id] = !S.coachOpen[el.dataset.id];
+        render();
+        return true;
+      }
+      return prevAction ? prevAction(act, el) : false;
+    };
+    const prevLoad = HOOKS.afterLoad;
+    HOOKS.afterLoad = async function () {
+      if (prevLoad) await prevLoad();
+      S.coachNotes = Store.readLocal("coachNotes", []) || [];
+      try {
+        S.coachNotes = await Store.loadCoachNotes();
+      } catch (err) {
+        console.warn("[coach] load failed", err);
+      }
+      // Deep link from the push: ?coach=<workoutId> → open that routine in Mine.
+      try {
+        const q = new URLSearchParams(location.search);
+        const wid = q.get("coach");
+        if (wid) {
+          q.delete("coach");
+          history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + location.hash);
+          const w = S.workouts.find((x) => x.id === wid);
+          if (w && !S.active) {
+            S.view = "list";
+            setTab("mine");
+            onMineClick({ dataset: { act: "edit", id: wid } });
+          }
+        }
+      } catch (_) {}
+    };
+  })();
 
   window.EddysMine = { setTab, getTab: () => tab, _state: S, _hooks: () => HOOKS };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

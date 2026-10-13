@@ -5,7 +5,7 @@
  *
  * Usage:
  *   node scripts/trainer-queue.mjs list
- *     → prints a JSON array of pending items ({id, type, ...doc}; type 'plan'|'session', missing → 'session') oldest first, or NONE (exit 0)
+ *     → prints a JSON array of pending items ({id, type, workoutId, sessionId, ...doc}; type 'plan'|'session', missing → 'session') oldest first, or NONE (exit 0)
  *   node scripts/trainer-queue.mjs mark <id> sent|failed [reason...]
  *     → trainerQueue/<id>: status, sentAt (ISO), reason (if given), updatedAt
  *       and users/{uid}/sessions/{sid} (from sessionPath): trainerStatus, trainerSentAt
@@ -62,7 +62,7 @@ async function list(token) {
     .filter((r) => r.document)
     .map((r) => {
       const d = fromFields(r.document.fields);
-      return relayFormat({ id: r.document.name.split("/").pop(), type: d.type || "session", ...d, ...(d.type ? {} : { type: "session" }) });
+      return relayFormat({ id: r.document.name.split("/").pop(), type: d.type || "session", ...d, ...(d.type ? {} : { type: "session" }), ...ids(d) });
     })
     .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   console.log(items.length ? JSON.stringify(items, null, 2) : "NONE");
@@ -105,6 +105,12 @@ export function relayFormat(item) {
   return item;
 }
 
+/** workoutId / sessionId for mapping Arni's reply back (scripts/coach-note.mjs --queue <id>). */
+function ids(d) {
+  const tail = (p, k) => (typeof p === "string" && p.split("/")[2] === k ? p.split("/")[3] : null);
+  return { workoutId: d.workoutId || tail(d.workoutPath, "workouts") || null, sessionId: d.sessionId || tail(d.sessionPath, "sessions") || null };
+}
+
 async function mark(token, id, status, reason) {
   if (!id || !["sent", "failed"].includes(status)) {
     throw new Error("usage: mark <id> sent|failed [reason]");
@@ -135,7 +141,7 @@ async function mark(token, id, status, reason) {
     );
     sessionUpdated = true;
   }
-  console.log(JSON.stringify({ ok: true, id, status, sentAt: now, sessionPath: cur.sessionPath || null, sessionUpdated }));
+  console.log(JSON.stringify({ ok: true, id, status, sentAt: now, uid: cur.uid || null, ...ids(cur), workoutName: cur.name || (cur.summary && cur.summary.name) || null, sessionPath: cur.sessionPath || null, sessionUpdated }));
 }
 
 const isMain = import.meta.url === `file://${process.argv[1]}`;

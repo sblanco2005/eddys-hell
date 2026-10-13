@@ -391,3 +391,18 @@ body.tab-gym .foot { display: none !important; }
 .twin-note .btn{align-self:flex-start}
 .save-choice{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #ff5a36;border-radius:14px;background:rgba(255,90,54,.08)}
 .save-choice p{margin:0;font-size:16px;font-weight:600}
+
+/* p14 — Coach notes from Arni */
+.coach-badge { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-dim); font-size: 0.75rem; font-weight: 600; }
+.coach-badge.new { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.coach-card { margin: 4px 0 14px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-elev); }
+.coach-card.new { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 2px; }
+.coach-title { font-size: 1.05rem; font-weight: 700; }
+.coach-new { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #fff; background: var(--accent); padding: 2px 8px; border-radius: 999px; }
+.coach-meta { margin: 0 0 8px; color: var(--text-dim); font-size: 0.85rem; }
+.coach-text { font-size: 1rem; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.coach-more { margin-top: 8px; }
+.coach-hist { margin: 0 0 18px; }
+.coach-hist-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 10px; }
+.coach-hist-item { padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-elev); }
