@@ -2269,38 +2269,58 @@
 
   function boot() {
     document.addEventListener("click", onClick);
-    // p9: numeric inputs select their whole value on tap (iOS Safari needs the deferred select), blank on leave → restore.
+    // numeric inputs in Mine (see p11 below)
     const isNum = (t) => t && t.tagName === "INPUT" && /^(decimal|numeric)$/.test(t.getAttribute("inputmode") || "") && !!t.closest("#steal-root");
-    const selAll = (t) => {
-      try {
-        t.select();
-        t.setSelectionRange(0, t.value.length);
-      } catch (_) {}
-    };
+    // p11: tapping a number CLEARS it (old value shown dimmed as the placeholder) — no iOS caret/selection fiddling.
+    // While empty, state keeps the old value (totals don't flash); blur with nothing typed restores it.
     document.addEventListener("focusin", (e) => {
       const t = e.target;
-      if (!isNum(t)) return;
+      if (!isNum(t) || t.dataset.prev != null) return;
       t.dataset.prev = t.value;
-      selAll(t);
-      setTimeout(() => document.activeElement === t && selAll(t), 0);
-      setTimeout(() => document.activeElement === t && selAll(t), 60);
-    });
-    // a tap on an already-focused field would drop the caret mid-number — keep it all selected
-    document.addEventListener("mouseup", (e) => {
-      if (isNum(e.target) && e.target.dataset.fresh !== "0") {
-        e.preventDefault();
-        e.target.dataset.fresh = "0";
+      t.dataset.ph = t.getAttribute("placeholder") || "";
+      if (t.value !== "") {
+        t.setAttribute("placeholder", t.value);
+        t.value = "";
       }
     });
+    document.addEventListener(
+      "input",
+      (e) => {
+        const t = e.target;
+        if (!isNum(t) || t.dataset.prev == null || t.dataset.replay) return;
+        if (t.value.trim() !== "") {
+          t.dataset.typed = "1";
+          return;
+        }
+        if (!t.dataset.prev) return;
+        e.stopImmediatePropagation();
+        if (t.dataset.typed) replayPrev(t); // typed then erased → totals go back to the old value, not 0
+      },
+      true
+    );
+    function replayPrev(t) {
+      t.dataset.replay = "1";
+      t.value = t.dataset.prev;
+      t.dispatchEvent(new Event("input", { bubbles: true }));
+      t.value = "";
+      delete t.dataset.replay;
+      delete t.dataset.typed;
+    }
+    document.addEventListener(
+      "input",
+      () => {
+      },
+      true
+    );
     document.addEventListener("focusout", (e) => {
       const t = e.target;
-      if (!isNum(t)) return;
-      delete t.dataset.fresh;
+      if (!isNum(t) || t.dataset.prev == null) return;
       const prev = t.dataset.prev;
-      if (t.value.trim() === "" && prev != null && prev.trim() !== "") {
-        t.value = prev;
-        t.dispatchEvent(new Event("input", { bubbles: true }));
-      }
+      t.setAttribute("placeholder", t.dataset.ph || "");
+      delete t.dataset.prev;
+      delete t.dataset.ph;
+      delete t.dataset.typed;
+      if (t.value.trim() === "" && prev !== "") t.value = prev; // state never changed — just show it again
     });
     document.addEventListener("input", (e) => {
       const root = $("steal-root");

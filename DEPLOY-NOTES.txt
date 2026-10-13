@@ -378,3 +378,6 @@ Slack admin self-DM unchanged.
 - Custom moves: "+ Add “<text>” as a custom move" (muscle + equipment guessed from name, editable; barbell auto-detected).
   Saved to users/{uid}/gym/custom {items} + local mirror; loaded on start; show in all searches.
 - Cache-bust 20261012-steal-p11-library.
+- p11b (same evening): Mine number fields (editor weight; Hit it per-side/weight/reps/time/bar) now CLEAR on tap, old value
+  shown dimmed as placeholder; totals keep the old value while empty (typed-then-erased replays the old value); blur with
+  nothing typed restores it, typed value commits. Replaces p9 select-all. Cache-bust 20261012-steal-p11b-clear.
