@@ -23,6 +23,7 @@ initializeApp();
 const VAPID_PUBLIC = defineSecret("VAPID_PUBLIC");
 const VAPID_PRIVATE = defineSecret("VAPID_PRIVATE");
 const VAPID_SUBJECT = defineSecret("VAPID_SUBJECT");
+const STEPUP_SECRET = defineSecret("STEPUP_SECRET");
 
 /** Only these site hosts receive check-in pushes (beta-only for now). */
 /**
@@ -335,7 +336,7 @@ function safeBroadcastUrl(raw, host) {
 exports.sendBroadcastPush = onCall(
   {
     region: "us-central1",
-    secrets: [VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT],
+    secrets: [VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT, STEPUP_SECRET],
     memory: "256MiB",
     maxInstances: 1,
   },
@@ -348,6 +349,10 @@ exports.sendBroadcastPush = onCall(
     const target = data.target === "self" ? "self" : "all";
     const host = callerHost(request);
     if (!host) throw new HttpsError("invalid-argument", "Unknown site host.");
+    // Beta: "Send to everyone" requires a Face ID step-up (prod has no step-up yet).
+    if (target === "all" && STEPUP_HOSTS.has(host)) {
+      requireStepUp(data.stepUp, caller.uid, host);
+    }
     const url = safeBroadcastUrl(data.url, host);
     if (title.length < 1 || title.length > 60) {
       throw new HttpsError("invalid-argument", "Title must be 1–60 characters.");
@@ -458,3 +463,272 @@ exports.sendBroadcastPush = onCall(
     return out;
   }
 );
+
+// ——— Admin Face ID (passkeys / WebAuthn) — beta step-up ———
+const crypto = require("crypto");
+const {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} = require("@simplewebauthn/server");
+
+/** RP IDs we accept (passkeys are bound to the exact host). */
+const PASSKEY_RP_HOSTS = new Set(["eddy-s-hell-beta.web.app", "eddy-s-hell.web.app"]);
+/** Hosts where server-side step-up is enforced today (beta only; prod later). */
+const STEPUP_HOSTS = new Set(["eddy-s-hell-beta.web.app", "eddy-s-hell.web.app"]);
+const STEPUP_TTL_MS = 12 * 60 * 60 * 1000;
+const CHALLENGE_TTL_MS = 5 * 60 * 1000;
+
+function b64url(buf) {
+  return Buffer.from(buf).toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+function fromB64url(str) {
+  return Buffer.from(String(str).replace(/-/g, "+").replace(/_/g, "/"), "base64");
+}
+
+function signStepUp(uid, email, host) {
+  const secret = (STEPUP_SECRET.value() || "").trim();
+  if (!secret) throw new HttpsError("failed-precondition", "Step-up secret not configured.");
+  const now = Date.now();
+  const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = b64url(
+    JSON.stringify({ sub: uid, email, host, iat: Math.floor(now / 1000), exp: Math.floor((now + STEPUP_TTL_MS) / 1000), amr: ["passkey", "uv"] })
+  );
+  const sig = b64url(crypto.createHmac("sha256", secret).update(`${header}.${payload}`).digest());
+  return { token: `${header}.${payload}.${sig}`, expiresAtMs: now + STEPUP_TTL_MS };
+}
+
+/** Throws unless token is a valid, unexpired step-up for uid on host. */
+function requireStepUp(token, uid, host) {
+  const secret = (STEPUP_SECRET.value() || "").trim();
+  const fail = () => {
+    throw new HttpsError("permission-denied", "Unlock Admin with Face ID first.");
+  };
+  if (!secret || !token || typeof token !== "string") fail();
+  const parts = token.split(".");
+  if (parts.length !== 3) fail();
+  const expect = crypto.createHmac("sha256", secret).update(`${parts[0]}.${parts[1]}`).digest();
+  const got = fromB64url(parts[2]);
+  if (got.length !== expect.length || !crypto.timingSafeEqual(got, expect)) fail();
+  let p;
+  try {
+    p = JSON.parse(fromB64url(parts[1]).toString("utf8"));
+  } catch (_) {
+    fail();
+  }
+  if (!p || p.sub !== uid || p.host !== host || !(p.exp * 1000 > Date.now())) fail();
+  return p;
+}
+
+function passkeyHost(request) {
+  const h = callerHost(request);
+  if (!h || !PASSKEY_RP_HOSTS.has(h)) throw new HttpsError("invalid-argument", "Face ID isn’t available on this site.");
+  return h;
+}
+
+function credsCol(db, uid) {
+  return db.collection("adminPasskeys").doc(uid).collection("creds");
+}
+
+async function credsForHost(db, uid, host) {
+  const snap = await credsCol(db, uid).get();
+  return snap.docs.map((d) => ({ docId: d.id, ...d.data() })).filter((c) => (c.rpID || host) === host);
+}
+
+async function saveChallenge(db, uid, kind, host, challenge) {
+  await db.collection("passkeyChallenges").doc(`${uid}__${kind}`).set({
+    challenge,
+    host,
+    expiresAtMs: Date.now() + CHALLENGE_TTL_MS,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+/** Single-use: read + delete; throws if missing/expired/wrong host. */
+async function consumeChallenge(db, uid, kind, host) {
+  const ref = db.collection("passkeyChallenges").doc(`${uid}__${kind}`);
+  const snap = await ref.get();
+  await ref.delete().catch(() => {});
+  const c = snap.exists ? snap.data() : null;
+  if (!c || c.host !== host || !(Number(c.expiresAtMs) > Date.now())) {
+    throw new HttpsError("deadline-exceeded", "Face ID request expired — try again.");
+  }
+  return c.challenge;
+}
+
+async function writeAdminSession(db, uid, host, expiresAtMs) {
+  try {
+    await db.collection("adminSessions").doc(uid).set(
+      { verifiedUntil: new Date(expiresAtMs), host, updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
+  } catch (_) {
+    /* best-effort (future rules hook) */
+  }
+}
+
+const PASSKEY_OPTS = {
+  region: "us-central1",
+  secrets: [STEPUP_SECRET],
+  memory: "256MiB",
+  maxInstances: 2,
+};
+
+exports.passkeyRegisterOptions = onCall(PASSKEY_OPTS, async (request) => {
+  const caller = await resolveCallableAuth(request);
+  const host = passkeyHost(request);
+  const db = getFirestore();
+  const existing = await credsForHost(db, caller.uid, host);
+  // First device: Google admin sign-in is enough. More devices: need a current Face ID unlock.
+  if (existing.length) requireStepUp((request.data || {}).stepUp, caller.uid, host);
+  const options = await generateRegistrationOptions({
+    rpName: "Eddy’s Hell Admin",
+    rpID: host,
+    userName: caller.email,
+    userDisplayName: (caller.token && caller.token.name) || caller.email,
+    userID: new TextEncoder().encode(caller.uid),
+    attestationType: "none",
+    excludeCredentials: existing.map((c) => ({ id: c.credId || c.docId, transports: c.transports || undefined })),
+    authenticatorSelection: {
+      authenticatorAttachment: "platform",
+      residentKey: "preferred",
+      userVerification: "required",
+    },
+    timeout: 60000,
+  });
+  await saveChallenge(db, caller.uid, "reg", host, options.challenge);
+  return { options };
+});
+
+exports.passkeyRegisterVerify = onCall(PASSKEY_OPTS, async (request) => {
+  const caller = await resolveCallableAuth(request);
+  const host = passkeyHost(request);
+  const data = request.data || {};
+  const db = getFirestore();
+  const expectedChallenge = await consumeChallenge(db, caller.uid, "reg", host);
+  let verification;
+  try {
+    verification = await verifyRegistrationResponse({
+      response: data.response,
+      expectedChallenge,
+      expectedOrigin: `https://${host}`,
+      expectedRPID: host,
+      requireUserVerification: true,
+    });
+  } catch (err) {
+    logger.warn("passkey register verify failed", { message: err && err.message });
+    throw new HttpsError("invalid-argument", "Face ID setup couldn’t be verified — try again.");
+  }
+  if (!verification.verified || !verification.registrationInfo) {
+    throw new HttpsError("invalid-argument", "Face ID setup couldn’t be verified — try again.");
+  }
+  const cred = verification.registrationInfo.credential;
+  const label = String(data.deviceLabel || "").trim().slice(0, 60) || "This device";
+  await credsCol(db, caller.uid).doc(cred.id).set({
+    credId: cred.id,
+    publicKey: b64url(cred.publicKey),
+    counter: cred.counter || 0,
+    transports: cred.transports || [],
+    deviceType: verification.registrationInfo.credentialDeviceType || null,
+    backedUp: !!verification.registrationInfo.credentialBackedUp,
+    rpID: host,
+    deviceLabel: label,
+    createdAt: new Date().toISOString(),
+    lastUsedAt: new Date().toISOString(),
+  });
+  // Registration required user verification (Face ID/passcode) → unlock now too.
+  const step = signStepUp(caller.uid, caller.email, host);
+  await writeAdminSession(db, caller.uid, host, step.expiresAtMs);
+  return { ok: true, credId: cred.id, ...step };
+});
+
+exports.passkeyAuthOptions = onCall(PASSKEY_OPTS, async (request) => {
+  const caller = await resolveCallableAuth(request);
+  const host = passkeyHost(request);
+  const db = getFirestore();
+  const creds = await credsForHost(db, caller.uid, host);
+  if (!creds.length) return { hasCredentials: false };
+  const options = await generateAuthenticationOptions({
+    rpID: host,
+    allowCredentials: creds.map((c) => ({ id: c.credId || c.docId, transports: c.transports || undefined })),
+    userVerification: "required",
+    timeout: 60000,
+  });
+  await saveChallenge(db, caller.uid, "auth", host, options.challenge);
+  return { hasCredentials: true, options };
+});
+
+exports.passkeyAuthVerify = onCall(PASSKEY_OPTS, async (request) => {
+  const caller = await resolveCallableAuth(request);
+  const host = passkeyHost(request);
+  const data = request.data || {};
+  const db = getFirestore();
+  const expectedChallenge = await consumeChallenge(db, caller.uid, "auth", host);
+  const credId = data.response && data.response.id;
+  if (!credId) throw new HttpsError("invalid-argument", "Missing Face ID response.");
+  const ref = credsCol(db, caller.uid).doc(String(credId));
+  const snap = await ref.get();
+  if (!snap.exists || (snap.get("rpID") || host) !== host) {
+    throw new HttpsError("not-found", "This Face ID device isn’t registered — set it up again.");
+  }
+  const c = snap.data();
+  let verification;
+  try {
+    verification = await verifyAuthenticationResponse({
+      response: data.response,
+      expectedChallenge,
+      expectedOrigin: `https://${host}`,
+      expectedRPID: host,
+      credential: {
+        id: c.credId || snap.id,
+        publicKey: new Uint8Array(fromB64url(c.publicKey)),
+        counter: Number(c.counter) || 0,
+        transports: c.transports || undefined,
+      },
+      requireUserVerification: true,
+    });
+  } catch (err) {
+    logger.warn("passkey auth verify failed", { message: err && err.message });
+    throw new HttpsError("permission-denied", "Face ID couldn’t be verified — try again.");
+  }
+  if (!verification.verified) throw new HttpsError("permission-denied", "Face ID couldn’t be verified — try again.");
+  await ref.set(
+    { counter: verification.authenticationInfo.newCounter || 0, lastUsedAt: new Date().toISOString() },
+    { merge: true }
+  );
+  const step = signStepUp(caller.uid, caller.email, host);
+  await writeAdminSession(db, caller.uid, host, step.expiresAtMs);
+  return { ok: true, ...step };
+});
+
+/** List this admin's Face ID devices for the current site (needs a valid unlock). */
+exports.passkeyList = onCall(PASSKEY_OPTS, async (request) => {
+  const caller = await resolveCallableAuth(request);
+  const host = passkeyHost(request);
+  requireStepUp((request.data || {}).stepUp, caller.uid, host);
+  const creds = await credsForHost(getFirestore(), caller.uid, host);
+  return {
+    devices: creds.map((c) => ({
+      credId: c.credId || c.docId,
+      deviceLabel: c.deviceLabel || "Device",
+      createdAt: c.createdAt || null,
+      lastUsedAt: c.lastUsedAt || null,
+    })),
+  };
+});
+
+/** Remove one Face ID device (needs a valid unlock). */
+exports.passkeyDelete = onCall(PASSKEY_OPTS, async (request) => {
+  const caller = await resolveCallableAuth(request);
+  const host = passkeyHost(request);
+  const data = request.data || {};
+  requireStepUp(data.stepUp, caller.uid, host);
+  const id = String(data.credId || "");
+  if (!id) throw new HttpsError("invalid-argument", "Missing device id.");
+  const ref = credsCol(getFirestore(), caller.uid).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists || (snap.get("rpID") || host) !== host) throw new HttpsError("not-found", "Device not found.");
+  await ref.delete();
+  return { ok: true };
+});
