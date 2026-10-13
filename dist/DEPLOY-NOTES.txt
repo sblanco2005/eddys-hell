@@ -1,0 +1,416 @@
+Eddy's Hell — Hosting / Auth deploy notes
+Updated 2026-09-27 ~10:30 AM ET (America/New_York).
+
+## Environments
+Stable (friends / known-good v1.0.0):
+  https://eddy-s-hell.web.app/
+Beta (Santiago feature testing — does not affect stable):
+  https://eddy-s-hell-beta.web.app/
+Pages mirror (steers to stable web.app):
+  https://sblanco2005.github.io/eddys-hell/
+
+Firebase project: eddy-s-hell
+Hosting sites:
+  stable target → site id eddy-s-hell
+  beta   target → site id eddy-s-hell-beta
+
+## Deploy commands
+From /workspace/eddys-hell-app (syncs root → dist, then deploys):
+
+  scripts/deploy-hosting.sh beta      # beta only — preferred for experiments
+  scripts/deploy-hosting.sh stable    # friends site — use only for known-good
+  scripts/deploy-hosting.sh both
+
+Equivalent firebase CLI:
+  firebase deploy --only hosting:beta   --project eddy-s-hell
+  firebase deploy --only hosting:stable --project eddy-s-hell
+
+GitHub Pages mirror (does not touch Firebase Hosting):
+  scripts/publish-pages.sh
+
+Do NOT move/retag v1.0.0. Tag stays on the known-good freeze.
+
+## Auth / OAuth
+authDomain (firebase-config.json): eddy-s-hell.web.app
+  (unchanged — popup works cross-site within same project when origins authorized)
+
+Popup-first on both stable and beta Hosting. Beta is first-class:
+  - hostname eddy-s-hell-beta.web.app treated as Firebase Hosting
+  - no auto-steer from beta → stable
+  - subtle BETA badge when hostname includes "beta"
+
+Authorized domains / OAuth (Console) — add if not already present:
+  Firebase Auth authorized domain:
+    eddy-s-hell-beta.web.app
+  Google Cloud OAuth client (Web) JS origin:
+    https://eddy-s-hell-beta.web.app
+  Redirect URI:
+    https://eddy-s-hell-beta.web.app/__/auth/handler
+
+Stable OAuth (already set):
+  https://eddy-s-hell.web.app/
+  https://eddy-s-hell.web.app/__/auth/handler
+
+## Prior notes
+auth.js: popup-first on web.app (fallback redirect if popup blocked);
+  initializeAuth includes browserPopupRedirectResolver.
+Stable Hosting release 2026-09-26 ~6:09 PM ET via tmp-hosting-deploy SA
+  (Console/SA path; SA key deleted after use — do not leave long-lived keys in repo).
+gh-pages published via scripts/publish-pages.sh.
+
+## Pending (needs Firebase Console / CLI login — 2026-09-26 ~9:30 PM ET)
+Beta Hosting site not created yet (https://eddy-s-hell-beta.web.app/ returns Site Not Found).
+OAuth authorized domains / JS origins for beta not applied yet (CLI had no authorized account).
+
+One-time setup after `firebase login` (or tmp SA like prior deploy):
+  firebase hosting:sites:create eddy-s-hell-beta --project eddy-s-hell
+  # targets already in .firebaserc — then:
+  scripts/deploy-hosting.sh beta
+
+Console checklist:
+  Auth → Settings → Authorized domains → add eddy-s-hell-beta.web.app
+  Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Web client →
+    Authorized JavaScript origins: https://eddy-s-hell-beta.web.app
+    Authorized redirect URIs: https://eddy-s-hell-beta.web.app/__/auth/handler
+
+Delete any temporary service-account key after use (never commit keys).
+
+## 2026-09-27 ~10:30 AM ET — beta only
+Reveal in Finder: Admin Rule was forcing #pick-result empty on load, so the
+button stayed hidden unless you dry-ran again. Now restores published/last
+pick onto #pick-result; Reveal row always shown when relPath exists.
+Check-in: window.confirm before recording (admin + members).
+Stable untouched.
+
+## 2026-09-27 ~10:35 AM ET — beta only (Reveal in Finder Safari)
+Reveal in Finder never fails silently on Safari:
+  - Always shows full Mac path in toast (selectable, 12s)
+  - Always opens prompt() with path prefilled for manual copy
+  - Tries navigator.clipboard.writeText, then document.execCommand('copy')
+  - Readonly selectable path field always visible under the button when candidate loaded
+  - Removed useless window.open(file://) on https
+Stable untouched.
+
+## 2026-09-27 ~10:45 AM ET — beta only (EddysHell catalog)
+Archive source: ONLY /Volumes/EddysHell (no SantiTB).
+Rebuilt data/catalog.json from Mac scan (59 videos).
+Crossfit & Power → folderType CrossFit (Admin Rule type chip).
+ARCHIVE_ROOT = /Volumes/EddysHell/
+this-week.json remapped to EddysHell Full/2024/HR 140 BB DL HT PushPull ups.mov
+Stable untouched.
+
+## 2026-09-27 ~10:50 AM ET — beta only (admin rule storage bump)
+localStorage key eddys-hell-admin-v1 was overriding data/default-rule.json, so
+Santiago's old Full / HR>140 / tag dl rule stuck after catalog redeploys.
+Fix:
+  - STORAGE_KEY → eddys-hell-admin-v2
+  - rule.version = 2 on default-rule.json / state.json / defaultRule()
+  - Boot reseeds rule from default-rule.json when version mismatches (keeps
+    usedHistory / lastPick); same-version still lets admin overrides win
+Stable untouched.
+
+## 2026-09-27 ~10:48 AM ET — beta only (rule v3 four folderTypes)
+Live default-rule still had folderTypes:[Full] so Santiago kept seeing
+Full + HR140 + rotate 2w (stale localStorage, same-version path kept overrides)
+and dry-run returned 0 matches.
+Fix:
+  - RULE_VERSION = 3
+  - default-rule.json / state.json rule / defaultRule():
+    folderTypes Full+Upper+Pull+CrossFit, minHR 120, requireHR true,
+    rotate true, rotateWeeks 8, tagContains "", autoPick true, version 3
+  - Boot: if stored rule.version !== 3, ALWAYS replace rule from
+    default-rule.json (keep usedHistory / lastPick)
+  - Cache-bust index.html scripts ?v=1790520444
+Stable untouched. Santiago: hard-refresh once.
+
+## 2026-09-27 ~11:20 AM ET — beta only (Firestore Publish this week + Save rule)
+Live SoT for pick/rule: Firestore `config/thisWeek` + `config/rule`.
+Admin buttons: both candidate + published paths labeled **Publish this week**
+(write local + Firestore). **Save rule** → `publishRule` → toast “Rule published to beta.”
+Hosting `data/*.json` is bootstrap/fallback only. Check-ins unchanged.
+Rules deploy: `firebase deploy --only firestore:rules --project eddy-s-hell`
+Hosting: `scripts/deploy-hosting.sh beta` only (stable untouched).
+Do NOT retag v1.0.0.
+
+## 2026-09-27 ~12:35 PM ET — beta only (video preserve + check-in QA + load)
+Bugs reported on phone Safari beta:
+1) YouTube vanished after Power BB DL HR153 publish without youtubeId.
+   Cause: new pick (2022b4d91d) replaced prior Hosting HR140 + youtubeId EAFLtVigQHY;
+   Firestore config/thisWeek written with youtubeId:null. Power BB never had its own YT.
+   Fix: publishThisWeek + applyCloudThisWeek + acceptPick preserve youtubeId when
+   same pickId/filename/relPath and new payload omits it (merge no longer wipes).
+2) False check-in “Sep 27 at 12:08 PM ET” — Firestore doc
+   checkins/2022b4d91d__sblanco2005@gmail.com at 16:08:57Z created during QA smoke
+   (same minute as thisWeek/rule admin updates). Deleted via firebase firestore:delete.
+   Check-in still requires window.confirm — not auto on load/sign-in.
+3) ~40s phone load: top culprits Firebase modular ESM sequential import
+   (~100KB+150KB+440KB from gstatic) + auth cold start; catalog.json only ~31KB.
+   Mitigation: Promise.all Firebase imports, modulepreload/preconnect gstatic,
+   non-blocking font stylesheet, parallel this-week+catalog fetch, JS/CSS max-age=86400.
+Stable untouched. Do NOT retag v1.0.0.
+
+## 2026-09-27 ~12:50 PM ET — beta only (Publish this week requires YouTube)
+Rule: Admin **Publish this week** (and any path that writes Firestore
+`config/thisWeek` / Hosting this-week as the live pick) only updates when the
+pick already has `youtubeId`. Otherwise refuse with toast
+"Upload YouTube first — won't replace this week without a video." and leave
+the current live thisWeek untouched.
+Blocked: acceptPick / keepThisWeek / Auth.publishThisWeek / scripts/set-this-week.js
+when youtubeId missing (same-pick preserve still fills id before the gate).
+Wednesday/bot: EddysHell.canPublishThisWeek(); auto-accept without YT is refused.
+Cache-bust ?v=1790527694. Stable untouched. Do NOT retag v1.0.0.
+
+## 2026-09-27 ~1:00 PM ET — beta only (Stage next week vs live)
+Santiago: live this-week was still overridden when picking another workout
+and hitting Publish without youtubeId. Correct model:
+  - Stage next week → Firestore config/nextWeek (+ local eddys-hell-next-week-v1)
+    Toast: "Staged — live week stays until YouTube upload."
+  - Live config/thisWeek ONLY after YouTube upload succeeds (promoteStagedToLive /
+    EddysHell.promoteAfterYoutubeUpload) with youtubeId set.
+  - Never write youtubeId:null over live; never replace live with a no-video pick.
+  - Button: "Stage next week" for candidates without video; "Publish this week"
+    only when youtubeId already on the pick (same-pick re-publish).
+Auth: stageNextWeek, loadNextWeekFromCloud, promoteStagedToLive.
+Rules: config/nextWeek admin write / signed-in read.
+Cache-bust ?v=1790528375. Deploy hosting:beta + firestore:rules.
+Stable untouched. Do NOT retag v1.0.0.
+
+## 2026-09-27 ~1:22 PM ET — beta only (UX: live vs staged)
+Root cause: Stage/Publish from a stale tab (or pre-stage JS) wrote Pull 155
+with youtubeId:null into Firestore config/thisWeek at 1:18 PM ET, so Admin
+“This week’s pick” (member card) showed “#2 Pull 155…” + “Video not published yet”.
+Hosting data/this-week.json was already HR140; cloud hydrate overwrote UI.
+
+Fix:
+  - Restored Firestore config/thisWeek → HR140 + youtubeId EAFLtVigQHY
+  - Moved Pull 155 into config/nextWeek (status:staged)
+  - applyCloudThisWeek / resolveThisWeek ignore no-youtubeId as live
+  - Firestore rules: thisWeek writes REQUIRE youtubeId (11+ chars)
+  - Admin Rule: “Next week staged” panel; This week tab shows LIVE badge
+  - Staging never mutates thisWeekFile / lastPick / member card
+Cache-bust ?v=1790529745. Deploy hosting:beta + firestore:rules.
+Stable untouched. Do NOT retag v1.0.0.
+
+## 2026-09-27 ~1:33 PM ET — beta only (Rule UI: Live vs Non-live)
+Santiago: Candidate pick = LIVE this-week only (read-only). Dry-run / Pick again
+are the SAME control — one button in Non-live. Reveal in Finder + Stage next week
+live in Non-live with the staged candidate preview.
+
+- Admin · Rule: remove Dry-run from Rule card (Save rule only)
+- Candidate pick card: LIVE badge, resolveThisWeek() (youtubeId required), no actions
+- Next week staged (Not live): Dry-run pick / Pick again (one btn), Reveal, Stage,
+  staged cloud summary + dry-run preview
+- Blank-screen race: paintGuestShellEarly + Auth.init 12s timeout (defer paint)
+Cache-bust ?v=1790530448. Deploy hosting:beta only.
+Stable untouched. Do NOT retag v1.0.0.
+
+## 2026-09-27 ~1:35 PM ET — blank beta body fix (beta only)
+Root cause: boot awaited Firebase Auth.init (module load + authStateReady)
+before onAuthChange → applyRoleUI. All .view start hidden, so slow/hung auth
+left header-only blank (no Sign in / This week). Repro: delay firebase-auth.js.
+
+Fix: paintGuestShellEarly() after catalog wire (Sign in + week hint immediately);
+12s Auth.init timeout; safeApplyRoleUI + boot().catch fallbacks; cache-bust
+?v=1790530220. Stable untouched. Firestore thisWeek still HR140 + EAFLtVigQHY.
+
+## 2026-09-27 deploy — Rule UI Live/Non-live + blank paint
+Cache-bust ?v=1790530448. hosting:beta only. Stable untouched.
+
+## 2026-09-27 ~1:40 PM ET — beta only (Rule UI fix + kill phone cache)
+Santiago screenshot still showed OLD DOM (Dry-run next to Save, Candidate pick
+badge “Next upload (admin)” + “No matches”) because index.html was CDN-cached
+max-age=3600 and prior ?v= was not unique enough for Safari.
+
+Fix:
+  - Rule card: Save rule ONLY (no Dry-run) — verified
+  - Candidate pick (LIVE): read-only thisWeek+youtubeId; never dry-run/No matches
+  - Next week staged (Not live): ALWAYS-visible Pick again (=dry-run), Reveal in
+    Finder, Stage; hydrates from config/nextWeek so Pull 155 shows controls
+  - Cache-bust ?v=20260927-1340-livefix (unique string, not recycled epoch)
+  - Hosting headers: / and /index.html → no-cache,no-store,must-revalidate
+  - Beta JS/CSS max-age=300
+  - meta Cache-Control + eddys-hell-build stamp in index.html
+Deploy: scripts/deploy-hosting.sh beta only. Stable untouched. Do NOT retag v1.0.0.
+Phone: hard-refresh or open https://eddy-s-hell-beta.web.app/?v=20260927-1340-livefix
+
+## 2026-09-27 ~1:55 PM ET — check-in difficulty (beta only)
+Replaced optional Notes with required Easy / Okay / Hard buttons.
+Stores `difficulty` on Firestore checkins docs. Shown as badge in
+Who checked in this week (admin uses same shared list). Stable untouched.
+Cache-bust: difficulty-20260927-1355.
+No Slack check-in alert path in app (still out of scope / separate).
+
+## 2026-10-01 ~5:18 PM ET — beta only (in-app check-in feed + badge)
+Member-facing Notifications / Who checked in feed on beta Hosting only.
+- Firestore `checkinFeed` (doc id pickId__email) written on successful check-in
+- Badge via localStorage lastSeenAt (+ best-effort userPrefs/{uid})
+- Subtle live toast via feed onSnapshot; no Web Push/FCM/SW in this pass
+- Rules additive: checkinFeed + userPrefs (REST rules deploy; CLI Premature close)
+- Hosting: REST deploy to eddy-s-hell-beta only. Stable untouched.
+Cache-bust ?v=20261001-checkin-feed. Build meta beta-checkin-feed-20261001.
+
+## 2026-10-01 ~6:50 PM ET — beta only (Check-ins bell panel fix)
+Root cause: Notifications panel lived below the full pick card (YT + check-in),
+so toggling the bell looked like a no-op (content opened off-screen). Listener
+was only a one-shot per-button bind late in async init.
+Fix: panel moved under card-head inside #member-pick; document capture
+delegation for bell/close; scrollIntoView; empty + cloud-error hint;
+[hidden]/pointer-events CSS harden; cache-bust ?v=20261001-bell-fix.
+Stable Hosting untouched.
+
+## 2026-10-02 ~2:40 AM ET — beta only (Web Push check-in notifications)
+Goal: lock-screen notify other members when someone checks in (social pressure).
+Shipped (beta Hosting only; stable untouched):
+  - Toggle “Notify me when someone checks in” (prompt Allow once)
+  - sw.js + manifest.webmanifest + icons (iOS Add to Home Screen hint)
+  - Firestore pushSubscriptions + rules; VAPID public in data/vapid-public.json
+  - Cloud Function onCheckinFeedCreate ready under functions/ (needs Blaze)
+  - Pragmatic sender: scripts/notify-checkin-push.mjs until Functions deploy
+  - REST deploy helpers: scripts/deploy-beta-rest.mjs + deploy-rules-rest.mjs
+    (CLI Premature close workaround)
+FCM: APIs enabled; Console VAPID + Blaze still required for full FCM Functions path.
+  Current beta uses standard Web Push + own VAPID (no silent fail if unset —
+  toggle explains “not configured”).
+Cache-bust ?v=20261002-webpush. Build meta beta-webpush-20261002.
+Slack admin self-DM unchanged.
+
+## 2026-10-11 ~10:45 AM ET — beta only (instant check-in push via Cloud Function)
+- functions/: firebase-functions v2 onDocumentCreated(checkinFeed/{docId}), region us-central1
+  (Firestore nam5), secrets VAPID_PUBLIC / VAPID_PRIVATE / VAPID_SUBJECT (defineSecret).
+  Sends only to pushSubscriptions with host == eddy-s-hell-beta.web.app, enabled != false,
+  skips checker (uid OR email), urgency high, TTL 12h, disables 404/410, logs activityLog
+  action "checkin-push" source "cloud-function".
+- Beta UX (isBetaHost only): one-time iOS Safari "Add to Home Screen" banner; one-time
+  standalone "Get notified when a friend checks in" Enable card. Toggle kept.
+- sw.js click: focus same-origin window + navigate, else openWindow(url).
+- Cache-bust ?v=20261011-instant-push, build beta-instant-push-20261011. REST deploy to
+  eddy-s-hell-beta only (version 2e9019f1d4a063bf). Stable untouched.
+- Functions deploy needs Blaze:
+  firebase functions:secrets:set VAPID_PUBLIC|VAPID_PRIVATE|VAPID_SUBJECT --project eddy-s-hell (values piped from secrets/vapid.json)
+  firebase deploy --only functions --project eddy-s-hell
+
+## 2026-10-11 ~11:40 AM ET — PROMOTE to prod: instant push + broadcast + bell removal
+- Functions (Node 22, us-central1, Blaze): onCheckinFeedCreate / sendTestPush / sendBroadcastPush
+  now serve prod + beta. Same-host routing: a check-in/broadcast on host H only reaches
+  subscriptions saved from host H (eddy-s-hell.web.app, eddy-s-hell.firebaseapp.com,
+  eddy-s-hell-beta.web.app). Click URL = that host's root. Untagged check-ins skipped.
+- Client: host tag on check-ins everywhere; composer + test button + A2HS banner + Enable card
+  on beta + stable; 🔔 bell retired everywhere. BETA badge stays beta-only.
+- Cache-bust ?v=20261011-push-prod, build push-prod-20261011. Hosting: stable + beta (REST).
+- Members must Add to Home Screen from eddy-s-hell.web.app and Enable again (subscriptions
+  are per-site; beta subs don't carry over).
+
+## 2026-10-11 ~7:00 PM ET — beta only: Steal merge (Mine | Gym | Eddy's) — branch beta-steal-merge
+- Bottom tab bar Mine | Gym | Eddy's (default Eddy's; Eddy's = existing This week / Admin · Rule, Admin still
+  behind Face ID). New code: steal-data.js (93 moves + demo clips, 6 gear groups/32 items, split rules),
+  steal.js, steal.css. auth.js only gains getCloudHandle().
+- Per-user Firestore: users/{uid}/gym/kit, users/{uid}/workouts/{id}, users/{uid}/sessions/{id}.
+  Rules: additive users/{uid}/... own-uid only (live ruleset 437d0e1b-…, was f6ced67a-…; prod-compatible).
+- Phase 1 Gym + gear import; Phase 2 Mine builder + workouts import; Phase 3 Hit it logger + per-workout history.
+- Import: scripts/import-steal-snapshot.mjs (merge-only). Santiago uid Yv9iwvUTwVSsKVo2DJxCKp7sIC92:
+  gym 14 items; workouts: Efficient Pull Day (Push/Pull never-saved drafts + 2 Stolen extracts skipped).
+- Cache-bust v=20261011-steal-p1 → p2 → p3; sw.js EH_SW_VERSION. REST deploy to eddy-s-hell-beta only.
+  Prod Hosting untouched. No pushes; config/thisWeek|nextWeek untouched.
+
+## 2026-10-11 ~8:30 PM ET — beta only: Finish confirmation + trainer hand-off
+- Hit it → Finish opens in-app modal (summary of LOGGED sets only, note "How did it feel?"):
+  Finish & send to trainer | Finish only | Keep going. Send hidden when nothing logged (Finish discards).
+- Send: session gets shareWithTrainer/trainerStatus:'pending'/note; queue doc trainerQueue/{autoId}.
+- Rules additive: trainerQueue create if uid == auth.uid && status=='pending'; read/update admin; no delete.
+  Live ruleset f64aa471-… (prev 437d0e1b-…).
+- Box: node scripts/trainer-queue.mjs list | mark <id> sent|failed [reason]
+- Cache-bust v=20261011-steal-p5-trainer; beta Hosting only.
+
+## 2026-10-11 ~8:40 PM ET — beta only: Send plan to trainer (before starting)
+- Buttons: saved-workout card (beside Hit it) + editor (under Hit it). Confirm modal → trainerQueue type:"plan"; session sends now type:"session".
+- Rules unchanged (type already allowed). trainer-queue.mjs list shows type (missing → session).
+- Cache-bust v=20261011-steal-p6-plan; beta Hosting only.
+
+## 2026-10-11 beta-steal-p7-targets (BETA only)
+- Editor: lift moves show Sets | Reps (stepper, default 8) | Weight (user unit, prefilled from last time, "last: N" hint); Rest + Setup below.
+- Bodyweight moves: optional weight, placeholder BW. Timed/cardio moves keep free-text reps.
+- Migration on load: rep ranges (e.g. 5-8, 8-12) -> 8, single numbers kept; targetWeightLb added; changed workouts saved back.
+- Hit it prefills planned weight/reps (planned beats last time). Plan summary: numeric targetReps, targetWeight + targetWeightSource planned|last time.
+- Weight stored as total lb (targetWeightLb); last time = heaviest done set of latest finished session.
+- Cache-bust 20261011-steal-p7-targets. Prod untouched (push-prod-20261011).
+
+## 2026-10-11 ~8:55 PM ET — beta-steal-p8-plates (BETA only)
+- Readability (Mine/Gym only, scoped to .steal-root): the global .mono rule (0.75rem !important) was shrinking every
+  Mine number/input to ~11px — overridden. Inputs 17–20px (no iOS zoom), labels 16px sentence case, brighter
+  dim/mute text + placeholders, steppers 44px tap targets, Hit it set inputs 48px tall with field labels.
+- Hit it, barbell moves: weight entry = ONE side. lb|kg toggle (remembered in local "unit"), Barbell switch per move
+  (default from library isBarbell / equipment), Bar field + presets 45 / 35 / None (default 45 lb = 20.4 kg shown in kg).
+  Live line: "Total 2×side + bar = X lb (Y kg)". Prefill side = (total − bar) / 2.
+- Log data: weightLb still = total lb (history/last time/trainer unchanged); barbell sets also store perSide, barLb, unit.
+  Logged sets keep their own bar; changing the bar re-totals open sets only (plates per side kept).
+- Non-barbell lifts: plain weight in current unit + "= N kg/lb" conversion; BW placeholder for bodyweight.
+- Trainer session summary sets add totalLb, ps (per side), bar, psUnit, txt e.g. "135 lb total (45/side + 45 bar) × 8".
+  Plan summary adds targetPerSide + barWeight for barbell moves. Editor: "225 lb = 90/side + 45 bar" under barbell moves.
+- Cache-bust 20261011-steal-p8-plates (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p8-plates-20261011).
+  Deployed hosting:beta via npx firebase-tools@latest (installed CLI: Premature close). Prod untouched (push-prod-20261011).
+
+## 2026-10-12 ~8:50 PM ET — beta-steal-p9-replace (BETA only)
+- Mine editor: "⇄ Replace" on every move → picker (search all moves; suggested = same movement slot from split rules,
+  then same muscle; kit marked in Gym first, others dimmed "not in your Gym"). Swap in place keeping sets/reps/rest;
+  weight re-prefills from the new move's last time (or empty); barbell detection follows the new move.
+- Hit it: same Replace. No sets logged → swap in place. Sets logged → choice "Replace remaining sets" (default; logged sets
+  stay under the original move, replacement inserted right after for the remaining sets) vs "Replace whole move" (discard).
+  Saved routine: "Just today" (default) vs "Update routine" (replaces that move in the workout immediately, same id).
+- Session moves carry swappedFrom; trainer summary moves add swappedFrom + label "X (swapped from Y)"; Finish modal +
+  History show it. Finish carry-back no longer shrinks routine sets for swapped moves.
+- iPhone numeric inputs (editor weight, Hit it per-side/weight/reps/time, bar): tap selects the whole value (deferred
+  select + setSelectionRange for iOS), typing replaces; leaving it blank restores the previous value.
+- Cache-bust 20261012-steal-p9-replace (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p9-replace-20261012).
+
+## 2026-10-12 ~9:00 PM ET — beta-steal-p10 (BETA only)
+- Replace picker hides the move being replaced and every move already in the current workout (editor draft or live session).
+- scripts/trainer-queue.mjs list: relayFormat() sets each summary move's `name` to its `label` when present
+  ("Chest-supported dumbbell row (swapped from Barbell row)"), keeps raw name in `moveName`, and adds
+  summary.movesText (one ready-to-send line per move). Script no longer runs its CLI when imported.
+- Cache-bust 20261012-steal-p10 (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p10-20261012).
+
+## 2026-10-12 ~9:10 PM ET — beta-steal-p11-library (BETA only)
+- Move library 93 → 330 (237 new, ids x-<slug>, no demo clips; existing ids/names untouched so history/last time match).
+  New moves carry muscle, equipment, needs (Gym kit), isBarbell, pattern (lunge/squat/hinge/h-push/v-pull/...).
+- Forgiving search (Replace picker + editor Add a move): case-insensitive, plural→singular, any word order, prefix match,
+  synonyms bb/db/kb/rdl/ohp/bss/sldl/dl/ez, name aliases (OHP finds standing/seated presses).
+- Replace suggestions also use movement pattern (lunge ↔ split squat ↔ step-up).
+- Custom moves: "+ Add “<text>” as a custom move" (muscle + equipment guessed from name, editable; barbell auto-detected).
+  Saved to users/{uid}/gym/custom {items} + local mirror; loaded on start; show in all searches.
+- Cache-bust 20261012-steal-p11-library.
+- p11b (same evening): Mine number fields (editor weight; Hit it per-side/weight/reps/time/bar) now CLEAR on tap, old value
+  shown dimmed as placeholder; totals keep the old value while empty (typed-then-erased replays the old value); blur with
+  nothing typed restores it, typed value commits. Replaces p9 select-all. Cache-bust 20261012-steal-p11b-clear.
+
+## 2026-10-12 ~9:20 PM ET — beta-steal-p12-cap (BETA only)
+- Mine number caps as you type (extra keystroke is rejected): weight / per-side / bar / editor weight ≤ 3 digits + one
+  decimal (e.g. 47.5, 102.5, max 999.x); reps ≤ 99; time m:ss ≤ 99:59 (or ≤ 4 digits).
+- Plate row: > 8 plates per side collapses to a summary like "22×45 + 5 + 2.5"; row capped at 2 lines.
+- Cache-bust 20261012-steal-p12-cap.
+
+## 2026-10-12 ~9:35 PM ET — beta-steal-p13-superset (BETA only)
+- Editor: "+ Superset with next" between adjacent moves (tap again "⛓ Superset A · Unlink"). Groups = contiguous moves with the
+  same `supersetGroup`; labels A1/A2/A3… auto-assigned in order, colored bracket. Reorder/remove re-normalizes (a move moved
+  out of its run drops the group); Replace (editor + Hit it) keeps the group. Unlink splits the run at that point.
+- Hit it: a superset renders as one block (all its moves + set rows). Next set highlighted; logging A1 set n jumps to A2 set n;
+  rest timer only after the round's last move, using the last move's rest. Different set counts: rounds = max, shorter
+  moves drop out. Prev/Next skip over the whole block. Ungrouped moves unchanged.
+- Payloads: moves carry superset/ssLabel/label ("A1 Bench press"); summary.supersets [{letter, title, rounds, text}] and
+  summary.movesText written by the app for BOTH plan and session:
+    "Superset A (alternated, rest after each round): Bench press + Pull-up"
+    "Round 1: Bench press 185 lb × 8 → Pull-up BW × 10" …   (plan adds "Rest 90s after each round")
+  scripts/trainer-queue.mjs relayFormat keeps app movesText; falls back to building it for older items.
+- Cache-bust 20261012-steal-p13-superset.
+
+## 2026-10-13 ~11:45 AM ET — promote Steal merge to prod (build prod-steal-20261013)
+Mine/Gym tabs, check-in history, manual video pick, admin Face ID step-up now
+enabled on stable (eddy-s-hell.web.app) as well as beta. BETA badge still beta-only.
+Passkeys are per-domain: register Face ID separately on prod.
+
+## 2026-10-13 ~5:30 PM ET — Mine save fix (build prod-steal-20261013b, beta + prod)
+- Root cause: tapping the "Push" split card opens a fresh template draft (no id), not the saved Push. Save for later then
+  added a duplicate / re-tapping the card regenerated defaults, so edits looked lost. Also cloud load blindly replaced local
+  (offline / pre-load saves could be clobbered) and savedAt never moved.
+- Fix: template draft whose name matches a saved workout shows "Open my Push" note; Save asks Update Push / Save as new /
+  Cancel. Existing-workout button now "Save changes", in place (same id), savedAt bumped, toast "Push updated".
+  loadWorkouts merges local vs cloud by updatedAt (newer local re-sent; deleted ids tracked).
