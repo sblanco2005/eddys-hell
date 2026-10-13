@@ -62,10 +62,24 @@ async function list(token) {
     .filter((r) => r.document)
     .map((r) => {
       const d = fromFields(r.document.fields);
-      return { id: r.document.name.split("/").pop(), type: d.type || "session", ...d, ...(d.type ? {} : { type: "session" }) };
+      return relayFormat({ id: r.document.name.split("/").pop(), type: d.type || "session", ...d, ...(d.type ? {} : { type: "session" }) });
     })
     .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   console.log(items.length ? JSON.stringify(items, null, 2) : "NONE");
+}
+
+/** Relay-facing formatting: each move's `name` becomes its `label` when present
+ * (e.g. "Chest-supported dumbbell row (swapped from Barbell row)"); the raw name stays in `moveName`.
+ * Also adds summary.movesText: one ready-to-send line per move. */
+export function relayFormat(item) {
+  const sum = item && item.summary;
+  if (!sum || !Array.isArray(sum.moves)) return item;
+  sum.moves = sum.moves.map((m) => ({ ...m, moveName: m.name, name: m.label || m.name }));
+  sum.movesText = sum.moves.map((m) => {
+    const sets = (m.sets || []).map((st) => st.txt || (st.t != null ? `${st.t}s` : st.w != null ? `${st.w || "BW"} × ${st.r}` : `${st.r} reps`));
+    return sets.length ? `${m.name}: ${sets.join(", ")}` : m.name;
+  });
+  return item;
 }
 
 async function mark(token, id, status, reason) {
@@ -101,7 +115,9 @@ async function mark(token, id, status, reason) {
   console.log(JSON.stringify({ ok: true, id, status, sentAt: now, sessionPath: cur.sessionPath || null, sessionUpdated }));
 }
 
-const [cmd, ...args] = process.argv.slice(2);
+const isMain = import.meta.url === `file://${process.argv[1]}`;
+const [cmd, ...args] = isMain ? process.argv.slice(2) : ["__import__"];
+if (isMain) {
 const token = await getGoogleAccessToken();
 try {
   if (cmd === "list") await list(token);
@@ -113,4 +129,5 @@ try {
 } catch (err) {
   console.error(String(err && err.message ? err.message : err));
   process.exit(1);
+}
 }

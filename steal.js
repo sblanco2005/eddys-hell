@@ -1774,7 +1774,9 @@
     const pattern = new Set();
     if (cur) for (const day of SLOT_IDS) for (const slot of day) if (slot.includes(cur.id)) slot.forEach((id) => pattern.add(id));
     const muscle = (cur && cur.muscle) || ex.muscle;
-    const seen = new Set([name]);
+    // hide the move being replaced and anything already in this workout
+    const inWorkout = ((S.repl && S.repl.ctx === "sess" ? S.active && S.active.exercises : S.draft && S.draft.exercises) || []).map((e) => String(e.name || "").toLowerCase());
+    const seen = new Set([name, ...inWorkout]);
     const score = (m) => (fits(m, S.gym) ? 0 : 10) + (pattern.has(m.id) ? 0 : m.muscle === muscle ? 2 : 5);
     const ql = String(q || "").trim().toLowerCase();
     let list = D.LIB.filter((m) => (ql ? (m.name + " " + m.muscle + " " + m.equipment).toLowerCase().includes(ql) : pattern.has(m.id) || m.muscle === muscle));

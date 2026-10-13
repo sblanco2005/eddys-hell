@@ -361,3 +361,10 @@ Slack admin self-DM unchanged.
 - iPhone numeric inputs (editor weight, Hit it per-side/weight/reps/time, bar): tap selects the whole value (deferred
   select + setSelectionRange for iOS), typing replaces; leaving it blank restores the previous value.
 - Cache-bust 20261012-steal-p9-replace (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p9-replace-20261012).
+
+## 2026-10-12 ~9:00 PM ET — beta-steal-p10 (BETA only)
+- Replace picker hides the move being replaced and every move already in the current workout (editor draft or live session).
+- scripts/trainer-queue.mjs list: relayFormat() sets each summary move's `name` to its `label` when present
+  ("Chest-supported dumbbell row (swapped from Barbell row)"), keeps raw name in `moveName`, and adds
+  summary.movesText (one ready-to-send line per move). Script no longer runs its CLI when imported.
+- Cache-bust 20261012-steal-p10 (index.html ?v=, sw.js EH_SW_VERSION, build beta-steal-p10-20261012).
