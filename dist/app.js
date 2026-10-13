@@ -1283,7 +1283,7 @@
   // ——— Beta: manual "Choose video" picker over the scanned catalog ———
   function isManualPickEnabled() {
     const Auth = window.EddysHellAuth;
-    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost() && authUser && authUser.role === "admin");
+    return !!(Auth && ((Auth.isBetaHost && Auth.isBetaHost()) || (Auth.isFirebaseHosting && Auth.isFirebaseHosting())) && authUser && authUser.role === "admin");
   }
 
   function paintChooseVideoButton() {
@@ -3306,7 +3306,7 @@
 
   function isHistoryEnabled() {
     const Auth = window.EddysHellAuth;
-    return !!(Auth && Auth.isBetaHost && Auth.isBetaHost() && Auth.loadCheckinHistory && authUser);
+    return !!(Auth && ((Auth.isBetaHost && Auth.isBetaHost()) || (Auth.isFirebaseHosting && Auth.isFirebaseHosting())) && Auth.loadCheckinHistory && authUser);
   }
 
   function diffLabel(d) {

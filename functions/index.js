@@ -476,7 +476,7 @@ const {
 /** RP IDs we accept (passkeys are bound to the exact host). */
 const PASSKEY_RP_HOSTS = new Set(["eddy-s-hell-beta.web.app", "eddy-s-hell.web.app"]);
 /** Hosts where server-side step-up is enforced today (beta only; prod later). */
-const STEPUP_HOSTS = new Set(["eddy-s-hell-beta.web.app"]);
+const STEPUP_HOSTS = new Set(["eddy-s-hell-beta.web.app", "eddy-s-hell.web.app"]);
 const STEPUP_TTL_MS = 12 * 60 * 60 * 1000;
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 

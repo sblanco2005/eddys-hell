@@ -401,3 +401,8 @@ Slack admin self-DM unchanged.
     "Round 1: Bench press 185 lb × 8 → Pull-up BW × 10" …   (plan adds "Rest 90s after each round")
   scripts/trainer-queue.mjs relayFormat keeps app movesText; falls back to building it for older items.
 - Cache-bust 20261012-steal-p13-superset.
+
+## 2026-10-13 ~11:45 AM ET — promote Steal merge to prod (build prod-steal-20261013)
+Mine/Gym tabs, check-in history, manual video pick, admin Face ID step-up now
+enabled on stable (eddy-s-hell.web.app) as well as beta. BETA badge still beta-only.
+Passkeys are per-domain: register Face ID separately on prod.

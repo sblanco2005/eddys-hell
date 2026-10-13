@@ -1323,7 +1323,7 @@
 
   /** Step-up is enforced on the beta host for admins only. */
   function isStepUpRequired() {
-    return !!(isBetaHost() && currentUser && isAdminEmail(currentUser.email));
+    return !!((isBetaHost() || location.hostname === "eddy-s-hell.web.app") && currentUser && isAdminEmail(currentUser.email));
   }
 
   function getStepUp() {
