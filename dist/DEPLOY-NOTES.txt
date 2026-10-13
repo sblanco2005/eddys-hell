@@ -414,3 +414,15 @@ Passkeys are per-domain: register Face ID separately on prod.
 - Fix: template draft whose name matches a saved workout shows "Open my Push" note; Save asks Update Push / Save as new /
   Cancel. Existing-workout button now "Save changes", in place (same id), savedAt bumped, toast "Push updated".
   loadWorkouts merges local vs cloud by updatedAt (newer local re-sent; deleted ids tracked).
+
+## 2026-10-13 ~7:20 PM ET — beta-steal-p14-coach (BETA hosting + shared Firestore rules)
+- Coach notes from Arni: users/{uid}/coachNotes/{id} {workoutId, workoutName, sessionId?, queueId?, kind 'session'|'plan', text,
+  from 'Arni Trainer', createdAt, readAt?}. Rules: owner read; owner update only if the diff touches readAt; create/delete false
+  (written by scripts/coach-note.mjs with admin creds).
+- Mine: workout card badge "Coach notes · new" (unread) / "Coach notes"; Edit (saved routine) and Hit it show "Coach notes from Arni"
+  card with the latest note (Show all/less for long ones), marked read on view; History lists every note for the routine.
+  Deep link ?coach=<workoutId> opens that routine (push target). Nothing host-specific — safe to promote.
+- scripts/coach-note.mjs add (--queue|--session|--workout) --text-file [--kind] [--uid] [--no-push] [--dry-run]; list --workout.
+  Push ONLY to pushSubscriptions where uid == Santiago (Yv9iwvUTwVSsKVo2DJxCKp7sIC92) and only for his own notes; URL uses the
+  subscription's host. trainer-queue.mjs list/mark now output workoutId + sessionId.
+- Cache-bust 20261013-steal-p14-coach.

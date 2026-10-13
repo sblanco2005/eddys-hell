@@ -121,6 +121,14 @@ service cloud.firestore {
       match /sessions/{sessionId} {
         allow read, write: if isOwner();
       }
+      // Coach notes from Arni (written by scripts/coach-note.mjs with admin creds).
+      // Owner can read and may only stamp readAt; no client create/delete.
+      match /coachNotes/{noteId} {
+        allow read: if isOwner();
+        allow update: if isOwner()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+        allow create, delete: if false;
+      }
     }
 
     // Trainer hand-off queue (beta). A user may enqueue only their own finished
