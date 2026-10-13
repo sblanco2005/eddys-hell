@@ -406,3 +406,11 @@ Slack admin self-DM unchanged.
 Mine/Gym tabs, check-in history, manual video pick, admin Face ID step-up now
 enabled on stable (eddy-s-hell.web.app) as well as beta. BETA badge still beta-only.
 Passkeys are per-domain: register Face ID separately on prod.
+
+## 2026-10-13 ~5:30 PM ET — Mine save fix (build prod-steal-20261013b, beta + prod)
+- Root cause: tapping the "Push" split card opens a fresh template draft (no id), not the saved Push. Save for later then
+  added a duplicate / re-tapping the card regenerated defaults, so edits looked lost. Also cloud load blindly replaced local
+  (offline / pre-load saves could be clobbered) and savedAt never moved.
+- Fix: template draft whose name matches a saved workout shows "Open my Push" note; Save asks Update Push / Save as new /
+  Cancel. Existing-workout button now "Save changes", in place (same id), savedAt bumped, toast "Push updated".
+  loadWorkouts merges local vs cloud by updatedAt (newer local re-sent; deleted ids tracked).

@@ -74,25 +74,45 @@
       );
       return "cloud";
     },
-    async loadWorkouts() {
+    async loadWorkouts(extra) {
       const local = this.readLocal("workouts", null);
       const c = await this.cloud();
       if (!c) return local || [];
       const snap = await c.fs.getDocs(c.fs.collection(c.db, "users", c.uid, "workouts"));
       const list = [];
       snap.forEach((d) => list.push({ ...d.data(), id: d.id }));
-      this.writeLocal("workouts", list);
-      return list;
+      // p14: a local edit newer than the cloud copy (save made offline / before this load finished) wins and is re-sent.
+      const ts = (w) => Date.parse((w && (w.updatedAt || w.savedAt)) || "") || 0;
+      const byId = new Map(list.map((w) => [w.id, w]));
+      const deleted = new Set(this.readLocal("deletedWorkouts", []) || []);
+      for (const lw of [...(local || []), ...(extra || [])]) {
+        if (!lw || !lw.id || deleted.has(lw.id)) continue;
+        const cw = byId.get(lw.id);
+        if (cw ? ts(lw) > ts(cw) : lw.pendingCloud) {
+          byId.set(lw.id, lw);
+          c.fs.setDoc(c.fs.doc(c.db, "users", c.uid, "workouts", lw.id), clean({ ...lw, pendingCloud: null })).catch(() => {});
+        }
+      }
+      const out = [...byId.values()].map((w) => ({ ...w, pendingCloud: null }));
+      this.writeLocal("workouts", out);
+      return out;
     },
     async saveWorkout(w, all) {
-      this.writeLocal("workouts", all);
+      // stamp updatedAt on the in-memory copy too, so local vs cloud can be compared on the next load
+      const now = new Date().toISOString();
+      w.updatedAt = now;
+      const mark = (x) => (x.id === w.id ? Object.assign(x, { updatedAt: now }) : x);
+      (all || []).forEach(mark);
+      this.writeLocal("workouts", (all || []).map((x) => (x.id === w.id ? { ...x, pendingCloud: true } : x)));
       const c = await this.cloud();
       if (!c) return "device";
-      await c.fs.setDoc(c.fs.doc(c.db, "users", c.uid, "workouts", w.id), clean({ ...w, updatedAt: new Date().toISOString() }));
+      await c.fs.setDoc(c.fs.doc(c.db, "users", c.uid, "workouts", w.id), clean({ ...w, pendingCloud: null, updatedAt: now }));
+      this.writeLocal("workouts", all);
       return "cloud";
     },
     async deleteWorkout(id, all) {
       this.writeLocal("workouts", all);
+      this.writeLocal("deletedWorkouts", [...(this.readLocal("deletedWorkouts", []) || []), id].slice(-50));
       const c = await this.cloud();
       if (!c) return "device";
       await c.fs.deleteDoc(c.fs.doc(c.db, "users", c.uid, "workouts", id));
@@ -646,6 +666,12 @@
         <input class="steal-title-input" data-field="name" value="${esc(d.name)}" aria-label="Workout name" maxlength="80" />
         <p class="steal-sub">${empty ? "Empty workout" : `${d.exercises.length} moves · Finish a session to log it`}</p>
       </header>
+      ${(() => {
+        const tw = nameTwin(d);
+        return tw
+          ? `<div class="twin-note"><span>This is a fresh ${esc(d.name)} template — not your saved “${esc(tw.name)}”.</span><button type="button" class="btn ghost btn-sm" data-act="open-twin" data-id="${esc(tw.id)}">Open my ${esc(tw.name)}</button></div>`
+          : "";
+      })()}
       ${splitPicker}
       <ul class="ex-list">${(() => {
         const labels = ssLabels(d.exercises);
@@ -668,7 +694,13 @@
       ${add}
       <div class="editor-actions">
         ${HOOKS.hitItDraftButton ? HOOKS.hitItDraftButton(d) : ""}
-        <button type="button" class="btn ${HOOKS.hitItDraftButton ? "secondary" : "accent"} wide-btn" data-act="save" ${empty ? "disabled" : ""}>${existing ? "Saved — update" : "Save for later"}</button>
+        <button type="button" class="btn ${HOOKS.hitItDraftButton ? "secondary" : "accent"} wide-btn" data-act="save" ${empty ? "disabled" : ""}>${existing ? "Save changes" : "Save for later"}</button>
+        ${(() => {
+          const tw = S.saveChoice && nameTwin(d);
+          return tw
+            ? `<div class="save-choice" role="dialog" aria-label="Save choice"><p>You already have “${esc(tw.name)}”.</p><button type="button" class="btn accent wide-btn" data-act="save-update">Update ${esc(tw.name)}</button><button type="button" class="btn secondary wide-btn" data-act="save-new">Save as new</button><button type="button" class="btn ghost wide-btn" data-act="save-cancel">Cancel</button></div>`
+            : "";
+        })()}
         <button type="button" class="btn ghost wide-btn" data-act="back">${existing ? "Back to Mine" : "Discard"}</button>
         ${existing ? `<button type="button" class="btn ghost wide-btn danger" data-act="remove-draft">${S.confirmRemove === d.id ? "Tap to confirm remove" : "Remove workout"}</button>` : ""}
       </div>`;
@@ -697,6 +729,7 @@
     S.view = "edit";
     S.addOpen = false;
     S.confirmRemove = null;
+    S.saveChoice = null;
     persistDraft();
     render();
     window.scrollTo(0, 0);
@@ -717,9 +750,24 @@
   function findEx(id) {
     return S.draft && S.draft.exercises.find((e) => e.id === id);
   }
-  async function saveDraft() {
+  const nameKey = (n) => String(n || "").trim().toLowerCase();
+  /** Saved workout with the same name as a new (template/blank) draft — e.g. the Push split card vs saved "Push". */
+  function nameTwin(d) {
+    if (!d || (d.id && S.workouts.some((w) => w.id === d.id))) return null;
+    const k = nameKey(d.name);
+    return (k && S.workouts.find((w) => nameKey(w.name) === k)) || null;
+  }
+  async function saveDraft(mode) {
     const d = S.draft;
     if (!d || !d.exercises.length) return;
+    const twin = nameTwin(d);
+    if (twin && !mode) {
+      S.saveChoice = twin.id;
+      return render();
+    }
+    S.saveChoice = null;
+    if (twin && mode === "update") d.id = twin.id;
+    if (mode === "new") d.id = null;
     const now = new Date().toISOString();
     const idx = d.id ? S.workouts.findIndex((w) => w.id === d.id) : -1;
     if (idx < 0 && S.workouts.length >= MAX_WORKOUTS) {
@@ -734,14 +782,16 @@
       notes: d.notes || "",
       exercises: d.exercises.map((e) => ({ ...e, setup: e.setup || "", reps: String(e.reps || "") })),
       createdAt: (prev && prev.createdAt) || d.createdAt || now,
-      savedAt: (prev && prev.savedAt) || now,
+      savedAt: now,
       lastDoneAt: (prev && prev.lastDoneAt) || null,
     };
+    let toast = prev ? `${w.name} updated` : `Saved “${w.name}”`;
     S.workouts = idx >= 0 ? S.workouts.map((x) => (x.id === w.id ? w : x)) : [w, ...S.workouts];
     closeEditor();
+    setStatus(toast, "ok");
     try {
       const where = await Store.saveWorkout(w, S.workouts);
-      setStatus(where === "cloud" ? `Saved “${w.name}”` : `Saved “${w.name}” on this device`, "ok");
+      setStatus(where === "cloud" ? toast : `${toast} on this device`, "ok");
     } catch (err) {
       console.warn("[mine] save failed", err);
       setStatus("Couldn’t save to your account — kept on this device.", "err");
@@ -851,6 +901,18 @@
       }
       case "save":
         return saveDraft();
+      case "save-update":
+        return saveDraft("update");
+      case "save-new":
+        return saveDraft("new");
+      case "save-cancel":
+        S.saveChoice = null;
+        return render();
+      case "open-twin": {
+        const w = S.workouts.find((x) => x.id === el.dataset.id);
+        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt })));
+        return;
+      }
       case "back":
         return closeEditor();
       case "clip":
@@ -1953,7 +2015,7 @@
     }
     render();
     try {
-      S.workouts = await Store.loadWorkouts();
+      S.workouts = await Store.loadWorkouts(S.workouts);
     } catch (err) {
       console.warn("[mine] workouts load failed", err);
       setStatus("Couldn’t load your workouts from the cloud — showing this device’s copy.", "err");

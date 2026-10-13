@@ -385,3 +385,9 @@ body.tab-gym .foot { display: none !important; }
 .ss-name { appearance: none; font: inherit; font-size: 1.1rem; font-weight: 700; background: none; border: 0; color: var(--text); text-align: left; flex: 1; padding: 4px 0; cursor: pointer; }
 .ss-mhead .ex-swap { margin-top: 0; }
 .set-row.next-up { outline: 2px solid var(--ss, var(--accent)); outline-offset: 2px; border-radius: 10px; }
+
+/* p14: template vs saved twin, save choice */
+.twin-note{display:flex;flex-direction:column;gap:8px;margin:0 0 12px;padding:10px 12px;border:1px dashed rgba(255,255,255,.25);border-radius:12px;font-size:15px;color:#cfd3dc}
+.twin-note .btn{align-self:flex-start}
+.save-choice{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid #ff5a36;border-radius:14px;background:rgba(255,90,54,.08)}
+.save-choice p{margin:0;font-size:16px;font-weight:600}
