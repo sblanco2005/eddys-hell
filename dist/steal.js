@@ -226,6 +226,77 @@
   const DEFAULT_BAR_LB = 45;
   const barLbOf = (ex) => (ex && ex.barLb != null && Number.isFinite(Number(ex.barLb)) ? Math.max(0, Number(ex.barLb)) : DEFAULT_BAR_LB);
 
+  // ——— Supersets (p13): moves sharing a `supersetGroup` that sit next to each other = one superset ———
+  const SS_COLORS = ["#ff5a36", "#3fa9f5", "#9b6cff", "#2ecc71", "#f5b83f", "#ff6fae"];
+  /** Contiguous runs (≥2) of the same supersetGroup → [{start, end, letter, color}] in order. */
+  function ssRuns(exs) {
+    const runs = [];
+    let i = 0;
+    while (i < (exs || []).length) {
+      const g = exs[i].supersetGroup;
+      let j = i;
+      if (g) while (j + 1 < exs.length && exs[j + 1].supersetGroup === g) j++;
+      if (g && j > i) runs.push({ start: i, end: j, letter: String.fromCharCode(65 + (runs.length % 26)), color: SS_COLORS[runs.length % SS_COLORS.length] });
+      i = j + 1;
+    }
+    return runs;
+  }
+  function ssRunAt(exs, i) {
+    return ssRuns(exs).find((r) => i >= r.start && i <= r.end) || null;
+  }
+  /** id → { label: 'A1', letter: 'A', color } */
+  function ssLabels(exs) {
+    const m = new Map();
+    for (const r of ssRuns(exs)) for (let i = r.start; i <= r.end; i++) m.set(exs[i].id, { label: r.letter + (i - r.start + 1), letter: r.letter, color: r.color });
+    return m;
+  }
+  /** Drop groups that aren't a contiguous run of ≥2; split non-adjacent reuse of one group id. */
+  function ssNormalize(exs) {
+    const keep = new Set();
+    for (const r of ssRuns(exs)) for (let i = r.start; i <= r.end; i++) keep.add(i);
+    const seenG = new Map();
+    exs.forEach((e, i) => {
+      if (!keep.has(i)) {
+        delete e.supersetGroup;
+        return;
+      }
+      const r = ssRunAt(exs, i);
+      const first = seenG.get(e.supersetGroup);
+      if (first != null && first !== r.start) e.supersetGroup = e.supersetGroup + "-" + r.start;
+      else seenG.set(e.supersetGroup, r.start);
+    });
+    return exs;
+  }
+  const newGroup = () => "g" + uuid().replace(/-/g, "").slice(0, 8);
+  /** Link / unlink move i with move i+1. */
+  function ssToggle(exs, i) {
+    const a = exs[i];
+    const b = exs[i + 1];
+    if (!a || !b) return;
+    if (a.supersetGroup && a.supersetGroup === b.supersetGroup) {
+      const old = a.supersetGroup;
+      const g = newGroup();
+      for (let j = i + 1; j < exs.length && exs[j].supersetGroup === old; j++) exs[j].supersetGroup = g;
+    } else {
+      const g = a.supersetGroup || newGroup();
+      const old = b.supersetGroup;
+      a.supersetGroup = g;
+      b.supersetGroup = g;
+      if (old) for (let j = i + 2; j < exs.length && exs[j].supersetGroup === old; j++) exs[j].supersetGroup = g;
+    }
+    ssNormalize(exs);
+  }
+  /** Next set to do in a superset run: lowest round first, then move order. Shorter moves just drop out. */
+  function ssNext(exs, run) {
+    const max = Math.max(...exs.slice(run.start, run.end + 1).map((e) => e.logs.length));
+    for (let r = 0; r < max; r++)
+      for (let i = run.start; i <= run.end; i++) {
+        const l = exs[i].logs[r];
+        if (l && !l.done) return { i, set: l.set, round: r };
+      }
+    return null;
+  }
+
   /** Deterministic split auto-fill: per slot, first move your kit supports (no dup names). */
   function fillSplit(split, gear) {
     const used = new Set();
@@ -426,11 +497,12 @@
 
   function renderExercise(ex, i, total) {
     const clip = clipFor(ex);
+    const ss = ssLabels(S.draft ? S.draft.exercises : []).get(ex.id);
     return `
-      <li class="ex-card" data-ex="${esc(ex.id)}">
+      <li class="ex-card${ss ? " ss" : ""}" data-ex="${esc(ex.id)}"${ss ? ` style="--ss:${ss.color}"` : ""}>
         <div class="ex-top">
           <div class="ex-name-wrap">
-            <p class="ex-name">${i + 1}. ${esc(ex.name)}</p>
+            <p class="ex-name">${ss ? `<span class="ss-tag">${ss.label}</span> ` : `${i + 1}. `}${esc(ex.name)}</p>
             <p class="ex-muscle">${esc(ex.muscle || "")}${ex.equipment ? " · " + esc(ex.equipment) : ""}</p>
             <button type="button" class="ex-swap" data-act="repl-open" data-ctx="edit" data-ex="${esc(ex.id)}" aria-label="Replace ${esc(ex.name)}">⇄ Replace</button>
           </div>
@@ -575,7 +647,24 @@
         <p class="steal-sub">${empty ? "Empty workout" : `${d.exercises.length} moves · Finish a session to log it`}</p>
       </header>
       ${splitPicker}
-      <ul class="ex-list">${d.exercises.map((ex, i) => renderExercise(ex, i, d.exercises.length)).join("")}</ul>
+      <ul class="ex-list">${(() => {
+        const labels = ssLabels(d.exercises);
+        return d.exercises
+          .map((ex, i) => {
+            const card = renderExercise(ex, i, d.exercises.length);
+            if (i >= d.exercises.length - 1) return card;
+            const nx = d.exercises[i + 1];
+            const linked = ex.supersetGroup && ex.supersetGroup === nx.supersetGroup;
+            const ss = labels.get(ex.id);
+            return (
+              card +
+              `<li class="ss-link-row${linked ? " on" : ""}"${linked && ss ? ` style="--ss:${ss.color}"` : ""}><button type="button" class="ss-link" data-act="ss-link" data-i="${i}">${
+                linked ? `⛓ Superset ${ss ? ss.letter : ""} · <u>Unlink</u>` : "+ Superset with next"
+              }</button></li>`
+            );
+          })
+          .join("");
+      })()}</ul>
       ${add}
       <div class="editor-actions">
         ${HOOKS.hitItDraftButton ? HOOKS.hitItDraftButton(d) : ""}
@@ -743,6 +832,10 @@
         ex.restSeconds = Math.min(180, Math.max(0, (ex.restSeconds ?? 60) + Number(el.dataset.d)));
         break;
       }
+      case "ss-link":
+        if (!d) return;
+        ssToggle(d.exercises, Number(el.dataset.i));
+        break;
       case "add-open":
         S.addOpen = true;
         break;
@@ -770,6 +863,7 @@
         if (HOOKS.onAction && HOOKS.onAction(act, el)) return;
         return;
     }
+    if (d && d.exercises) ssNormalize(d.exercises);
     persistDraft();
     const y = window.scrollY;
     render();
@@ -1017,28 +1111,56 @@
           .map((l) => (kind === "time" ? mmss(l.timeSeconds) : kind === "reps" ? `${l.reps}` : `${fmtNum(disp1(l.weightLb, unit))}×${l.reps}`))
           .join(" · ")
       : "";
-    const rows = ex.logs
+    const rowsFor = (ex, nextUp) => {
+      const kind = kindOf(ex);
+      const per = kind === "lift" && isBarbellEx(ex);
+      const X = `data-ex="${esc(ex.id)}"`;
+      return ex.logs
       .map((l) => {
         const wDisp = per ? sideOf(l, ex, unit) : l.weightLb > 0 ? disp1(l.weightLb, unit) : null;
         let inputs;
         if (kind === "time")
           inputs = `<span class="sess-target mono">${esc(ex.reps)}</span>
-            <input class="sess-input mono grow" inputmode="decimal" data-sf="time" data-set="${l.set}" value="${l.timeSeconds ? mmss(l.timeSeconds) : ""}" placeholder="2:15" aria-label="Time" />`;
+            <input class="sess-input mono grow" inputmode="decimal" data-sf="time" data-set="${l.set}" ${X} value="${l.timeSeconds ? mmss(l.timeSeconds) : ""}" placeholder="2:15" aria-label="Time" />`;
         else if (kind === "reps")
-          inputs = `<input class="sess-input mono grow" inputmode="numeric" data-sf="reps" data-set="${l.set}" value="${l.reps || ""}" placeholder="reps" aria-label="Reps" />`;
+          inputs = `<input class="sess-input mono grow" inputmode="numeric" data-sf="reps" data-set="${l.set}" ${X} value="${l.reps || ""}" placeholder="reps" aria-label="Reps" />`;
         else
           inputs = `<label class="sess-wfield grow"><span class="sess-flbl">${per ? `One side · ${unit}` : `Weight · ${unit}`}</span>
-              <input class="sess-input mono" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-sf="weight" data-set="${l.set}" value="${wDisp != null ? fmtNum(wDisp) : ""}" placeholder="${per ? "per side" : isBodyweight(ex) ? "BW" : unit}" aria-label="${per ? `Weight on one side in ${unit}` : `Weight in ${unit}`}" /></label>
+              <input class="sess-input mono" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-sf="weight" data-set="${l.set}" ${X} value="${wDisp != null ? fmtNum(wDisp) : ""}" placeholder="${per ? "per side" : isBodyweight(ex) ? "BW" : unit}" aria-label="${per ? `Weight on one side in ${unit}` : `Weight in ${unit}`}" /></label>
             <label class="sess-wfield reps"><span class="sess-flbl">Reps</span>
-              <input class="sess-input mono" inputmode="numeric" enterkeyhint="done" data-sf="reps" data-set="${l.set}" value="${l.reps || ""}" placeholder="reps" aria-label="Reps" /></label>`;
+              <input class="sess-input mono" inputmode="numeric" enterkeyhint="done" data-sf="reps" data-set="${l.set}" ${X} value="${l.reps || ""}" placeholder="reps" aria-label="Reps" /></label>`;
         const plates =
-          kind !== "lift" ? "" : per ? `<div class="plate-wrap" data-pw="${l.set}">${platesHtml(l, unit, ex)}</div>` : `<div class="plate-wrap" data-pw="${l.set}">${convHtml(l, unit)}</div>`;
-        return `<li class="set-row${l.done ? " done" : ""}">
+          kind !== "lift" ? "" : per ? `<div class="plate-wrap" data-pw="${esc(ex.id)}:${l.set}">${platesHtml(l, unit, ex)}</div>` : `<div class="plate-wrap" data-pw="${esc(ex.id)}:${l.set}">${convHtml(l, unit)}</div>`;
+        return `<li class="set-row${l.done ? " done" : ""}${nextUp && nextUp.id === ex.id && nextUp.set === l.set ? " next-up" : ""}">
             <div class="set-main"><span class="set-n mono">${l.set}</span>${inputs}
-              <button type="button" class="btn ${l.done ? "accent" : "secondary"} btn-sm set-log" data-act="log" data-set="${l.set}">${l.done ? "Logged" : "Log"}</button></div>
+              <button type="button" class="btn ${l.done ? "accent" : "secondary"} btn-sm set-log" data-act="log" data-set="${l.set}" ${X}>${l.done ? "Logged" : "Log"}</button></div>
             ${plates}</li>`;
       })
       .join("");
+    };
+    const run = ssRunAt(exs, idx);
+    const labels = ssLabels(exs);
+    let setsHtml;
+    if (run) {
+      const nx = ssNext(exs, run);
+      const nextUp = nx ? { id: exs[nx.i].id, set: nx.set } : null;
+      const rounds = Math.max(...exs.slice(run.start, run.end + 1).map((e) => e.logs.length));
+      const restS = exs[run.end].restSeconds ?? 60;
+      let parts = "";
+      for (let i = run.start; i <= run.end; i++) {
+        const m = exs[i];
+        const lb = labels.get(m.id);
+        parts += `<section class="ss-move${i === idx ? " focus" : ""}">
+            <div class="ss-mhead"><span class="ss-tag">${lb.label}</span>
+              <button type="button" class="ss-name" data-act="ss-focus" data-i="${i}">${esc(m.name)}</button>
+              <button type="button" class="ex-swap" data-act="repl-open" data-ctx="sess" data-ex="${esc(m.id)}" aria-label="Replace ${esc(m.name)}">⇄</button></div>
+            ${m.swappedFrom ? `<p class="hint sess-swapped">Swapped from ${esc(m.swappedFrom)}</p>` : ""}
+            <ul class="set-list">${rowsFor(m, nextUp)}</ul></section>`;
+      }
+      setsHtml = `<div class="ss-block" style="--ss:${run.color}">
+          <p class="ss-head"><strong>Superset ${run.letter}</strong> · ${rounds} round${rounds === 1 ? "" : "s"} · rest ${restS}s after each round${nx ? ` · next: <span class="mono">${labels.get(exs[nx.i].id).label} set ${nx.set}</span>` : " · done ✓"}</p>
+          ${parts}</div>`;
+    } else setsHtml = `<ul class="set-list">${rowsFor(ex, null)}</ul>`;
     const rest = S.rest
       ? `<div class="rest-bar" id="rest-bar"><span>Rest</span><strong class="mono" id="rest-left">${mmss(Math.ceil((S.rest.until - Date.now()) / 1000))}</strong>
            <button type="button" class="btn ghost btn-sm" data-act="rest-add">+15s</button><button type="button" class="btn ghost btn-sm" data-act="rest-skip">Skip</button></div>`
@@ -1076,7 +1198,7 @@
           : ""
       }
       <article class="sess-card">
-        <p class="steal-kicker">${idx + 1} of ${exs.length} · ${esc(ex.muscle || "")}</p>
+        <p class="steal-kicker">${labels.get(ex.id) ? `<span class="ss-tag" style="--ss:${labels.get(ex.id).color}">${labels.get(ex.id).label}</span> ` : ""}${idx + 1} of ${exs.length} · ${esc(ex.muscle || "")}</p>
         <div class="sess-move-row"><h3 class="sess-move">${esc(ex.name)}</h3>
           <button type="button" class="ex-swap" data-act="repl-open" data-ctx="sess" data-ex="${esc(ex.id)}" aria-label="Replace ${esc(ex.name)}">⇄ Replace</button></div>
         ${ex.swappedFrom ? `<p class="hint sess-swapped">Swapped from ${esc(ex.swappedFrom)}</p>` : ""}
@@ -1094,12 +1216,12 @@
         </div>
         ${clip ? `<button type="button" class="ex-clip sess-clip" data-act="clip" data-vid="${esc(clip.videoId)}" data-start="${clip.start}" data-name="${esc(ex.name)}">▶ Watch demo · ${mmss(clip.start)}</button>` : ""}
       </article>
-      <ul class="set-list">${rows}</ul>
+      ${setsHtml}
       ${rest}
       <div class="sess-nav">
-        <button type="button" class="btn secondary" data-act="sess-prev" ${idx === 0 ? "disabled" : ""}>Previous</button>
+        <button type="button" class="btn secondary" data-act="sess-prev" ${(run ? run.start : idx) === 0 ? "disabled" : ""}>Previous</button>
         ${
-          idx < exs.length - 1
+          (run ? run.end : idx) < exs.length - 1
             ? `<button type="button" class="btn accent" data-act="sess-next">Next move</button>`
             : `<button type="button" class="btn accent" data-act="sess-finish">Done</button>`
         }
@@ -1160,6 +1282,7 @@
     let totalSets = 0;
     let totalVolume = 0;
     const moves = [];
+    const ssl = ssLabels(sess.exercises);
     for (const e of sess.exercises) {
       const k = kindOf(e);
       const done = e.logs.filter((l) => l.done);
@@ -1167,7 +1290,11 @@
       totalSets += done.length;
       moves.push({
         name: e.name,
-        ...(e.swappedFrom ? { swappedFrom: e.swappedFrom, label: `${e.name} (swapped from ${e.swappedFrom})` } : {}),
+        ...(e.swappedFrom ? { swappedFrom: e.swappedFrom } : {}),
+        ...(ssl.get(e.id) ? { superset: ssl.get(e.id).letter, ssLabel: ssl.get(e.id).label } : {}),
+        ...(e.swappedFrom || ssl.get(e.id)
+          ? { label: `${ssl.get(e.id) ? ssl.get(e.id).label + " " : ""}${e.name}${e.swappedFrom ? ` (swapped from ${e.swappedFrom})` : ""}` }
+          : {}),
         kind: k,
         sets: done.map((l) => {
           if (k === "time") return { t: l.timeSeconds || 0 };
@@ -1189,17 +1316,49 @@
       });
     }
     const end = finishedAt || new Date().toISOString();
+    const supersets = ssSummary(moves, unit);
+    const movesText = movesTextFor(moves, supersets, (m) => `${m.label || m.name}: ${m.sets.map((st) => st.txt || shortSet(st, unit)).join(", ")}`);
     return {
+      movesText,
       workoutName: sess.name,
       startedAt: sess.startedAt,
       finishedAt: end,
       durationMin: Math.max(0, Math.round((new Date(end) - new Date(sess.startedAt)) / 60000)),
       unit,
       moves, // only moves with ≥1 logged set; only logged sets (planned/unlogged excluded)
+      supersets,
       totalSets,
       loggedSetCount: totalSets,
       totalVolume: Math.round(totalVolume),
     };
+  }
+  const SS_HEAD = (letter, names) => `Superset ${letter} (alternated, rest after each round): ${names.join(" + ")}`;
+  /** Short set text for relay lines: '185 lb × 8', 'BW × 10', '1:30', '12 reps'. */
+  const shortSet = (st, unit) => (st.t != null ? mmss(st.t) : st.w != null ? `${st.w ? fmtNum(st.w) + " " + unit : "BW"} × ${st.r}` : `${st.r} reps`);
+  /** Supersets from logged moves: header + 'Round 1: Bench 185 lb × 8 → Pull-up BW × 10' in the order done. */
+  function ssSummary(moves, unit) {
+    const by = new Map();
+    for (const m of moves) if (m.superset) (by.get(m.superset) || by.set(m.superset, []).get(m.superset)).push(m);
+    return [...by].map(([letter, ms]) => {
+      const n = Math.max(...ms.map((m) => m.sets.length));
+      const rounds = [];
+      for (let r = 0; r < n; r++) rounds.push(`Round ${r + 1}: ` + ms.filter((m) => m.sets[r]).map((m) => `${m.name} ${shortSet(m.sets[r], unit)}`).join(" → "));
+      const title = SS_HEAD(letter, ms.map((m) => m.name));
+      return { letter, moves: ms.map((m) => m.name), title, rounds, text: [title, ...rounds].join("\n") };
+    });
+  }
+  /** One relay line per normal move; one block per superset (header + rounds) at the superset's first move. */
+  function movesTextFor(moves, supersets, lineFor) {
+    const ss = new Map((supersets || []).map((g) => [g.letter, g]));
+    const seen = new Set();
+    const out = [];
+    for (const m of moves) {
+      if (m.superset && ss.has(m.superset)) {
+        if (!seen.has(m.superset)) out.push(ss.get(m.superset).text);
+        seen.add(m.superset);
+      } else out.push(lineFor(m));
+    }
+    return out;
   }
   const setTxt = (st, unit) =>
     st.t != null ? mmss(st.t) : st.w != null ? `${st.w ? fmtNum(st.w) + unit : "BW"}${st.ps != null ? ` (${fmtNum(st.ps)}${st.psUnit && st.psUnit !== unit ? " " + st.psUnit : ""}/side)` : ""} × ${st.r}` : `${st.r} reps`;
@@ -1210,7 +1369,7 @@
     const sum = sessionSummary(sess);
     const empty = !sum.totalSets;
     const moves = sum.moves
-      .map((m) => `<li><span class="fin-move">${esc(m.name)}${m.swappedFrom ? `<em class="fin-swap">swapped from ${esc(m.swappedFrom)}</em>` : ""}</span><span class="mono fin-sets">${m.sets.map((st) => esc(setTxt(st, sum.unit))).join(", ")}</span></li>`)
+      .map((m) => `<li><span class="fin-move">${m.ssLabel ? `<span class="ss-tag">${esc(m.ssLabel)}</span> ` : ""}${esc(m.name)}${m.swappedFrom ? `<em class="fin-swap">swapped from ${esc(m.swappedFrom)}</em>` : ""}</span><span class="mono fin-sets">${m.sets.map((st) => esc(setTxt(st, sum.unit))).join(", ")}</span></li>`)
       .join("");
     return `
       <div class="eh-modal fin-modal" role="dialog" aria-modal="true" aria-labelledby="fin-title">
@@ -1480,20 +1639,29 @@
       if (!sess) return false;
       const ex = sessEx();
       switch (act) {
-        case "sess-prev":
-          S.sessIdx = Math.max(0, S.sessIdx - 1);
+        case "ss-focus":
+          S.sessIdx = Number(el.dataset.i) || 0;
+          break;
+        case "sess-prev": {
+          const r0 = ssRunAt(sess.exercises, S.sessIdx);
+          const p = Math.max(0, (r0 ? r0.start : S.sessIdx) - 1);
+          const r1 = ssRunAt(sess.exercises, p);
+          S.sessIdx = r1 ? r1.start : p;
           S.rest = null;
           persistActive();
           render();
           window.scrollTo(0, 0);
           return true;
-        case "sess-next":
-          S.sessIdx = Math.min(sess.exercises.length - 1, S.sessIdx + 1);
+        }
+        case "sess-next": {
+          const r0 = ssRunAt(sess.exercises, S.sessIdx);
+          S.sessIdx = Math.min(sess.exercises.length - 1, (r0 ? r0.end : S.sessIdx) + 1);
           S.rest = null;
           persistActive();
           render();
           window.scrollTo(0, 0);
           return true;
+        }
         case "unit":
           sess.unit = el.dataset.unit === "kg" ? "kg" : "lb";
           Store.writeLocal("unit", sess.unit);
@@ -1516,6 +1684,7 @@
           break;
         }
         case "log": {
+          const ex = (el.dataset.ex && sess.exercises.find((e) => e.id === el.dataset.ex)) || sessEx();
           const l = ex.logs.find((x) => x.set === Number(el.dataset.set));
           if (!l) return true;
           l.done = !l.done;
@@ -1525,7 +1694,15 @@
             l.barLb = barLbOf(ex);
           }
           if (l.done && kindOf(ex) === "lift") l.unit = sess.unit;
-          if (l.done && (ex.restSeconds ?? 60) > 0) S.rest = { until: Date.now() + (ex.restSeconds ?? 60) * 1000 };
+          const run = ssRunAt(sess.exercises, sess.exercises.indexOf(ex));
+          if (run && l.done) {
+            // superset: jump to the next move's same set; rest only once the round is complete
+            const nx = ssNext(sess.exercises, run);
+            const roundDone = !nx || nx.set > l.set;
+            if (nx) S.sessIdx = nx.i;
+            const rs = sess.exercises[run.end].restSeconds ?? 60;
+            S.rest = roundDone && rs > 0 ? { until: Date.now() + rs * 1000 } : null;
+          } else if (l.done && (ex.restSeconds ?? 60) > 0) S.rest = { until: Date.now() + (ex.restSeconds ?? 60) * 1000 };
           if (l.done) {
             // carry weight/reps forward to the next untouched set
             const nx = ex.logs.find((x) => x.set === l.set + 1);
@@ -1561,7 +1738,7 @@
       }
       const f = t.dataset && t.dataset.sf;
       if (!f || !S.active) return false;
-      const ex = sessEx();
+      const ex = (t.dataset.ex && S.active.exercises.find((x) => x.id === t.dataset.ex)) || sessEx();
       if (!ex) return true;
       const unit = S.active.unit;
       const per = kindOf(ex) === "lift" && isBarbellEx(ex);
@@ -1582,14 +1759,14 @@
           else if (!Number.isNaN(Number(v))) l.weightLb = round1(toLb(Math.max(0, Number(v)), unit));
           l.unit = unit;
         }
-        const pw = document.querySelector(`[data-pw="${l.set}"]`);
+        const pw = document.querySelector(`[data-pw="${ex.id}:${l.set}"]`);
         if (pw) pw.innerHTML = per ? platesHtml(l, unit, ex) : convHtml(l, unit); // in place — a re-render would eat the Log tap
       } else if (f === "bar" && per) {
         const v = t.value.trim().replace(",", ".");
         if (v === "" || Number.isNaN(Number(v))) return true;
         changeBar(ex, round1(toLb(Math.max(0, Number(v)), unit)), unit);
         for (const x of ex.logs) {
-          const pw = document.querySelector(`[data-pw="${x.set}"]`);
+          const pw = document.querySelector(`[data-pw="${ex.id}:${x.set}"]`);
           if (pw) pw.innerHTML = platesHtml(x, unit, ex);
         }
         document.querySelectorAll('[data-act="bar"]').forEach((b) => b.classList.toggle("on", Number(b.dataset.lb) === barLbOf(ex)));
@@ -1619,6 +1796,7 @@
   function planSummary(src) {
     const unit = Store.readLocal("unit", "lb");
     const { map } = lastLogsFor(src.workoutId);
+    const ssl = ssLabels(src.exercises);
     const moves = src.exercises.map((e) => {
       const k = kindOf(e);
       const prior = (map.get(e.name) || []).filter((l) => l.done);
@@ -1631,6 +1809,8 @@
         restSec: e.restSeconds ?? 60,
         note: e.setup || "",
       };
+      const sl = ssl.get(e.id);
+      if (sl) Object.assign(m, { superset: sl.letter, ssLabel: sl.label, label: `${sl.label} ${e.name}` });
       if (lift && e.targetWeightLb > 0) {
         m.targetWeight = toDisp(e.targetWeightLb, unit);
         m.targetWeightSource = e.targetWeightFrom === "last" ? "last time" : "planned";
@@ -1652,7 +1832,19 @@
       }
       return m;
     });
-    return { workoutName: src.name, workoutId: src.workoutId, unit, moves, note: "", plannedAt: new Date().toISOString() };
+    const tgt = (m) =>
+      m.targetWeight != null ? `${fmtNum(m.targetWeight)} ${unit} × ${m.targetReps}` : m.bodyweight ? `BW × ${m.targetReps}` : /^\d+$/.test(String(m.targetReps)) ? `${m.targetReps} reps` : String(m.targetReps);
+    const supersets = ssRuns(src.exercises).map((r) => {
+      const ms = moves.slice(r.start, r.end + 1);
+      const n = Math.max(...ms.map((m) => m.sets));
+      const restSec = ms[ms.length - 1].restSec;
+      const rounds = [];
+      for (let k = 0; k < n; k++) rounds.push(`Round ${k + 1}: ` + ms.filter((m) => m.sets > k).map((m) => `${m.name} ${tgt(m)}`).join(" → "));
+      const title = SS_HEAD(r.letter, ms.map((m) => m.name));
+      return { letter: r.letter, moves: ms.map((m) => m.name), title, rounds, roundCount: n, restSec, text: [title, ...rounds, `Rest ${restSec}s after each round`].join("\n") };
+    });
+    const movesText = movesTextFor(moves, supersets, (m) => `${m.name}: ${m.sets} × ${tgt(m)}${m.targetPerSide != null ? ` (${fmtNum(m.targetPerSide)}/side)` : ""}`);
+    return { workoutName: src.name, workoutId: src.workoutId, unit, moves, supersets, movesText, note: "", plannedAt: new Date().toISOString() };
   }
   function renderPlanModal() {
     const pl = S.plan;
@@ -1684,7 +1876,7 @@
             : m.bodyweight
               ? " · BW"
               : "";
-        return `<li><span class="fin-move">${esc(m.name)}</span>
+        return `<li><span class="fin-move">${m.ssLabel ? `<span class="ss-tag">${esc(m.ssLabel)}</span> ` : ""}${esc(m.name)}</span>
           <span class="mono fin-sets">${tgt}${wt} · ${m.restSec}s rest</span>
           ${m.note ? `<span class="fin-sets plan-setup">${esc(m.note)}</span>` : ""}</li>`;
       })
@@ -1950,6 +2142,7 @@
     const base = toExercise(m);
     const nx = { ...base, sets: old.sets, restSeconds: old.restSeconds ?? base.restSeconds };
     if (editKind(nx) === "lift" && editKind(old) === "lift") nx.reps = String(migrateReps(old.reps));
+    if (old.supersetGroup) nx.supersetGroup = old.supersetGroup;
     return normalizeEx(nx, true);
   }
   function replTarget() {

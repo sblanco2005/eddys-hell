@@ -75,10 +75,22 @@ export function relayFormat(item) {
   const sum = item && item.summary;
   if (!sum || !Array.isArray(sum.moves)) return item;
   sum.moves = sum.moves.map((m) => ({ ...m, moveName: m.name, name: m.label || m.name }));
-  sum.movesText = sum.moves.map((m) => {
+  // Supersets: one block per group ("Superset A: X / Y" + rounds in order); other moves one line each.
+  const ss = new Map((sum.supersets || []).map((g) => [g.letter, g]));
+  const done = new Set();
+  if (Array.isArray(sum.movesText) && sum.movesText.length) return item; // app already wrote the relay lines (p13+)
+  sum.movesText = [];
+  for (const m of sum.moves) {
+    if (m.superset && ss.has(m.superset)) {
+      if (done.has(m.superset)) continue;
+      done.add(m.superset);
+      const g = ss.get(m.superset);
+      sum.movesText.push(g.text || [g.title, ...(Array.isArray(g.rounds) ? g.rounds : [])].join("\n"));
+      continue;
+    }
     const sets = (m.sets || []).map((st) => st.txt || (st.t != null ? `${st.t}s` : st.w != null ? `${st.w || "BW"} × ${st.r}` : `${st.r} reps`));
-    return sets.length ? `${m.name}: ${sets.join(", ")}` : m.name;
-  });
+    sum.movesText.push(Array.isArray(m.sets) && sets.length ? `${m.name}: ${sets.join(", ")}` : m.name);
+  }
   return item;
 }
 

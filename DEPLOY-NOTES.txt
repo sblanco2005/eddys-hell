@@ -387,3 +387,17 @@ Slack admin self-DM unchanged.
   decimal (e.g. 47.5, 102.5, max 999.x); reps ≤ 99; time m:ss ≤ 99:59 (or ≤ 4 digits).
 - Plate row: > 8 plates per side collapses to a summary like "22×45 + 5 + 2.5"; row capped at 2 lines.
 - Cache-bust 20261012-steal-p12-cap.
+
+## 2026-10-12 ~9:35 PM ET — beta-steal-p13-superset (BETA only)
+- Editor: "+ Superset with next" between adjacent moves (tap again "⛓ Superset A · Unlink"). Groups = contiguous moves with the
+  same `supersetGroup`; labels A1/A2/A3… auto-assigned in order, colored bracket. Reorder/remove re-normalizes (a move moved
+  out of its run drops the group); Replace (editor + Hit it) keeps the group. Unlink splits the run at that point.
+- Hit it: a superset renders as one block (all its moves + set rows). Next set highlighted; logging A1 set n jumps to A2 set n;
+  rest timer only after the round's last move, using the last move's rest. Different set counts: rounds = max, shorter
+  moves drop out. Prev/Next skip over the whole block. Ungrouped moves unchanged.
+- Payloads: moves carry superset/ssLabel/label ("A1 Bench press"); summary.supersets [{letter, title, rounds, text}] and
+  summary.movesText written by the app for BOTH plan and session:
+    "Superset A (alternated, rest after each round): Bench press + Pull-up"
+    "Round 1: Bench press 185 lb × 8 → Pull-up BW × 10" …   (plan adds "Rest 90s after each round")
+  scripts/trainer-queue.mjs relayFormat keeps app movesText; falls back to building it for older items.
+- Cache-bust 20261012-steal-p13-superset.
