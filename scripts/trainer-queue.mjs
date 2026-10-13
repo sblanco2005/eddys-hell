@@ -85,7 +85,18 @@ export function relayFormat(item) {
       if (done.has(m.superset)) continue;
       done.add(m.superset);
       const g = ss.get(m.superset);
-      sum.movesText.push(g.text || [g.title, ...(Array.isArray(g.rounds) ? g.rounds : [])].join("\n"));
+      if (g.text || g.title) {
+        sum.movesText.push(g.text || [g.title, ...(Array.isArray(g.rounds) ? g.rounds : [])].join("\n"));
+        continue;
+      }
+      // older item without app-written text: build header + rounds from the grouped moves
+      const ms = sum.moves.filter((x) => x.superset === m.superset);
+      const u = sum.unit || "lb";
+      const st = (x) => (x.txt ? x.txt : x.t != null ? `${x.t}s` : x.w != null ? `${x.w ? x.w + " " + u : "BW"} × ${x.r}` : `${x.r} reps`);
+      const n = Math.max(...ms.map((x) => (x.sets || []).length));
+      const lines = [`Superset ${m.superset} (alternated, rest after each round): ${ms.map((x) => x.name).join(" + ")}`];
+      for (let k = 0; k < n; k++) lines.push(`Round ${k + 1}: ` + ms.filter((x) => x.sets && x.sets[k]).map((x) => `${x.name} ${st(x.sets[k])}`).join(" → "));
+      sum.movesText.push(lines.join("\n"));
       continue;
     }
     const sets = (m.sets || []).map((st) => st.txt || (st.t != null ? `${st.t}s` : st.w != null ? `${st.w || "BW"} × ${st.r}` : `${st.r} reps`));
