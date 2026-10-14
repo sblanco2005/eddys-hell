@@ -430,3 +430,10 @@ Passkeys are per-domain: register Face ID separately on prod.
 ## 2026-10-13 ~7:55 PM ET — promote coach notes to prod (build prod-steal-20261013c, beta + prod)
 - Coach notes from Arni (badge/card/history, ?coach=<workoutId> deep link) now live on stable (eddy-s-hell.web.app).
   Firestore coachNotes rules were already deployed (shared). BETA badge remains beta-host-only.
+
+## 2026-10-14 ~6:30 AM ET — coach notes robustness (build prod-steal-20261014a, beta + prod)
+- Santiago saw Arni's Legs/Push notes on beta but not prod. Firestore data is shared (same uid, same workout ids, both notes present),
+  and both sites served identical code, so the gap was client-side: notes were fetched once at sign-in only (a suspended prod PWA
+  never re-fetched; a not-yet-ready cloud handle silently returned the empty local mirror).
+- Fix: re-fetch coach notes on app resume (visibilitychange) + retry 3s after load if empty; match notes by workoutId, falling
+  back to routine name when the note's workoutId isn't one of the user's routines.

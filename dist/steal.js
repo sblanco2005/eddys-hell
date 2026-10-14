@@ -2625,7 +2625,35 @@
     S.coachNotes = [];
     S.coachOpen = {};
     const tsOf = (v) => (v && typeof v === "object" && v.seconds != null ? new Date(v.seconds * 1000).toISOString() : v && v.toDate ? v.toDate().toISOString() : v || "");
-    const notesFor = (wid) => S.coachNotes.filter((n) => n.workoutId === wid).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    // Match by workoutId; fall back to routine name (a re-created / differently-id'd copy of the same routine still gets its notes).
+    const norm = (x) => String(x || "").trim().toLowerCase();
+    const notesFor = (wid) => {
+      const w = S.workouts.find((x) => x.id === wid);
+      const nm = w && norm(w.name);
+      const ids = new Set(S.workouts.map((x) => x.id));
+      return S.coachNotes
+        .filter((n) => n.workoutId === wid || (nm && !ids.has(n.workoutId) && norm(n.workoutName) === nm))
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    };
+    // Re-fetch notes whenever the app comes back to the foreground (PWA resume) — not only at sign-in.
+    let lastFetch = 0;
+    async function refreshNotes(force) {
+      if (!force && Date.now() - lastFetch < 15000) return;
+      lastFetch = Date.now();
+      try {
+        const list = await Store.loadCoachNotes();
+        if (JSON.stringify(list.map((n) => [n.id, n.readAt])) !== JSON.stringify(S.coachNotes.map((n) => [n.id, n.readAt])) || list.length !== S.coachNotes.length) {
+          S.coachNotes = list;
+          render();
+        }
+      } catch (err) {
+        console.warn("[coach] refresh failed", err);
+        lastFetch = 0;
+      }
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && user) refreshNotes();
+    });
     Object.assign(Store, {
       async loadCoachNotes() {
         const c = await this.cloud();
@@ -2712,9 +2740,12 @@
       S.coachNotes = Store.readLocal("coachNotes", []) || [];
       try {
         S.coachNotes = await Store.loadCoachNotes();
+        lastFetch = Date.now();
       } catch (err) {
         console.warn("[coach] load failed", err);
       }
+      // Cloud handle may not be ready yet on first paint → retry shortly.
+      if (!S.coachNotes.length) setTimeout(() => refreshNotes(true), 3000);
       // Deep link from the push: ?coach=<workoutId> → open that routine in Mine.
       try {
         const q = new URLSearchParams(location.search);
