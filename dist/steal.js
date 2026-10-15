@@ -725,8 +725,37 @@
   function persistDraft() {
     Store.writeLocal("draft", S.view === "edit" ? S.draft : null);
   }
+  const draftSig = (d) => JSON.stringify([d.name || "", d.notes || "", d.exercises || []]);
+  function draftDirty(d) {
+    if (!d) return false;
+    return d._orig ? draftSig(d) !== d._orig : !!(d.exercises && d.exercises.length);
+  }
+  /** p16: bottom-bar Mine always lands on Mine home (routine list). Active session kept (Resume banner);
+   * an editor with unsaved changes asks first; otherwise the draft is dropped like "‹ Back · don't save". */
+  function goMineHome() {
+    if (S.view === "edit" && S.draft && draftDirty(S.draft)) {
+      const nm = (S.draft.name || "this workout").trim();
+      if (!window.confirm(`Leave “${nm}” without saving your changes?`)) return false;
+    }
+    if (S.view === "edit" || (S.draft && !draftDirty(S.draft))) S.draft = null;
+    S.view = "list";
+    S.historyFor = null;
+    S.addOpen = false;
+    S.confirmRemove = null;
+    S.saveChoice = null;
+    S.clip = null;
+    S.la = null;
+    S.finishOpen = false;
+    S.plan = null;
+    if (S.repl) S.repl = null;
+    Store.writeLocal("draft", null);
+    render();
+    window.scrollTo(0, 0);
+    return true;
+  }
   function openDraft(d) {
     d.exercises = (d.exercises || []).map((e) => normalizeEx(e, true));
+    d._orig = draftSig(d);
     S.draft = d;
     S.view = "edit";
     S.addOpen = false;
@@ -917,6 +946,18 @@
       }
       case "back":
         return closeEditor();
+      case "draft-continue":
+        if (S.draft) {
+          S.view = "edit";
+          persistDraft();
+          render();
+          window.scrollTo(0, 0);
+        }
+        return;
+      case "draft-discard":
+        S.draft = null;
+        Store.writeLocal("draft", null);
+        return render();
       case "clip":
         S.clip = { videoId: el.dataset.vid, start: Number(el.dataset.start) || 0, name: el.dataset.name || "" };
         return render();
@@ -1585,7 +1626,11 @@
     renderPlanModal: () => renderPlanModal(),
     resumeBanner: () =>
       S.active
-        ? `<button type="button" class="resume-banner" data-act="sess-resume"><span>In progress · ${esc(S.active.name)}</span><strong>Resume ›</strong></button>`
+        ? `<button type="button" class="resume-banner" data-act="sess-resume"><span>In progress · ${esc(S.active.name)}</span><strong>Resume workout ›</strong></button>`
+        : S.draft && S.view !== "edit" && draftDirty(S.draft)
+        ? `<div class="resume-banner draft-banner"><span>Unsaved changes · ${esc(S.draft.name || "Workout")}</span>
+            <span><button type="button" class="btn ghost btn-sm" data-act="draft-discard">Discard</button>
+            <button type="button" class="btn accent btn-sm" data-act="draft-continue">Continue editing</button></span></div>`
         : "",
     renderView: (v) => (v === "session" && S.active ? renderSession() + renderFinishModal() : v === "history" && S.historyFor ? renderHistory() : ""),
     async afterLoad() {
@@ -2016,10 +2061,10 @@
     render();
     S.workouts = Store.readLocal("workouts", []) || [];
     const draft = Store.readLocal("draft", null);
-    if (draft && Array.isArray(draft.exercises)) {
-      S.draft = draft;
-      S.view = "edit";
-    }
+    // p16: never reopen the editor on load — Mine home first; unsaved changes are offered via a banner.
+    if (draft && Array.isArray(draft.exercises) && draftDirty(draft)) S.draft = draft;
+    else Store.writeLocal("draft", null);
+    if (S.view === "edit") S.view = "list";
     render();
     try {
       S.workouts = await Store.loadWorkouts(S.workouts);
@@ -2506,6 +2551,13 @@
     const nav = e.target.closest(".bnav-btn");
     if (nav) {
       e.preventDefault();
+      const wasEdit = S.view === "edit" && tab === "mine";
+      if (nav.dataset.tab === "mine") {
+        if (wasEdit && !goMineHome()) return; // kept editing (cancelled the prompt)
+        setTab("mine");
+        if (!wasEdit) goMineHome();
+        return;
+      }
       setTab(nav.dataset.tab);
       return;
     }

@@ -458,3 +458,10 @@ Passkeys are per-domain: register Face ID separately on prod.
 ## 2026-10-14 ~8:20 PM ET — beta-steal-p15c (build 20261014-steal-p15c-logafter, BETA hosting only)
 - Built-in split template "Hyrox" renamed "Hyrox/Cardio" (steal-data.js SPLITS). Santiago has no saved routine named Hyrox in
   Firestore (only Push, Efficient Pull Day, Legs), so there was nothing to rename there. Log-after name auto-detect matches "Hyrox/Cardio".
+
+## 2026-10-14 ~8:15 PM ET — beta-steal-p16 (build 20261014-steal-p16-minehome, BETA hosting only)
+- Bug: tapping Mine reopened the last routine. Cause: viewing a routine persisted it as a "draft", and load / tab switch restored the editor.
+- Fix: the Mine bottom-bar tap always goes to Mine home (list) and resets the sub-view: editor, history, sheets, replace, plan. This
+  includes tapping Mine while already on Mine. An active Hit it session is kept, with a "Resume workout ›" banner. If the editor has
+  unsaved changes, it asks "Leave “X” without saving your changes?" (Cancel = stay). Load never reopens the editor; a dirty draft
+  shows an "Unsaved changes · X — Discard / Continue editing" banner. Deep links ?coach= / ?log= still open the routine.
