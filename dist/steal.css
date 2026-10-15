@@ -446,3 +446,8 @@ body.tab-gym .foot { display: none !important; }
 .la-finish { margin: 6px 0 20px; }
 .la-big { min-height: 56px; font-size: 1.1rem; }
 .la-finish .hint { text-align: center; margin: 8px 0 0; }
+/* p17 — Discard workout */
+.sess-head > .sess-head-actions { display: flex; flex-direction: row; flex-wrap: nowrap; flex-shrink: 0; gap: 6px; align-items: flex-start; white-space: nowrap; }
+.sess-discard { opacity: 0.8; }
+.sess-discard-row { margin: 10px 0 20px; }
+.sess-discard-bottom { margin-top: 8px; color: var(--text-muted, inherit); border-color: var(--border); }

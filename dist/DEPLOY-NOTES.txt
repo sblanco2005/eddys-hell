@@ -465,3 +465,9 @@ Passkeys are per-domain: register Face ID separately on prod.
   includes tapping Mine while already on Mine. An active Hit it session is kept, with a "Resume workout ›" banner. If the editor has
   unsaved changes, it asks "Leave “X” without saving your changes?" (Cancel = stay). Load never reopens the editor; a dirty draft
   shows an "Unsaved changes · X — Discard / Continue editing" banner. Deep links ?coach= / ?log= still open the routine.
+
+## 2026-10-15 ~7:45 AM ET — beta-steal-p17 (build 20261015-steal-p17-discard, BETA hosting only)
+- Hit it (normal + Log after): "✕ Discard" at the top and a "Discard workout" button at the bottom. Confirm "Discard this workout?
+  Nothing will be saved or sent to Arni." clears the active session, rest timer, Finish/Log after sheets, and the local active
+  mirror, then returns to Mine home. There is no session save, no History entry, no trainerQueue item, and no Resume banner, and the
+  saved routine is not touched. Cancel keeps the workout.

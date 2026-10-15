@@ -1,7 +1,7 @@
 /* Eddy's Hell — Web Push service worker. Cache-bust via Hosting headers. */
 /* eslint-disable no-undef */
 // SW version — bump to force an update on installed Home Screen apps.
-const EH_SW_VERSION = "20261014-steal-p16-minehome";
+const EH_SW_VERSION = "20261015-steal-p17-discard";
 self.addEventListener("install", (event) => {
   self.skipWaiting();
 });

@@ -1278,7 +1278,7 @@
           <p class="steal-kicker">${doneMoves}/${exs.length} · <span class="mono" id="sess-clock">${fmtDur(Date.now() - new Date(sess.startedAt).getTime())}</span></p>
           <h2 class="sess-title">${esc(sess.name)}</h2>
         </div>
-        <button type="button" class="btn ghost btn-sm" data-act="sess-finish">Finish</button>
+        <div class="sess-head-actions"><button type="button" class="btn ghost btn-sm sess-discard" data-act="sess-discard">✕ Discard</button><button type="button" class="btn ghost btn-sm" data-act="sess-finish">Finish</button></div>
       </header>
       ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
       ${HOOKS.logAfterBanner ? HOOKS.logAfterBanner(sess) : ""}
@@ -1333,7 +1333,8 @@
             ? `<button type="button" class="btn accent" data-act="sess-next">Next move</button>`
             : `<button type="button" class="btn accent" data-act="sess-finish">Done</button>`
         }
-      </div>`;
+      </div>
+      <div class="sess-discard-row"><button type="button" class="btn ghost wide-btn sess-discard-bottom" data-act="sess-discard">Discard workout</button></div>`;
   }
 
   function renderHistory() {
@@ -1729,6 +1730,31 @@
           S.view = "list";
           render();
           return true;
+        case "sess-discard": {
+          // p17: tapped Hit it by mistake → drop the session entirely. No save, no History, no trainer queue, no Resume banner.
+          if (!S.active) return true;
+          if (!window.confirm("Discard this workout? Nothing will be saved or sent to Arni.")) return true;
+          const wid = S.active.workoutId;
+          S.active = null;
+          S.rest = null;
+          S.finishOpen = false;
+          S.finishBusy = false;
+          S.finishNote = "";
+          S.la = null;
+          S.repl = null;
+          Store.writeLocal("active", null);
+          S.view = "list";
+          S.historyFor = null;
+          render();
+          window.scrollTo(0, 0);
+          if (wid) {
+            const card = document.querySelector(`.mine-item [data-id="${CSS.escape(wid)}"]`);
+            const li = card && card.closest(".mine-item");
+            if (li && li.scrollIntoView) li.scrollIntoView({ block: "center" });
+          }
+          toast("Workout discarded — nothing saved.", "");
+          return true;
+        }
         case "sess-finish":
           if (!S.active) return true;
           S.finishOpen = true;
@@ -2859,6 +2885,7 @@
           <p class="steal-kicker">Log after · <span class="mono" id="sess-clock">${mmssX((Date.now() - new Date(sess.startedAt).getTime()) / 1000)}</span></p>
           <h2 class="sess-title">${esc(sess.name)}</h2>
         </div>
+        <button type="button" class="btn ghost btn-sm sess-discard" data-act="sess-discard">✕ Discard</button>
       </header>
       ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
       <p class="la-banner-sub">Just train. When you're done, tap <strong>Finish &amp; log after</strong> and type, dictate, or snap your AlphaFit screen.</p>
@@ -2875,6 +2902,7 @@
         .join("")}</ol>
       ${rest}
       <div class="la-finish"><button type="button" class="btn accent wide-btn la-big" data-act="la-open-active">Finish &amp; log after</button>
+        <button type="button" class="btn ghost wide-btn sess-discard-bottom" data-act="sess-discard">Discard workout</button>
         <p class="hint">To log sets as you go, turn off Log after in this routine's Edit.</p></div>`;
     };
     HOOKS.logAfterBanner = (sess) =>
