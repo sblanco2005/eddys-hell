@@ -471,3 +471,14 @@ Passkeys are per-domain: register Face ID separately on prod.
   Nothing will be saved or sent to Arni." clears the active session, rest timer, Finish/Log after sheets, and the local active
   mirror, then returns to Mine home. There is no session save, no History entry, no trainerQueue item, and no Resume banner, and the
   saved routine is not touched. Cancel keeps the workout.
+
+## 2026-10-15 ~9:00 AM ET — beta-steal-p18 (build 20261015-steal-p18-circuit, BETA hosting only)
+- Routine `structure`: null = Straight sets (default, existing routines unchanged), or {type:'circuit', rounds, restBetweenRounds,
+  restBetweenMoves}. Editor "Structure" section with big −/+ for rounds and both rests. Circuit hides per-move Sets/Rest.
+- The Hyrox/Cardio template is now Circuit · 5 rounds with 90s between rounds: runner 500m, row 500m, slam 15, wall ball 20, box jump 10,
+  farmers 40m, burpee broad jump 20m, KB swing 15.
+- Hit it, Log after on: "Round N of M" tracker with dots, a read-only target list, "✓ Round N done" (starts the between-rounds rest)
+  plus Undo, Finish & log after, and Discard. Log after off: the session is one alternating group, so the logger goes move by move,
+  round by round. Rest comes after each round (and between moves if set).
+- Summary/relay: "Circuit · N rounds (…)" + "Round k: A …, B …". The logParse item carries structure. log-parse.mjs apply also accepts
+  a rounds-first JSON ({rounds:[{round,time_s,moves:[…]}], totalTime_s, restBetweenRounds_s}); History shows it by round. README updated.

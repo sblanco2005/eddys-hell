@@ -451,3 +451,22 @@ body.tab-gym .foot { display: none !important; }
 .sess-discard { opacity: 0.8; }
 .sess-discard-row { margin: 10px 0 20px; }
 .sess-discard-bottom { margin-top: 8px; color: var(--text-muted, inherit); border-color: var(--border); }
+/* p18 — Circuit structure */
+.st-section { margin: 4px 0 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
+.st-seg { display: flex; margin: 6px 0 10px; }
+.st-seg .seg-btn { flex: 1; }
+.st-row { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 6px; }
+.st-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stepper.big button { min-width: 48px; min-height: 44px; font-size: 1.3rem; }
+.stepper.big .mono { min-width: 3.2em; text-align: center; font-size: 1.1rem; }
+.ex-list.circuit .ex-sets, .ex-list.circuit .ex-rest, .ex-list.circuit .ss-link-row { display: none !important; }
+.circ-tracker { margin: 6px 0 10px; padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--accent, #e4572e); background: var(--bg-elev); }
+.circ-round { margin: 0 0 8px; font-size: 1.35rem; font-weight: 800; }
+.circ-dots { display: flex; gap: 6px; margin-bottom: 6px; }
+.circ-dot { flex: 1; height: 8px; border-radius: 4px; background: var(--border); }
+.circ-dot.on { background: var(--accent, #e4572e); }
+.circ-dot.cur { background: var(--accent, #e4572e); opacity: 0.45; }
+.circ-tracker .hint { margin: 0; }
+.circ-actions { display: flex; gap: 8px; align-items: center; margin: 4px 0 10px; }
+.la-mn { min-width: 7.5em; font-weight: 600; }
+.la-circ-k { margin: 8px 0 0; }

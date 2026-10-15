@@ -20,6 +20,9 @@
  *                  "rounds": [ { "distance_m": 500, "time_s": 112, "reps": null, "cals": null, "pace": "1:52/500m",
  *                                "weight": null, "weightUnit": null, "notes": "" } ] } ],
  *     "note": "optional overall note", "durationMin": 34 }
+ *   OR rounds-first (circuits, p18):
+ *   { "rounds": [ { "round": 1, "time_s": "6:40", "notes": "", "moves": [ { "name": "Assault runner", "distance_m": 500, "time_s": "1:52" }, … ] } ],
+ *     "totalTime_s": "35:10", "restBetweenRounds_s": 90, "note": "…", "durationMin": 38 }
  *   time_s accepts seconds or "m:ss"/"h:mm:ss"; every round field is optional but each round needs at least one value.
  */
 import fs from "fs";
@@ -125,6 +128,7 @@ async function list(token) {
     out.push({
       id: q.id, type: "logParse", uid: q.uid, name: q.name, sessionId: q.sessionId, workoutId: q.workoutId,
       text: q.text || "", photoPath: q.photoPath || null, photoFile, sendToTrainer: q.sendToTrainer !== false,
+      structure: q.structure || null,
       plannedMoves: q.plannedMoves || [], startedAt: q.startedAt || null, finishedAt: q.finishedAt || null, createdAt: q.createdAt || null,
       next: `node scripts/log-parse.mjs apply --id ${q.id} --json-file /workspace/logparse/${q.id}.json`,
     });
@@ -149,8 +153,53 @@ const num = (v, f) => {
   if (!Number.isFinite(n) || n < 0 || n > 100000) throw new Error(`bad number for ${f}: ${v}`);
   return n;
 };
+function normRound(r, where) {
+  const t = toSec(r.time_s ?? r.time);
+  if (Number.isNaN(t)) throw new Error(`${where}.time_s bad: ${r.time_s ?? r.time}`);
+  const o = {
+    distance_m: num(r.distance_m, "distance_m"), time_s: t, reps: num(r.reps, "reps"), cals: num(r.cals, "cals"),
+    pace: r.pace ? String(r.pace).slice(0, 40) : null, weight: num(r.weight, "weight"),
+    weightUnit: r.weightUnit ? String(r.weightUnit).slice(0, 8) : null, notes: r.notes ? String(r.notes).slice(0, 300) : null,
+  };
+  if (Object.values(o).every((x) => x == null)) throw new Error(`${where} is empty`);
+  return o;
+}
+const rtxt = (r) => [r.distance_m != null ? `${r.distance_m}m` : "", r.reps != null ? `${r.reps} reps` : "", r.cals != null ? `${r.cals} cal` : "",
+  r.weight != null ? `${r.weight}${r.weightUnit ? " " + r.weightUnit : ""}` : "", r.time_s != null ? mmss(r.time_s) : "", r.pace ? `@ ${r.pace}` : "",
+  r.notes ? `(${r.notes})` : ""].filter(Boolean).join(" ");
+/** p18 rounds-first (circuit) shape → {rounds, moves (transposed), movesText "Circuit · N rounds" + "Round k: …"}. */
+function normalizeRounds(j) {
+  const rounds = j.rounds.map((r, k) => {
+    if (!r || !Array.isArray(r.moves) || !r.moves.length) throw new Error(`rounds[${k}].moves missing`);
+    const t = toSec(r.time_s ?? r.time);
+    if (Number.isNaN(t)) throw new Error(`rounds[${k}].time_s bad`);
+    return {
+      round: Number(r.round) || k + 1, time_s: t, notes: r.notes ? String(r.notes).slice(0, 300) : null,
+      moves: r.moves.map((m, i) => {
+        const name = String(m.name || "").trim();
+        if (!name) throw new Error(`rounds[${k}].moves[${i}].name missing`);
+        return { name: name.slice(0, 120), ...normRound(m, `rounds[${k}].moves[${i}]`) };
+      }),
+    };
+  });
+  const byName = new Map();
+  for (const r of rounds) for (const m of r.moves) {
+    const { name, ...rest } = m;
+    if (!byName.has(name)) byName.set(name, { name, rounds: [], notes: null });
+    byName.get(name).rounds.push({ ...rest, round: r.round });
+  }
+  const totalTime_s = j.totalTime_s != null ? toSec(j.totalTime_s) : null;
+  const head = `Circuit · ${rounds.length} round${rounds.length === 1 ? "" : "s"}${totalTime_s ? ` (total ${mmss(totalTime_s)})` : ""}${j.restBetweenRounds_s ? `, ${j.restBetweenRounds_s}s rest between rounds` : ""}`;
+  const movesText = [head, ...rounds.map((r) => `Round ${r.round}${r.time_s != null ? ` (${mmss(r.time_s)})` : ""}: ${r.moves.map((m) => `${m.name} ${rtxt(m)}`.trim()).join(", ")}${r.notes ? ` — ${r.notes}` : ""}`)];
+  return {
+    structure: "circuit", rounds, moves: [...byName.values()], movesText, totalTime_s: Number.isNaN(totalTime_s) ? null : totalTime_s,
+    note: j.note ? String(j.note).slice(0, 1000) : null, durationMin: j.durationMin != null ? num(j.durationMin, "durationMin") : null,
+    roundCount: rounds.length,
+  };
+}
 export function normalize(j) {
-  if (!j || !Array.isArray(j.moves) || !j.moves.length) throw new Error("JSON needs moves: [ {name, rounds:[...]} ]");
+  if (j && Array.isArray(j.rounds) && j.rounds.length) return normalizeRounds(j);
+  if (!j || !Array.isArray(j.moves) || !j.moves.length) throw new Error("JSON needs moves: [ {name, rounds:[...]} ] or rounds: [ {round, moves:[...]} ]");
   const moves = j.moves.map((m, i) => {
     const name = String(m.name || "").trim();
     if (!name) throw new Error(`moves[${i}].name missing`);
@@ -234,6 +283,7 @@ async function apply(token, a) {
   const durationMin = parsed.durationMin != null ? parsed.durationMin : Math.max(0, Math.round((new Date(finishedAt) - new Date(startedAt)) / 60000));
   const summary = {
     source: "logAfter", workoutName: name, startedAt, finishedAt, durationMin, unit: sess.unit || "lb",
+    ...(parsed.structure === "circuit" ? { structure: { type: "circuit", rounds: parsed.roundCount }, rounds: parsed.rounds } : {}),
     moves: parsed.moves.map((m) => ({ name: m.name, kind: "cardio", notes: m.notes, sets: m.rounds.map((r) => ({ ...r })) })),
     movesText: parsed.movesText, supersets: [], totalSets: parsed.roundCount, loggedSetCount: parsed.roundCount, totalVolume: 0,
     ...(parsed.note || sess.note ? { note: [sess.note, parsed.note].filter(Boolean).join(" — ") } : {}),

@@ -318,7 +318,20 @@
   }
 
   /** Deterministic split auto-fill: per slot, first move your kit supports (no dup names). */
+  // p18: real-Hyrox circuit template (each move once per round), independent of kit marks.
+  const HYROX_CIRCUIT = [["assault-run", "500m"], ["row", "500m"], ["slam", "15"], ["wall-ball", "20"], ["box-jump", "10"], ["farmers-kb", "40m"], ["bb-jump", "20m"], ["kb-swing", "15"]];
+  const CIRCUIT_DEFAULT = () => ({ type: "circuit", rounds: 5, restBetweenRounds: 90, restBetweenMoves: 0 });
+  function splitStructure(split) {
+    return split === "hyrox" ? CIRCUIT_DEFAULT() : null;
+  }
   function fillSplit(split, gear) {
+    if (split === "hyrox")
+      return HYROX_CIRCUIT.map(([id]) => LIB_BY_ID.get(id)).filter(Boolean).map((m) => {
+        const e = normalizeEx(toExercise(m), true);
+        e.reps = (HYROX_CIRCUIT.find((x) => x[0] === m.id) || [])[1] || e.reps;
+        e.sets = 5;
+        return e;
+      });
     const used = new Set();
     const out = [];
     for (const slot of D.SPLIT_RULES[split] || []) {
@@ -565,7 +578,7 @@
     const hint = last ? `last: ${fmtNum(toDisp(last.weightLb, unit))}` : bw ? "optional" : "";
     return `
         <div class="ex-targets">
-          <div class="ex-field">
+          <div class="ex-field ex-sets">
             <span class="ex-lbl">Sets</span>
             <div class="stepper">
               <button type="button" data-act="sets" data-d="-1" data-ex="${esc(ex.id)}" aria-label="Fewer sets">−</button>
@@ -605,7 +618,7 @@
   function renderFreeTargets(ex) {
     return `
         <div class="ex-targets free">
-          <div class="ex-field">
+          <div class="ex-field ex-sets">
             <span class="ex-lbl">Sets</span>
             <div class="stepper">
               <button type="button" data-act="sets" data-d="-1" data-ex="${esc(ex.id)}" aria-label="Fewer sets">−</button>
@@ -674,8 +687,9 @@
       })()}
       ${HOOKS.coachCard && existing ? HOOKS.coachCard(d.id) : ""}
       ${HOOKS.logAfterToggle && existing ? HOOKS.logAfterToggle(d) : ""}
+      ${!empty && HOOKS.structureSection ? HOOKS.structureSection(d) : ""}
       ${splitPicker}
-      <ul class="ex-list">${(() => {
+      <ul class="ex-list${d.structure && d.structure.type === "circuit" ? " circuit" : ""}">${(() => {
         const labels = ssLabels(d.exercises);
         return d.exercises
           .map((ex, i) => {
@@ -725,7 +739,7 @@
   function persistDraft() {
     Store.writeLocal("draft", S.view === "edit" ? S.draft : null);
   }
-  const draftSig = (d) => JSON.stringify([d.name || "", d.notes || "", d.exercises || []]);
+  const draftSig = (d) => JSON.stringify([d.name || "", d.notes || "", d.exercises || [], d.structure || null]);
   function draftDirty(d) {
     if (!d) return false;
     return d._orig ? draftSig(d) !== d._orig : !!(d.exercises && d.exercises.length);
@@ -812,6 +826,7 @@
       name: (d.name || "").trim() || "My workout",
       notes: d.notes || "",
       exercises: d.exercises.map((e) => ({ ...e, setup: e.setup || "", reps: String(e.reps || "") })),
+      structure: d.structure && d.structure.type === "circuit" ? d.structure : null,
       createdAt: (prev && prev.createdAt) || d.createdAt || now,
       savedAt: now,
       lastDoneAt: (prev && prev.lastDoneAt) || null,
@@ -851,13 +866,13 @@
         return setTab("gym");
       case "new-split": {
         const sp = el.dataset.split;
-        return openDraft({ id: null, name: splitLabel(sp), notes: "", exercises: fillSplit(sp, S.gym) });
+        return openDraft({ id: null, name: splitLabel(sp), notes: "", exercises: fillSplit(sp, S.gym), structure: splitStructure(sp) });
       }
       case "new-blank":
         return openDraft({ id: null, name: "My workout", notes: "", exercises: [] });
       case "edit": {
         const w = S.workouts.find((x) => x.id === el.dataset.id);
-        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt })));
+        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt, structure: w.structure || null })));
         return;
       }
       case "remove":
@@ -878,6 +893,7 @@
       case "fill":
         if (!d) return;
         d.exercises = fillSplit(el.dataset.split, S.gym);
+        d.structure = splitStructure(el.dataset.split);
         if (!d.name || d.name === "My workout") d.name = splitLabel(el.dataset.split);
         if (!d.exercises.length) setStatus("Nothing in that split fits your kit — mark more in Gym.", "err");
         break;
@@ -941,7 +957,7 @@
         return render();
       case "open-twin": {
         const w = S.workouts.find((x) => x.id === el.dataset.id);
-        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt })));
+        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt, structure: w.structure || null })));
         return;
       }
       case "back":
@@ -1093,6 +1109,12 @@
 
   function startSession(w, workoutId) {
     if (!w || !w.exercises || !w.exercises.length) return;
+    const circ = w.structure && w.structure.type === "circuit" ? { ...w.structure, rounds: Math.max(1, Math.min(20, Number(w.structure.rounds) || 1)) } : null;
+    if (circ) {
+      // p18: circuit = one big alternating group → logger goes move by move, round by round; rest after each round.
+      const n = w.exercises.length;
+      w = { ...w, exercises: w.exercises.map((e, i) => ({ ...e, sets: circ.rounds, supersetGroup: n > 1 ? "circuit" : undefined, restSeconds: i === n - 1 ? Number(circ.restBetweenRounds) || 0 : Number(circ.restBetweenMoves) || 0 })) };
+    }
     const unit = Store.readLocal("unit", "lb");
     const { map } = lastLogsFor(workoutId);
     const sess = {
@@ -1126,7 +1148,11 @@
         };
       }),
     };
-    if (!workoutId) sess.draft = { name: sess.name, notes: (w && w.notes) || "", exercises: w.exercises };
+    if (circ) {
+      sess.structure = circ;
+      sess.round = 1;
+    }
+    if (!workoutId) sess.draft = { name: sess.name, notes: (w && w.notes) || "", exercises: w.exercises, structure: circ || null };
     S.active = sess;
     S.sessIdx = 0;
     S.rest = null;
@@ -1427,6 +1453,14 @@
     }
     const end = finishedAt || new Date().toISOString();
     const supersets = ssSummary(moves, unit);
+    const circ = sess.structure && sess.structure.type === "circuit" ? sess.structure : null;
+    if (circ)
+      for (const g of supersets) {
+        const n = g.rounds.length;
+        g.title = `Circuit · ${n} round${n === 1 ? "" : "s"} (each move once per round${circ.restBetweenRounds ? `, ${circ.restBetweenRounds}s rest between rounds` : ""}): ${g.moves.join(" → ")}`;
+        g.rounds = g.rounds.map((r) => r.replace(/ → /g, ", "));
+        g.text = [g.title, ...g.rounds].join("\n");
+      }
     const movesText = movesTextFor(moves, supersets, (m) => `${m.label || m.name}: ${m.sets.map((st) => st.txt || shortSet(st, unit)).join(", ")}`);
     return {
       movesText,
@@ -1437,6 +1471,7 @@
       unit,
       moves, // only moves with ≥1 logged set; only logged sets (planned/unlogged excluded)
       supersets,
+      ...(circ ? { structure: { type: "circuit", rounds: circ.rounds, restBetweenRounds: circ.restBetweenRounds || 0, restBetweenMoves: circ.restBetweenMoves || 0 } } : {}),
       totalSets,
       loggedSetCount: totalSets,
       totalVolume: Math.round(totalVolume),
@@ -1557,7 +1592,7 @@
     let w = sess.workoutId ? S.workouts.find((x) => x.id === sess.workoutId) : null;
     if (!w && draft && S.workouts.length < MAX_WORKOUTS) {
       // Finishing an unsaved build logs it as a workout (same as Steal).
-      w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
+      w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, structure: draft.structure || null, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
       S.workouts = [w, ...S.workouts];
       sess.workoutId = w.id;
     }
@@ -1841,7 +1876,8 @@
             const roundDone = !nx || nx.set > l.set;
             if (nx) S.sessIdx = nx.i;
             const rs = sess.exercises[run.end].restSeconds ?? 60;
-            S.rest = roundDone && rs > 0 ? { until: Date.now() + rs * 1000 } : null;
+            const rm = sess.structure && Number(sess.structure.restBetweenMoves) > 0 ? Number(sess.structure.restBetweenMoves) : 0;
+            S.rest = roundDone && rs > 0 ? { until: Date.now() + rs * 1000 } : !roundDone && rm > 0 && l.done ? { until: Date.now() + rm * 1000 } : null;
           } else if (l.done && (ex.restSeconds ?? 60) > 0) S.rest = { until: Date.now() + (ex.restSeconds ?? 60) * 1000 };
           if (l.done) {
             // carry weight/reps forward to the next untouched set
@@ -2871,9 +2907,28 @@
     const sessOn = (sess) => onFor(workoutOf(sess) || { name: sess.name }, (workoutOf(sess) || {}).exercises || sess.exercises);
     HOOKS.logAfterOn = sessOn;
 
+    // p18: routine Structure — Straight sets | Circuit · N rounds (+ rest between rounds / moves).
+    HOOKS.structureSection = (d) => {
+      const c = d.structure && d.structure.type === "circuit" ? d.structure : null;
+      const step = (act, val, unit, lbl) => `<div class="st-field"><span class="ex-lbl">${lbl}</span><div class="stepper big">
+          <button type="button" data-act="${act}" data-d="-1" aria-label="Less ${lbl}">−</button><span class="mono">${val}${unit}</span>
+          <button type="button" data-act="${act}" data-d="1" aria-label="More ${lbl}">+</button></div></div>`;
+      return `<section class="st-section" aria-label="Structure">
+          <p class="steal-kicker">Structure</p>
+          <div class="seg-pair st-seg" role="group">
+            <button type="button" class="seg-btn${c ? "" : " on"}" data-act="st-type" data-t="straight" aria-pressed="${!c}">Straight sets</button>
+            <button type="button" class="seg-btn${c ? " on" : ""}" data-act="st-type" data-t="circuit" aria-pressed="${!!c}">Circuit${c ? ` · ${c.rounds} rounds` : ""}</button>
+          </div>
+          ${c ? `<div class="st-row">${step("st-rounds", c.rounds, "", "Rounds")}${step("st-rbr", c.restBetweenRounds || 0, "s", "Rest between rounds")}${step("st-rbm", c.restBetweenMoves || 0, "s", "Rest between moves")}</div>
+            <p class="hint">Each move once per round, then repeat. Set each move's target below.</p>` : `<p class="hint">Each move: all its sets, then the next move.</p>`}
+        </section>`;
+    };
     // p15b: Log-after mode = no per-set logging at all; read-only move list + rest timer + Finish & log after.
     HOOKS.renderLogAfterSession = (sess) => {
       const exs = sess.exercises || [];
+      const circ = sess.structure && sess.structure.type === "circuit" ? sess.structure : null;
+      const rnd = Math.min((circ && circ.rounds + 1) || 1, sess.round || 1);
+      const done = !!circ && rnd > circ.rounds;
       const rest = S.rest
         ? `<div class="rest-bar" id="rest-bar"><span>Rest</span><strong class="mono" id="rest-left">${mmssX(Math.max(0, Math.ceil((S.rest.until - Date.now()) / 1000)))}</strong>
              <button type="button" class="btn ghost btn-sm" data-act="rest-add">+15s</button><button type="button" class="btn ghost btn-sm" data-act="rest-skip">Skip</button></div>`
@@ -2889,8 +2944,13 @@
       </header>
       ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
       <p class="la-banner-sub">Just train. When you're done, tap <strong>Finish &amp; log after</strong> and type, dictate, or snap your AlphaFit screen.</p>
+      ${circ ? `<div class="circ-tracker"><p class="circ-round">${done ? `All ${circ.rounds} rounds done` : `Round ${rnd} of ${circ.rounds}`}</p>
+          <div class="circ-dots">${Array.from({ length: circ.rounds }, (_, k) => `<span class="circ-dot${k + 1 < rnd ? " on" : k + 1 === rnd ? " cur" : ""}"></span>`).join("")}</div>
+          <p class="hint">Each move once, then ${circ.restBetweenRounds ? `${circ.restBetweenRounds}s rest` : "straight into the next round"}${circ.restBetweenMoves ? ` · ${circ.restBetweenMoves}s between moves` : ""}.</p></div>` : ""}
       <ol class="la-plan">${exs
         .map((e, i) => {
+          if (circ) return `<li class="la-plan-item"><span class="la-plan-n mono">${i + 1}</span><div class="la-plan-body"><p class="la-plan-name">${esc(e.name)}</p>
+              <p class="la-plan-meta mono">${esc(e.reps || "")}</p>${e.setup ? `<p class="hint">${esc(e.setup)}</p>` : ""}</div></li>`;
           const n = e.logs ? e.logs.length : Number(e.sets) || 1;
           const r = e.restSeconds ?? 60;
           return `<li class="la-plan-item"><span class="la-plan-n mono">${i + 1}</span><div class="la-plan-body">
@@ -2901,6 +2961,8 @@
         })
         .join("")}</ol>
       ${rest}
+      ${circ && !done ? `<div class="circ-actions"><button type="button" class="btn secondary wide-btn la-big" data-act="la-round">✓ Round ${rnd} done</button>
+          ${rnd > 1 ? `<button type="button" class="btn ghost btn-sm" data-act="la-round-undo">Undo</button>` : ""}</div>` : ""}
       <div class="la-finish"><button type="button" class="btn accent wide-btn la-big" data-act="la-open-active">Finish &amp; log after</button>
         <button type="button" class="btn ghost wide-btn sess-discard-bottom" data-act="sess-discard">Discard workout</button>
         <p class="hint">To log sets as you go, turn off Log after in this routine's Edit.</p></div>`;
@@ -2952,6 +3014,15 @@
         return `<div class="la-pending" role="status"><span class="la-spin" aria-hidden="true"></span><div><p class="la-pending-title">Processing your log…</p>${raw}</div></div>${manual}`;
       }
       const p = la.parsed;
+      if (Array.isArray(p.rounds) && p.rounds.length) {
+        const rs = p.rounds
+          .map((r, k) => `<li class="la-move"><p class="la-move-name">Round ${r.round || k + 1}${r.time_s != null ? ` <span class="hint mono">· ${mmssX(r.time_s)}</span>` : ""}</p>
+              <ol class="la-rounds">${(r.moves || []).map((m) => `<li><span class="la-mn">${esc(m.name)}</span><span class="mono">${esc(roundTxt(m) || "done")}</span>${m.notes ? `<em class="hint"> ${esc(m.notes)}</em>` : ""}</li>`).join("")}</ol>
+              ${r.notes ? `<p class="hint">${esc(r.notes)}</p>` : ""}</li>`)
+          .join("");
+        return `<p class="steal-kicker la-circ-k">Circuit · ${p.rounds.length} round${p.rounds.length === 1 ? "" : "s"}${p.totalTime_s != null ? ` · ${mmssX(p.totalTime_s)}` : ""}</p><ul class="la-moves">${rs}</ul>${p.note ? `<p class="hint la-note">${esc(p.note)}</p>` : ""}${manual}
+          <p class="hint la-src">Logged after${la.hasPhoto ? " from your photo" : ""}${la.text ? (la.hasPhoto ? " + text" : " from your text") : ""}</p>`;
+      }
       const moves = (p.moves || [])
         .map((m) => `<li class="la-move"><p class="la-move-name">${esc(m.name)}${m.rounds && m.rounds.length > 1 ? ` <span class="hint">· ${m.rounds.length} rounds</span>` : ""}</p>
             <ol class="la-rounds">${(m.rounds || []).map((r, i) => `<li><span class="la-rn mono">${m.rounds.length > 1 ? i + 1 : "✓"}</span><span class="mono">${esc(roundTxt(r) || "done")}</span>${r.notes ? `<em class="hint"> ${esc(r.notes)}</em>` : ""}</li>`).join("")}</ol>
@@ -3061,7 +3132,7 @@
         delete sess.draft;
         w = workoutOf(sess);
         if (!w && draft && S.workouts.length < MAX_WORKOUTS) {
-          w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
+          w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, structure: draft.structure || null, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
           S.workouts = [w, ...S.workouts];
           sess.workoutId = w.id;
         }
@@ -3096,6 +3167,7 @@
           photoPath,
           hasPhoto: !!la.photo,
           sendToTrainer: !!la.send,
+          structure: sess.structure || null,
           plannedMoves: sess.exercises.map((e) => ({ name: e.name, sets: e.logs ? e.logs.length : Number(e.sets) || 1, target: String(e.reps || "") })),
           startedAt: sess.startedAt,
           finishedAt: sess.finishedAt,
@@ -3169,6 +3241,40 @@
         case "la-cancel":
           S.la = null;
           rerenderKeep();
+          return true;
+        case "st-type":
+        case "st-rounds":
+        case "st-rbr":
+        case "st-rbm": {
+          const d = S.draft;
+          if (!d) return true;
+          if (act === "st-type") d.structure = el.dataset.t === "circuit" ? d.structure || { type: "circuit", rounds: Math.max(1, ...d.exercises.map((e) => Number(e.sets) || 1)), restBetweenRounds: 90, restBetweenMoves: 0 } : null;
+          else if (d.structure) {
+            const k = { "st-rounds": ["rounds", 1, 1, 20], "st-rbr": ["restBetweenRounds", 15, 0, 600], "st-rbm": ["restBetweenMoves", 15, 0, 300] }[act];
+            d.structure[k[0]] = Math.max(k[2], Math.min(k[3], (Number(d.structure[k[0]]) || 0) + Number(el.dataset.d) * k[1]));
+          }
+          Store.writeLocal("draft", d);
+          rerenderKeep();
+          return true;
+        }
+        case "la-round": {
+          const sx = S.active;
+          if (!sx || !sx.structure) return true;
+          const n = sx.structure.rounds;
+          sx.round = Math.min(n + 1, (sx.round || 1) + 1);
+          const rr = Number(sx.structure.restBetweenRounds) || 0;
+          S.rest = sx.round <= n && rr > 0 ? { until: Date.now() + rr * 1000 } : null;
+          if (S.rest) startTicker();
+          persistActive();
+          rerenderKeep();
+          return true;
+        }
+        case "la-round-undo":
+          if (S.active && S.active.round > 1) {
+            S.active.round--;
+            persistActive();
+            rerenderKeep();
+          }
           return true;
         case "la-rest":
           S.rest = { until: Date.now() + (Number(el.dataset.s) || 60) * 1000 };

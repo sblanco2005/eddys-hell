@@ -224,6 +224,31 @@ logParse item `parsed`, and — when "Send to Arni" was ticked — writes `train
 so the normal routine relays it to Arni and marks it sent (unchanged confirmation flow). Push goes only to Santiago's uid:
 "Your <Routine> log is in" → `/?log=<sessionId>` (opens that routine's History).
 
+### Circuits (p18)
+
+Routine `structure`: absent/null = Straight sets (default, all existing routines); or
+`{ "type": "circuit", "rounds": 5, "restBetweenRounds": 90, "restBetweenMoves": 0 }` (Editor → Structure). In circuit mode
+moves show only Target + Setup. The Hyrox/Cardio template defaults to Circuit · 5 rounds, 90s between rounds:
+Assault runner 500m, Row 500m, Slam ball 15, Wall ball 20, Box jump 10, Farmers carry 40m, Burpee broad jump 20m, KB swing 15.
+Hit it: with Log after it shows "Round N of M", a round tracker, and "✓ Round N done" (this starts the between-rounds rest); without
+Log after the logger goes move by move, round by round. Arni's summary: `Circuit · N rounds (…): A → B …` then `Round k: A …, B …`.
+The logParse queue item carries `structure`. `apply` also accepts a **rounds-first** JSON (the moves-first shape above still works):
+
+```json
+{
+  "rounds": [
+    { "round": 1, "time_s": "6:40", "notes": "",
+      "moves": [ { "name": "Assault runner", "distance_m": 500, "time_s": "1:52" },
+                 { "name": "Row", "distance_m": 500, "time_s": "1:58" },
+                 { "name": "Wall ball", "reps": 20 } ] }
+  ],
+  "totalTime_s": "35:10", "restBetweenRounds_s": 90, "note": "optional", "durationMin": 38
+}
+```
+Move fields are the same as round fields above (distance_m, time_s, reps, cals, pace, weight, weightUnit, notes). The relay text is
+`Circuit · 5 rounds (total 35:10), 90s rest between rounds` then `Round 1 (6:40): Assault runner 500m 1:52, Row 500m 1:58, …`.
+History shows it by round.
+
 ## YouTube (this week’s video)
 
 `data/this-week.json` may include optional `youtubeId` and `youtubeUrl`.
