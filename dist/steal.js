@@ -457,7 +457,7 @@
     else if (HOOKS.renderView && (html = HOOKS.renderView(S.view))) {
       /* session / history (phase 3) */
     } else html = renderMineList();
-    return html + renderClip() + (HOOKS.renderReplace ? HOOKS.renderReplace() : "") + (HOOKS.renderPlanModal ? HOOKS.renderPlanModal() : "") + `<p class="steal-status" id="steal-status" hidden></p>`;
+    return html + renderClip() + (HOOKS.renderReplace ? HOOKS.renderReplace() : "") + (HOOKS.renderPlanModal ? HOOKS.renderPlanModal() : "") + (HOOKS.renderLogAfter ? HOOKS.renderLogAfter() : "") + `<p class="steal-status" id="steal-status" hidden></p>`;
   }
 
   function sortedWorkouts() {
@@ -673,6 +673,7 @@
           : "";
       })()}
       ${HOOKS.coachCard && existing ? HOOKS.coachCard(d.id) : ""}
+      ${HOOKS.logAfterToggle && existing ? HOOKS.logAfterToggle(d) : ""}
       ${splitPicker}
       <ul class="ex-list">${(() => {
         const labels = ssLabels(d.exercises);
@@ -1238,6 +1239,7 @@
         <button type="button" class="btn ghost btn-sm" data-act="sess-finish">Finish</button>
       </header>
       ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
+      ${HOOKS.logAfterBanner ? HOOKS.logAfterBanner(sess) : ""}
       ${
         kind === "lift"
           ? `<div class="seg-row">
@@ -1301,7 +1303,7 @@
       ? `<ul class="hist-list">${list
           .map((x) => {
             const dur = fmtDur(new Date(x.finishedAt) - new Date(x.startedAt));
-            const sets = x.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
+            const sets = x.logAfter && x.logAfter.parsed ? x.logAfter.parsed.roundCount || 0 : x.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
             const lines = x.exercises
               .map((e) => {
                 const done = e.logs.filter((l) => l.done);
@@ -1316,7 +1318,7 @@
             return `<li class="hist-item">
                 <p class="hist-when">${esc(new Date(x.finishedAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }))}
                   <span class="hint">· ${dur} · ${sets} sets · ${esc(x.unit)}</span></p>
-                <ul class="hist-moves">${lines || `<li><span class="hint">No sets logged</span></li>`}</ul></li>`;
+                ${HOOKS.histLogAfter ? HOOKS.histLogAfter(x, lines) : `<ul class="hist-moves">${lines || `<li><span class="hint">No sets logged</span></li>`}</ul>`}</li>`;
           })
           .join("")}</ul>`
       : `<p class="hint">No finished sessions yet. Hit it, then Finish to log one.</p>`;
@@ -1453,6 +1455,7 @@
                  <textarea id="fin-note" class="fin-note" data-fn="note" rows="3" maxlength="1000" placeholder="Optional — energy, pain, what to change…">${esc(S.finishNote || "")}</textarea>`
           }
           <div class="fin-actions">
+            ${HOOKS.logAfterFinishBtn ? HOOKS.logAfterFinishBtn(sess, empty) : ""}
             ${
               empty
                 ? `<button type="button" class="btn accent wide-btn" data-act="fin-only">Discard session</button>`
@@ -2758,6 +2761,338 @@
             S.view = "list";
             setTab("mine");
             onMineClick({ dataset: { act: "edit", id: wid } });
+          }
+        }
+      } catch (_) {}
+    };
+  })();
+
+
+  // ——— p15: Log after (cardio / Hyrox). Free text (dictation) + photo → pending parse → scripts/log-parse.mjs apply ———
+  (function logAfter() {
+    S.la = null; // { mode: 'active'|'session', sid, text, photo (dataUrl), send, busy }
+    const isCardio = (e) => {
+      if (!e) return false;
+      if (e.muscle === "cardio") return true;
+      const m = e.libId && LIB_BY_ID.get(e.libId);
+      return !!(m && m.muscle === "cardio");
+    };
+    const autoOn = (exs) => {
+      const xs = exs || [];
+      return xs.length > 0 && xs.filter(isCardio).length * 2 >= xs.length;
+    };
+    const workoutOf = (sess) => (sess && sess.workoutId ? S.workouts.find((w) => w.id === sess.workoutId) : null);
+    function onFor(w, exs) {
+      if (w && w.logAfter === true) return true;
+      if (w && w.logAfter === false) return false;
+      if (w && CARDIO_NAME.test(w.name || "")) return true;
+      return autoOn(exs || (w && w.exercises));
+    }
+    const CARDIO_NAME = /\b(hyrox|cardio|conditioning|metcon|wod|intervals?|run|row(ing)?\s+day)\b/i;
+    const sessOn = (sess) => onFor(workoutOf(sess) || { name: sess.name }, (workoutOf(sess) || {}).exercises || sess.exercises);
+    HOOKS.logAfterOn = sessOn;
+
+    HOOKS.logAfterBanner = (sess) =>
+      sessOn(sess)
+        ? `<section class="la-banner" aria-label="Log after">
+            <p class="la-banner-title">Just train — log after</p>
+            <p class="la-banner-sub">No need to enter numbers per set. When you're done, tap <strong>Log after</strong> and type, dictate, or snap your AlphaFit screen. Logging sets below still works if you want.</p>
+            <button type="button" class="btn accent wide-btn" data-act="la-open-active">Finish &amp; log after</button>
+          </section>`
+        : "";
+    HOOKS.logAfterToggle = (d) => {
+      const w = S.workouts.find((x) => x.id === d.id) || d;
+      const on = onFor(w, d.exercises);
+      const auto = w.logAfter == null;
+      return `<div class="la-toggle-row"><div><p class="la-toggle-title">Log after</p><p class="hint">${
+        auto ? (on ? "On automatically — mostly cardio moves." : "Off — log sets as you go.") : on ? "On — you turned it on." : "Off — you turned it off."
+      } Type or snap your results when you finish.</p></div>
+        <button type="button" class="seg-btn${on ? " on" : ""}" data-act="la-toggle" data-id="${esc(d.id)}" aria-pressed="${on}">${on ? "✓ On" : "Off"}</button></div>`;
+    };
+    HOOKS.logAfterFinishBtn = (sess, empty) =>
+      sessOn(sess) || empty
+        ? `<button type="button" class="btn ${sessOn(sess) ? "accent" : "secondary"} wide-btn" data-act="la-open-active">Log after — text or photo</button>`
+        : "";
+
+    // ——— History ———
+    const mmssX = (t) => {
+      const n = Math.round(Number(t) || 0);
+      const h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), s2 = n % 60;
+      return h ? `${h}:${String(m).padStart(2, "0")}:${String(s2).padStart(2, "0")}` : `${m}:${String(s2).padStart(2, "0")}`;
+    };
+    const roundTxt = (r) =>
+      [
+        r.distance_m != null ? (r.distance_m >= 1000 && r.distance_m % 100 === 0 ? `${r.distance_m / 1000}km` : `${r.distance_m}m`) : "",
+        r.reps != null ? `${r.reps} reps` : "",
+        r.cals != null ? `${r.cals} cal` : "",
+        r.weight != null ? `${r.weight}${r.weightUnit ? " " + r.weightUnit : ""}` : "",
+        r.time_s != null ? mmssX(r.time_s) : "",
+        r.pace ? `@ ${r.pace}` : "",
+      ].filter(Boolean).join(" · ");
+    HOOKS.histLogAfter = (x, lines) => {
+      const la = x.logAfter;
+      const manual = lines ? `<ul class="hist-moves">${lines}</ul>` : "";
+      if (!la) return (manual || `<ul class="hist-moves"><li><span class="hint">No sets logged</span></li></ul>`) + (!sessOn(x) ? "" :
+        `<button type="button" class="btn ghost btn-sm la-hist-btn" data-act="la-open-session" data-sid="${esc(x.id)}">Log after — text or photo</button>`);
+      const raw = la.text ? `<p class="la-raw">“${esc(la.text.length > 160 ? la.text.slice(0, 158) + "…" : la.text)}”${la.hasPhoto ? " · 📷 photo" : ""}</p>` : la.hasPhoto ? `<p class="la-raw">📷 photo</p>` : "";
+      if (la.status !== "parsed" || !la.parsed) {
+        return `<div class="la-pending" role="status"><span class="la-spin" aria-hidden="true"></span><div><p class="la-pending-title">Processing your log…</p>${raw}</div></div>${manual}`;
+      }
+      const p = la.parsed;
+      const moves = (p.moves || [])
+        .map((m) => `<li class="la-move"><p class="la-move-name">${esc(m.name)}${m.rounds && m.rounds.length > 1 ? ` <span class="hint">· ${m.rounds.length} rounds</span>` : ""}</p>
+            <ol class="la-rounds">${(m.rounds || []).map((r, i) => `<li><span class="la-rn mono">${m.rounds.length > 1 ? i + 1 : "✓"}</span><span class="mono">${esc(roundTxt(r) || "done")}</span>${r.notes ? `<em class="hint"> ${esc(r.notes)}</em>` : ""}</li>`).join("")}</ol>
+            ${m.notes ? `<p class="hint">${esc(m.notes)}</p>` : ""}</li>`)
+        .join("");
+      return `<ul class="la-moves">${moves}</ul>${p.note ? `<p class="hint la-note">${esc(p.note)}</p>` : ""}${manual}
+        <p class="hint la-src">Logged after${la.hasPhoto ? " from your photo" : ""}${la.text ? (la.hasPhoto ? " + text" : " from your text") : ""}</p>`;
+    };
+
+    // ——— Sheet ———
+    HOOKS.renderLogAfter = () => {
+      const la = S.la;
+      if (!la) return "";
+      const sess = la.mode === "active" ? S.active : S.sessions.find((x) => x.id === la.sid);
+      if (!sess) return "";
+      return `
+      <div class="eh-modal la-modal" role="dialog" aria-modal="true" aria-labelledby="la-title">
+        <div class="eh-modal-backdrop" data-act="la-cancel"></div>
+        <div class="eh-modal-card la-card">
+          <p class="steal-kicker">Log after</p>
+          <h3 id="la-title" class="fin-title">${esc(sess.name)}</h3>
+          <label class="field-label" for="la-text">What did you do?</label>
+          <textarea id="la-text" class="la-text" rows="6" maxlength="4000" autocapitalize="sentences" enterkeyhint="done"
+            placeholder="Tap the mic and talk — e.g. “Runner 5×500m: 1:52, 1:55, 1:58, 2:01, 1:59. Row 4×250m…”">${esc(la.text || "")}</textarea>
+          <p class="hint la-tip">Tip: tap 🎤 on the keyboard to dictate. Times, distances, reps, cals — any order is fine.</p>
+          <div class="la-photo-row">
+            ${la.photo
+              ? `<div class="la-thumb"><img src="${la.photo}" alt="Your workout photo" /><button type="button" class="btn ghost btn-sm" data-act="la-photo-clear">Remove photo</button></div>`
+              : `<label class="btn secondary wide-btn la-photo-btn" for="la-file">📷 Add photo or screenshot</label>`}
+            <input id="la-file" class="la-file" type="file" accept="image/*" hidden />
+          </div>
+          <label class="la-send"><input type="checkbox" id="la-send" ${la.send ? "checked" : ""} /> Send to Arni once it's processed</label>
+          ${la.err ? `<p class="la-err">${esc(la.err)}</p>` : ""}
+          <div class="fin-actions">
+            <button type="button" class="btn accent wide-btn" data-act="la-save" ${la.busy ? "disabled" : ""}>${la.busy ? "Saving…" : "Save log"}</button>
+            <button type="button" class="btn ghost wide-btn" data-act="la-cancel">${la.mode === "active" ? "Keep going" : "Cancel"}</button>
+          </div>
+        </div>
+      </div>`;
+    };
+    document.addEventListener("input", (e) => {
+      if (S.la && e.target && e.target.id === "la-text") S.la.text = e.target.value;
+    });
+    document.addEventListener("change", async (e) => {
+      if (!S.la || !e.target) return;
+      if (e.target.id === "la-send") S.la.send = !!e.target.checked;
+      if (e.target.id === "la-file" && e.target.files && e.target.files[0]) {
+        try {
+          S.la.photo = await shrink(e.target.files[0]);
+          S.la.err = "";
+        } catch (err) {
+          console.warn("[logafter] photo", err);
+          S.la.err = "Couldn't read that photo — try a screenshot instead.";
+        }
+        render();
+      }
+    });
+    /** Downscale to ≤1600px JPEG; keep under ~900 KB of base64 (Firestore doc limit 1 MiB). */
+    async function shrink(file) {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = await new Promise((ok, bad) => {
+          const i = new Image();
+          i.onload = () => ok(i);
+          i.onerror = bad;
+          i.src = url;
+        });
+        for (const [max, q] of [[1600, 0.8], [1400, 0.7], [1200, 0.6], [1000, 0.55], [800, 0.5]]) {
+          const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+          const c = document.createElement("canvas");
+          c.width = Math.round(img.naturalWidth * k);
+          c.height = Math.round(img.naturalHeight * k);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          const d = c.toDataURL("image/jpeg", q);
+          if (d.length < 900000) return d;
+        }
+        throw new Error("photo too large");
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    async function saveLog() {
+      const la = S.la;
+      const text = String(la.text || "").trim();
+      if (!text && !la.photo) {
+        la.err = "Type (or dictate) what you did, or add a photo.";
+        return render();
+      }
+      la.busy = true;
+      la.err = "";
+      render();
+      const c = await Store.cloud().catch(() => null);
+      if (!c) {
+        la.busy = false;
+        la.err = "You need to be online and signed in to save a log.";
+        return render();
+      }
+      const now = new Date().toISOString();
+      let sess;
+      let w = null;
+      if (la.mode === "active") {
+        sess = S.active;
+        if (!sess) return;
+        sess.finishedAt = now;
+        const draft = sess.draft;
+        delete sess.draft;
+        w = workoutOf(sess);
+        if (!w && draft && S.workouts.length < MAX_WORKOUTS) {
+          w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
+          S.workouts = [w, ...S.workouts];
+          sess.workoutId = w.id;
+        }
+        if (w) w.lastDoneAt = now;
+      } else sess = S.sessions.find((x) => x.id === la.sid);
+      if (!sess) return;
+      try {
+        let photoPath = null;
+        if (la.photo) {
+          photoPath = `users/${c.uid}/logPhotos/${sess.id}`;
+          await c.fs.setDoc(c.fs.doc(c.db, "users", c.uid, "logPhotos", sess.id), {
+            sessionId: sess.id,
+            contentType: "image/jpeg",
+            dataUrl: la.photo,
+            createdAt: now,
+          });
+        }
+        sess.logAfter = { status: "pending", text, hasPhoto: !!la.photo, photoPath, submittedAt: now, sendToTrainer: !!la.send };
+        if (la.send) {
+          sess.shareWithTrainer = true;
+          sess.trainerStatus = "awaiting-parse";
+        }
+        const qid = await Store.queueForTrainer({
+          type: "logParse",
+          status: "pending",
+          email: (user && user.email) || "",
+          displayName: (user && user.displayName) || "",
+          sessionId: sess.id,
+          workoutId: sess.workoutId || null,
+          name: sess.name,
+          text,
+          photoPath,
+          hasPhoto: !!la.photo,
+          sendToTrainer: !!la.send,
+          plannedMoves: sess.exercises.map((e) => ({ name: e.name, sets: e.logs ? e.logs.length : Number(e.sets) || 1, target: String(e.reps || "") })),
+          startedAt: sess.startedAt,
+          finishedAt: sess.finishedAt,
+          createdAt: c.fs.serverTimestamp(),
+        });
+        sess.logAfter.queueId = qid;
+        S.sessions = [...S.sessions.filter((x) => x.id !== sess.id), sess];
+        await Store.saveSession(sess, S.sessions);
+        if (w) await Store.saveWorkout(w, S.workouts);
+      } catch (err) {
+        console.warn("[logafter] save failed", err);
+        la.busy = false;
+        la.err = "Couldn't save your log — check your connection and try again.";
+        return render();
+      }
+      const wid = sess.workoutId;
+      S.la = null;
+      if (la.mode === "active") {
+        S.active = null;
+        S.rest = null;
+        S.finishOpen = false;
+        persistActive();
+      }
+      if (wid) {
+        S.historyFor = wid;
+        S.view = "history";
+      } else S.view = "list";
+      render();
+      window.scrollTo(0, 0);
+      toast("Log saved — processing it now", "ok");
+      schedulePoll();
+    }
+
+    // Pending logs: re-fetch sessions on resume / every 20s while any are pending.
+    let pollT = null;
+    const anyPending = () => S.sessions.some((x) => x.logAfter && x.logAfter.status === "pending");
+    async function refresh() {
+      try {
+        const before = JSON.stringify(S.sessions.map((x) => [x.id, x.logAfter && x.logAfter.status]));
+        S.sessions = await Store.loadSessions();
+        if (JSON.stringify(S.sessions.map((x) => [x.id, x.logAfter && x.logAfter.status])) !== before && !S.la) render();
+      } catch (err) {
+        console.warn("[logafter] refresh", err);
+      }
+    }
+    function schedulePoll() {
+      clearTimeout(pollT);
+      if (!anyPending()) return;
+      pollT = setTimeout(async () => {
+        if (document.visibilityState === "visible") await refresh();
+        schedulePoll();
+      }, 20000);
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && user && anyPending()) refresh().then(schedulePoll);
+    });
+
+    const prevAction = HOOKS.onAction;
+    HOOKS.onAction = (act, el) => {
+      switch (act) {
+        case "la-open-active":
+          if (!S.active) return true;
+          S.finishOpen = false;
+          S.la = { mode: "active", sid: S.active.id, text: "", photo: null, send: true, busy: false };
+          rerenderKeep();
+          return true;
+        case "la-open-session":
+          S.la = { mode: "session", sid: el.dataset.sid, text: "", photo: null, send: true, busy: false };
+          render();
+          return true;
+        case "la-cancel":
+          S.la = null;
+          rerenderKeep();
+          return true;
+        case "la-photo-clear":
+          if (S.la) S.la.photo = null;
+          render();
+          return true;
+        case "la-save":
+          if (S.la && !S.la.busy) saveLog();
+          return true;
+        case "la-toggle": {
+          const w = S.workouts.find((x) => x.id === el.dataset.id);
+          if (!w) return true;
+          w.logAfter = !onFor(w, w.exercises);
+          if (S.draft && S.draft.id === w.id) S.draft.logAfter = w.logAfter;
+          render();
+          Store.saveWorkout(w, S.workouts).catch((err) => console.warn("[logafter] toggle save", err));
+          return true;
+        }
+      }
+      return prevAction ? prevAction(act, el) : false;
+    };
+    const prevLoad = HOOKS.afterLoad;
+    HOOKS.afterLoad = async function () {
+      if (prevLoad) await prevLoad();
+      schedulePoll();
+      // Push deep link: ?log=<sessionId> → that routine's History.
+      try {
+        const q = new URLSearchParams(location.search);
+        const sid = q.get("log");
+        if (sid) {
+          q.delete("log");
+          history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + location.hash);
+          const x = S.sessions.find((y) => y.id === sid);
+          if (x && x.workoutId && !S.active) {
+            setTab("mine");
+            S.historyFor = x.workoutId;
+            S.view = "history";
+            render();
           }
         }
       } catch (_) {}

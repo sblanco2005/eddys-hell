@@ -406,3 +406,33 @@ body.tab-gym .foot { display: none !important; }
 .coach-hist { margin: 0 0 18px; }
 .coach-hist-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 10px; }
 .coach-hist-item { padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-elev); }
+
+/* p15 — Log after (cardio / Hyrox) */
+.la-banner { margin: 4px 0 14px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--accent, #e4572e); background: var(--bg-elev); }
+.la-banner-title { margin: 0 0 4px; font-weight: 800; font-size: 1.05rem; }
+.la-banner-sub { margin: 0 0 12px; font-size: 0.98rem; line-height: 1.45; color: var(--text-muted, inherit); }
+.la-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
+.la-toggle-title { margin: 0 0 2px; font-weight: 700; }
+.la-toggle-row .hint { margin: 0; }
+.la-card { max-height: 92vh; overflow-y: auto; }
+.la-text { width: 100%; box-sizing: border-box; min-height: 150px; font-size: 17px; line-height: 1.45; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); color: inherit; resize: vertical; }
+.la-tip { margin: 6px 0 12px; }
+.la-photo-row { margin: 0 0 12px; }
+.la-photo-btn { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.la-thumb { display: flex; align-items: center; gap: 12px; }
+.la-thumb img { width: 84px; height: 112px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.la-send { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; font-size: 1rem; }
+.la-send input { width: 20px; height: 20px; }
+.la-err { color: #ff6b6b; margin: 0 0 10px; }
+.la-hist-btn { margin-top: 8px; }
+.la-pending { display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--bg-elev); }
+.la-pending-title { margin: 0 0 2px; font-weight: 700; }
+.la-raw { margin: 0; font-size: 0.92rem; opacity: 0.8; }
+.la-spin { flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent, #e4572e); animation: la-spin 0.9s linear infinite; }
+@keyframes la-spin { to { transform: rotate(360deg); } }
+.la-moves { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.la-move-name { margin: 0 0 4px; font-weight: 700; }
+.la-rounds { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.la-rounds li { display: flex; gap: 10px; align-items: baseline; font-size: 0.98rem; }
+.la-rn { min-width: 1.4em; text-align: right; opacity: 0.6; }
+.la-note, .la-src { margin: 8px 0 0; }

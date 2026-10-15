@@ -183,6 +183,47 @@ Stable Hosting is untouched. Admin Slack self-DM check-in alerts stay separate.
 `data/pt.json` holds the summary destination (`eddy_pazmino@yahoo.com`). Automatic Thursday email to the PT is **not wired yet** (manual / deferred). Check-in recording in the app works independently.
 
 
+## Log after — cardio / Hyrox (beta, p15)
+
+Routines whose moves are mostly Cardio (or with the per-routine **Log after** toggle on in Edit) show a "Just train — log after"
+banner in Hit it. **Finish & log after** (also in the Finish sheet and on each History entry of such routines) opens a sheet with a
+big dictation-friendly text box + photo upload (camera/library). Saving finishes the session with
+`logAfter {status:'pending', text, hasPhoto, photoPath, sendToTrainer, queueId}` and enqueues
+`trainerQueue/{id} {type:'logParse', status:'pending', uid, sessionId, workoutId, name, text, photoPath, plannedMoves, sendToTrainer}`.
+History shows "Processing your log…" until it's parsed, then the rounds per move.
+
+Photos: Firebase Storage is not provisioned on eddy-s-hell (no default bucket), so photos are downscaled in the browser
+(≤1600px JPEG, <900 KB) and stored at `users/{uid}/logPhotos/{sessionId}` `{dataUrl, contentType, sessionId, createdAt}`
+(Firestore rules: owner only, size-capped).
+
+The 15-min trainer routine: `node scripts/trainer-queue.mjs list` prints logParse items **last** with `relay:false, handTo:"parent"`.
+Never send those to Arni or `mark` them (mark refuses) — hand them to the parent bot, which runs:
+
+```
+node scripts/log-parse.mjs list                    # pending items; photo saved to /workspace/logparse/<id>.jpg (photoFile)
+node scripts/log-parse.mjs apply --id <id> --json-file /workspace/logparse/<id>.json [--dry-run] [--no-push] [--no-trainer]
+node scripts/log-parse.mjs delete --id <id> --yes  # test cleanup only (queue item + session + photo + la-<id> relay)
+```
+
+apply JSON (every round field optional, ≥1 per round; time_s = seconds or "m:ss"/"h:mm:ss"):
+
+```json
+{
+  "moves": [
+    { "name": "Assault runner", "notes": "optional",
+      "rounds": [ { "distance_m": 500, "time_s": "1:52", "reps": null, "cals": null, "pace": "1:52/500m",
+                    "weight": null, "weightUnit": null, "notes": "" } ] }
+  ],
+  "note": "optional overall note",
+  "durationMin": 34
+}
+```
+
+apply writes `logAfter.status='parsed'` + `logAfter.parsed {moves, movesText, note, roundCount, durationMin, parsedAt}`, marks the
+logParse item `parsed`, and — when "Send to Arni" was ticked — writes `trainerQueue/la-<id>` `{type:'session', status:'pending', summary{source:'logAfter', movesText, …}}`
+so the normal routine relays it to Arni and marks it sent (unchanged confirmation flow). Push goes only to Santiago's uid:
+"Your <Routine> log is in" → `/?log=<sessionId>` (opens that routine's History).
+
 ## YouTube (this week’s video)
 
 `data/this-week.json` may include optional `youtubeId` and `youtubeUrl`.

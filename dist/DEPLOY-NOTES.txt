@@ -437,3 +437,16 @@ Passkeys are per-domain: register Face ID separately on prod.
   never re-fetched; a not-yet-ready cloud handle silently returned the empty local mirror).
 - Fix: re-fetch coach notes on app resume (visibilitychange) + retry 3s after load if empty; match notes by workoutId, falling
   back to routine name when the note's workoutId isn't one of the user's routines.
+
+## 2026-10-14 ~8:05 PM ET — beta-steal-p15 Log after (build 20261014-steal-p15-logafter, BETA hosting + shared Firestore rules)
+- Mine: "Log after" for cardio/Hyrox. Auto-on when ≥50% of moves are Cardio or the routine name says Hyrox/cardio/…; per-routine
+  toggle in Edit (workout.logAfter true/false). Hit it shows "Just train — log after" banner; per-set entry still works.
+  Sheet (from banner, Finish sheet, or History entry): big dictation-friendly text box + photo (camera/library) + "Send to Arni" tick.
+  Saves session.logAfter {status:'pending', text, hasPhoto, photoPath, sendToTrainer, queueId} + trainerQueue {type:'logParse'}.
+  History: "Processing your log…" → parsed rounds per move. Deep link ?log=<sessionId> opens that History.
+- Photos: Firebase Storage has no bucket on this project → photos downscaled client-side (≤1600px JPEG <900 KB) into Firestore
+  users/{uid}/logPhotos/{sessionId}; new owner-only, size-capped rule (shared rules deployed; additive, unused by prod code).
+- scripts/log-parse.mjs list | apply --id --json-file [--dry-run|--no-push|--no-trainer] | delete --id --yes. apply re-queues
+  trainerQueue/la-<id> {type:'session'} for the normal Arni relay; push only to Santiago "Your <Routine> log is in".
+- trainer-queue.mjs list: logParse items listed last with relay:false/handTo:'parent'; mark refuses them. README section added.
+- E2E on live Firestore with fake uid zz-test-logparse (seed → list → apply dry-run → apply → relay item → delete): all cleaned up.
