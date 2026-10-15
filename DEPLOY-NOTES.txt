@@ -454,3 +454,7 @@ Passkeys are per-domain: register Face ID separately on prod.
 ## 2026-10-14 ~8:15 PM ET — beta-steal-p15b (build 20261014-steal-p15b-logafter, BETA hosting only)
 - Log-after routines: Hit it no longer shows any per-set logging. It shows a read-only move list (name, planned sets × target, rest),
   a "Rest Ns" button per move (same rest bar/timer), and a big "Finish & log after". To log sets during a workout, turn off Log after in Edit.
+
+## 2026-10-14 ~8:20 PM ET — beta-steal-p15c (build 20261014-steal-p15c-logafter, BETA hosting only)
+- Built-in split template "Hyrox" renamed "Hyrox/Cardio" (steal-data.js SPLITS). Santiago has no saved routine named Hyrox in
+  Firestore (only Push, Efficient Pull Day, Legs), so there was nothing to rename there. Log-after name auto-detect matches "Hyrox/Cardio".

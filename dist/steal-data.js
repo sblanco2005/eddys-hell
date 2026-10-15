@@ -193,7 +193,7 @@
       },
       {
         "id": "hyrox",
-        "label": "Hyrox",
+        "label": "Hyrox/Cardio",
         "blurb": "Race stations and engine work"
       }
     ],
