@@ -436,3 +436,13 @@ body.tab-gym .foot { display: none !important; }
 .la-rounds li { display: flex; gap: 10px; align-items: baseline; font-size: 0.98rem; }
 .la-rn { min-width: 1.4em; text-align: right; opacity: 0.6; }
 .la-note, .la-src { margin: 8px 0 0; }
+/* p15b — Log-after Hit it (no per-set logging) */
+.la-plan { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 8px; }
+.la-plan-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
+.la-plan-n { opacity: 0.6; min-width: 1.2em; }
+.la-plan-body { flex: 1; min-width: 0; }
+.la-plan-name { margin: 0 0 2px; font-weight: 700; font-size: 1.05rem; }
+.la-plan-meta { margin: 0; font-size: 0.95rem; opacity: 0.85; }
+.la-finish { margin: 6px 0 20px; }
+.la-big { min-height: 56px; font-size: 1.1rem; }
+.la-finish .hint { text-align: center; margin: 8px 0 0; }

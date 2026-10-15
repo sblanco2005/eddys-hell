@@ -450,3 +450,7 @@ Passkeys are per-domain: register Face ID separately on prod.
   trainerQueue/la-<id> {type:'session'} for the normal Arni relay; push only to Santiago "Your <Routine> log is in".
 - trainer-queue.mjs list: logParse items listed last with relay:false/handTo:'parent'; mark refuses them. README section added.
 - E2E on live Firestore with fake uid zz-test-logparse (seed → list → apply dry-run → apply → relay item → delete): all cleaned up.
+
+## 2026-10-14 ~8:15 PM ET — beta-steal-p15b (build 20261014-steal-p15b-logafter, BETA hosting only)
+- Log-after routines: Hit it no longer shows any per-set logging. It shows a read-only move list (name, planned sets × target, rest),
+  a "Rest Ns" button per move (same rest bar/timer), and a big "Finish & log after". To log sets during a workout, turn off Log after in Edit.

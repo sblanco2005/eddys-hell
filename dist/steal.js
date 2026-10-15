@@ -1159,6 +1159,7 @@
   function renderSession() {
     const sess = S.active;
     if (!sess) return "";
+    if (HOOKS.logAfterOn && HOOKS.logAfterOn(sess) && HOOKS.renderLogAfterSession) return HOOKS.renderLogAfterSession(sess);
     const exs = sess.exercises;
     const idx = Math.min(S.sessIdx, exs.length - 1);
     const ex = exs[idx];
@@ -2792,6 +2793,38 @@
     const sessOn = (sess) => onFor(workoutOf(sess) || { name: sess.name }, (workoutOf(sess) || {}).exercises || sess.exercises);
     HOOKS.logAfterOn = sessOn;
 
+    // p15b: Log-after mode = no per-set logging at all; read-only move list + rest timer + Finish & log after.
+    HOOKS.renderLogAfterSession = (sess) => {
+      const exs = sess.exercises || [];
+      const rest = S.rest
+        ? `<div class="rest-bar" id="rest-bar"><span>Rest</span><strong class="mono" id="rest-left">${mmssX(Math.max(0, Math.ceil((S.rest.until - Date.now()) / 1000)))}</strong>
+             <button type="button" class="btn ghost btn-sm" data-act="rest-add">+15s</button><button type="button" class="btn ghost btn-sm" data-act="rest-skip">Skip</button></div>`
+        : "";
+      return `
+      <header class="sess-head">
+        <div>
+          <button type="button" class="steal-back" data-act="sess-leave">‹ Mine</button>
+          <p class="steal-kicker">Log after · <span class="mono" id="sess-clock">${mmssX((Date.now() - new Date(sess.startedAt).getTime()) / 1000)}</span></p>
+          <h2 class="sess-title">${esc(sess.name)}</h2>
+        </div>
+      </header>
+      ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
+      <p class="la-banner-sub">Just train. When you're done, tap <strong>Finish &amp; log after</strong> and type, dictate, or snap your AlphaFit screen.</p>
+      <ol class="la-plan">${exs
+        .map((e, i) => {
+          const n = e.logs ? e.logs.length : Number(e.sets) || 1;
+          const r = e.restSeconds ?? 60;
+          return `<li class="la-plan-item"><span class="la-plan-n mono">${i + 1}</span><div class="la-plan-body">
+              <p class="la-plan-name">${esc(e.name)}</p>
+              <p class="la-plan-meta mono">${n} × ${esc(e.reps || "")}${r > 0 ? ` · ${r}s rest` : ""}</p>
+              ${e.setup ? `<p class="hint">${esc(e.setup)}</p>` : ""}</div>
+              ${r > 0 ? `<button type="button" class="btn ghost btn-sm" data-act="la-rest" data-s="${r}">Rest ${r}s</button>` : ""}</li>`;
+        })
+        .join("")}</ol>
+      ${rest}
+      <div class="la-finish"><button type="button" class="btn accent wide-btn la-big" data-act="la-open-active">Finish &amp; log after</button>
+        <p class="hint">To log sets as you go, turn off Log after in this routine's Edit.</p></div>`;
+    };
     HOOKS.logAfterBanner = (sess) =>
       sessOn(sess)
         ? `<section class="la-banner" aria-label="Log after">
@@ -3055,6 +3088,11 @@
           return true;
         case "la-cancel":
           S.la = null;
+          rerenderKeep();
+          return true;
+        case "la-rest":
+          S.rest = { until: Date.now() + (Number(el.dataset.s) || 60) * 1000 };
+          startTicker();
           rerenderKeep();
           return true;
         case "la-photo-clear":
