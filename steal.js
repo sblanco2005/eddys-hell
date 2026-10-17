@@ -686,7 +686,7 @@
           : "";
       })()}
       ${HOOKS.coachCard && existing ? HOOKS.coachCard(d.id) : ""}
-      ${HOOKS.logAfterToggle && existing ? HOOKS.logAfterToggle(d) : ""}
+      ${HOOKS.logAfterToggle && !empty ? HOOKS.logAfterToggle(d) : ""}
       ${!empty && HOOKS.structureSection ? HOOKS.structureSection(d) : ""}
       ${splitPicker}
       <ul class="ex-list${d.structure && d.structure.type === "circuit" ? " circuit" : ""}">${(() => {
@@ -709,16 +709,31 @@
       })()}</ul>
       ${add}
       <div class="editor-actions">
-        ${HOOKS.hitItDraftButton ? HOOKS.hitItDraftButton(d) : ""}
-        <button type="button" class="btn ${HOOKS.hitItDraftButton ? "secondary" : "accent"} wide-btn" data-act="save" ${empty ? "disabled" : ""}>${existing ? "Save changes" : "Save for later"}</button>
-        ${(() => {
-          const tw = S.saveChoice && nameTwin(d);
-          return tw
-            ? `<div class="save-choice" role="dialog" aria-label="Save choice"><p>You already have “${esc(tw.name)}”.</p><button type="button" class="btn accent wide-btn" data-act="save-update">Update ${esc(tw.name)}</button><button type="button" class="btn secondary wide-btn" data-act="save-new">Save as new</button><button type="button" class="btn ghost wide-btn" data-act="save-cancel">Cancel</button></div>`
-            : "";
-        })()}
+        ${HOOKS.hitItDraftButton ? HOOKS.hitItDraftButton(d, existing) : ""}
         <button type="button" class="btn ghost wide-btn" data-act="back">${existing ? "Back to Mine" : "Discard"}</button>
         ${existing ? `<button type="button" class="btn ghost wide-btn danger" data-act="remove-draft">${S.confirmRemove === d.id ? "Tap to confirm remove" : "Remove workout"}</button>` : ""}
+      </div>
+      <div class="save-bar-spacer" aria-hidden="true"></div>
+      ${renderSaveBar(d, existing, empty)}`;
+  }
+  /** p19: sticky Save bar (always reachable, above the bottom tab bar). Template/new → saves a new routine in Mine;
+   * existing → saves in place (+ Save as new). A same-name saved routine → Update X / Save as new / Cancel (PR #5). */
+  function renderSaveBar(d, existing, empty) {
+    const tw = S.saveChoice && nameTwin(d);
+    if (tw)
+      return `<div class="save-bar choice" role="dialog" aria-label="Save choice"><p class="save-bar-q">You already have “${esc(tw.name)}”. Update it or keep both?</p>
+        <div class="save-bar-row"><button type="button" class="btn secondary" data-act="save-new">Save as new</button><button type="button" class="btn accent" data-act="save-update">Update ${esc(tw.name)}</button></div>
+        <button type="button" class="btn ghost btn-sm save-bar-cancel" data-act="save-cancel">Cancel</button></div>`;
+    const dirty = draftDirty(d);
+    const note = empty ? "Add a move to save" : existing ? (dirty ? "Unsaved changes" : "No changes yet") : `Saves to Mine as “${esc((d.name || "").trim() || "My workout")}”`;
+    return `<div class="save-bar" role="region" aria-label="Save routine">
+        <div class="save-bar-top"><span class="save-bar-note${dirty && !empty ? " dirty" : ""}">${note}</span>${
+          existing ? `<button type="button" class="save-bar-link" data-act="save-copy" ${empty ? "disabled" : ""}>Save as new</button>` : ""
+        }</div>
+        <div class="save-bar-row">
+          <button type="button" class="btn secondary" data-act="save-hit" ${empty ? "disabled" : ""}>Save &amp; Hit it</button>
+          <button type="button" class="btn accent" data-act="save" ${empty ? "disabled" : ""}>Save routine</button>
+        </div>
       </div>`;
   }
 
@@ -739,7 +754,7 @@
   function persistDraft() {
     Store.writeLocal("draft", S.view === "edit" ? S.draft : null);
   }
-  const draftSig = (d) => JSON.stringify([d.name || "", d.notes || "", d.exercises || [], d.structure || null]);
+  const draftSig = (d) => JSON.stringify([d.name || "", d.notes || "", d.exercises || [], d.structure || null].concat(typeof d.logAfter === "boolean" ? [d.logAfter] : []));
   function draftDirty(d) {
     if (!d) return false;
     return d._orig ? draftSig(d) !== d._orig : !!(d.exercises && d.exercises.length);
@@ -802,45 +817,62 @@
     const k = nameKey(d.name);
     return (k && S.workouts.find((w) => nameKey(w.name) === k)) || null;
   }
-  async function saveDraft(mode) {
+  async function saveDraft(mode, opts) {
     const d = S.draft;
     if (!d || !d.exercises.length) return;
+    const hit = !!(opts && opts.hit) || (!!mode && !!S.saveThenHit);
     const twin = nameTwin(d);
     if (twin && !mode) {
       S.saveChoice = twin.id;
+      S.saveThenHit = hit;
       return render();
     }
     S.saveChoice = null;
+    S.saveThenHit = false;
     if (twin && mode === "update") d.id = twin.id;
-    if (mode === "new") d.id = null;
+    if (mode === "new" || mode === "copy") d.id = null;
+    if (mode === "copy") {
+      const k = nameKey(d.name);
+      if (S.workouts.some((w) => nameKey(w.name) === k)) d.name = `${(d.name || "").trim() || "My workout"} (copy)`;
+    }
     const now = new Date().toISOString();
     const idx = d.id ? S.workouts.findIndex((w) => w.id === d.id) : -1;
     if (idx < 0 && S.workouts.length >= MAX_WORKOUTS) {
       setStatus(`You have ${MAX_WORKOUTS} saved workouts — remove one first.`, "err");
-      return;
+      toast(`You have ${MAX_WORKOUTS} saved workouts — remove one first.`, "err");
+      return render();
     }
     const prev = idx >= 0 ? S.workouts[idx] : null;
+    // p19: keep the Log after setting with the routine. Explicit toggle wins; a new routine keeps what the editor showed.
+    const la = typeof d.logAfter === "boolean" ? d.logAfter : prev ? prev.logAfter : HOOKS.logAfterFor ? HOOKS.logAfterFor(d) : undefined;
     const w = {
       ...(prev || {}),
       id: d.id || uuid(),
       name: (d.name || "").trim() || "My workout",
       notes: d.notes || "",
       exercises: d.exercises.map((e) => ({ ...e, setup: e.setup || "", reps: String(e.reps || "") })),
-      structure: d.structure && d.structure.type === "circuit" ? d.structure : null,
+      structure: d.structure && d.structure.type === "circuit" ? { ...d.structure } : null,
       createdAt: (prev && prev.createdAt) || d.createdAt || now,
       savedAt: now,
       lastDoneAt: (prev && prev.lastDoneAt) || null,
     };
-    let toast = prev ? `${w.name} updated` : `Saved “${w.name}”`;
+    if (typeof la === "boolean") w.logAfter = la;
+    let msg = prev ? `${w.name} updated` : `Saved “${w.name}” to Mine`;
     S.workouts = idx >= 0 ? S.workouts.map((x) => (x.id === w.id ? w : x)) : [w, ...S.workouts];
     closeEditor();
-    setStatus(toast, "ok");
+    if (hit) startSession(w, w.id);
+    setStatus(msg, "ok");
+    toast(msg, "ok");
     try {
       const where = await Store.saveWorkout(w, S.workouts);
-      setStatus(where === "cloud" ? toast : `${toast} on this device`, "ok");
+      if (where !== "cloud") {
+        setStatus(`${msg} on this device`, "ok");
+        toast(`${msg} on this device`, "ok");
+      }
     } catch (err) {
       console.warn("[mine] save failed", err);
       setStatus("Couldn’t save to your account — kept on this device.", "err");
+      toast("Couldn’t save to your account — kept on this device.", "err");
     }
     return w;
   }
@@ -948,12 +980,17 @@
       }
       case "save":
         return saveDraft();
+      case "save-hit":
+        return saveDraft(null, { hit: true });
+      case "save-copy":
+        return saveDraft("copy");
       case "save-update":
         return saveDraft("update");
       case "save-new":
         return saveDraft("new");
       case "save-cancel":
         S.saveChoice = null;
+        S.saveThenHit = false;
         return render();
       case "open-twin": {
         const w = S.workouts.find((x) => x.id === el.dataset.id);
@@ -1656,8 +1693,8 @@
       const n = S.sessions.filter((x) => x.finishedAt && x.workoutId === w.id).length;
       return `<button type="button" class="btn ghost btn-sm" data-act="history" data-id="${esc(w.id)}">History${n ? ` · ${n}` : ""}</button>`;
     },
-    hitItDraftButton: (d) =>
-      `<button type="button" class="btn accent wide-btn" data-act="hit-draft" ${d.exercises.length ? "" : "disabled"}>Hit it</button>` +
+    hitItDraftButton: (d, existing) =>
+      (existing ? "" : `<button type="button" class="btn ghost wide-btn" data-act="hit-draft" ${d.exercises.length ? "" : "disabled"}>Try once without saving</button>`) +
       `<button type="button" class="btn secondary wide-btn" data-act="plan-open" data-src="draft" ${d.exercises.length ? "" : "disabled"}>Send plan to trainer</button>`,
     renderPlanModal: () => renderPlanModal(),
     resumeBanner: () =>
@@ -2975,14 +3012,16 @@
             <button type="button" class="btn accent wide-btn" data-act="la-open-active">Finish &amp; log after</button>
           </section>`
         : "";
+    HOOKS.logAfterFor = (d) => onFor(d, d.exercises);
     HOOKS.logAfterToggle = (d) => {
-      const w = S.workouts.find((x) => x.id === d.id) || d;
+      const saved = S.workouts.find((x) => x.id === d.id);
+      const w = typeof d.logAfter === "boolean" || !saved ? d : saved;
       const on = onFor(w, d.exercises);
       const auto = w.logAfter == null;
       return `<div class="la-toggle-row"><div><p class="la-toggle-title">Log after</p><p class="hint">${
         auto ? (on ? "On automatically — mostly cardio moves." : "Off — log sets as you go.") : on ? "On — you turned it on." : "Off — you turned it off."
       } Type or snap your results when you finish.</p></div>
-        <button type="button" class="seg-btn${on ? " on" : ""}" data-act="la-toggle" data-id="${esc(d.id)}" aria-pressed="${on}">${on ? "✓ On" : "Off"}</button></div>`;
+        <button type="button" class="seg-btn${on ? " on" : ""}" data-act="la-toggle" data-id="${esc(d.id || "")}" aria-pressed="${on}">${on ? "✓ On" : "Off"}</button></div>`;
     };
     HOOKS.logAfterFinishBtn = (sess, empty) =>
       sessOn(sess) || empty
@@ -3289,10 +3328,27 @@
           if (S.la && !S.la.busy) saveLog();
           return true;
         case "la-toggle": {
-          const w = S.workouts.find((x) => x.id === el.dataset.id);
-          if (!w) return true;
+          const w = el.dataset.id && S.workouts.find((x) => x.id === el.dataset.id);
+          if (!w) {
+            // p19: template / new routine — keep it on the draft; it's saved with Save routine.
+            const d = S.draft;
+            if (!d) return true;
+            d.logAfter = !onFor(d, d.exercises);
+            Store.writeLocal("draft", d);
+            rerenderKeep();
+            return true;
+          }
           w.logAfter = !onFor(w, w.exercises);
-          if (S.draft && S.draft.id === w.id) S.draft.logAfter = w.logAfter;
+          if (S.draft && S.draft.id === w.id) {
+            // already saved on the routine → not an unsaved change in the editor
+            S.draft.logAfter = w.logAfter;
+            try {
+              const o = JSON.parse(S.draft._orig);
+              o[4] = w.logAfter;
+              S.draft._orig = JSON.stringify(o);
+            } catch (_) {}
+            Store.writeLocal("draft", S.draft);
+          }
           render();
           Store.saveWorkout(w, S.workouts).catch((err) => console.warn("[logafter] toggle save", err));
           return true;

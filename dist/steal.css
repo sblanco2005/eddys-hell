@@ -470,3 +470,24 @@ body.tab-gym .foot { display: none !important; }
 .circ-actions { display: flex; gap: 8px; align-items: center; margin: 4px 0 10px; }
 .la-mn { min-width: 7.5em; font-weight: 600; }
 .la-circ-k { margin: 8px 0 0; }
+
+/* p19: sticky Save bar in the routine editor — always reachable, sits right above the bottom tab bar. */
+.save-bar-spacer { height: 132px; }
+.save-bar {
+  position: fixed; left: 0; right: 0; bottom: calc(62px + var(--safe-b)); z-index: 55;
+  max-width: 560px; margin: 0 auto; padding: 10px 14px 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: rgba(11, 15, 20, 0.96); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border-strong, var(--border)); box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+body:not(.has-bnav) .save-bar { bottom: 0; padding-bottom: calc(10px + var(--safe-b)); }
+.save-bar-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 18px; }
+.save-bar-note { font-size: 0.78rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.save-bar-note.dirty { color: var(--accent); font-weight: 600; }
+.save-bar-link { background: none; border: 0; padding: 2px 0; color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; text-decoration: underline; cursor: pointer; white-space: nowrap; }
+.save-bar-link:disabled { opacity: 0.4; }
+.save-bar-row { display: grid; grid-template-columns: 1fr 1.25fr; gap: 8px; }
+.save-bar-row .btn { min-height: 50px; font-size: 1rem; font-weight: 700; width: 100%; }
+.save-bar.choice { border-top-color: #ff5a36; }
+.save-bar-q { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.save-bar-cancel { align-self: center; }
