@@ -183,6 +183,72 @@ Stable Hosting is untouched. Admin Slack self-DM check-in alerts stay separate.
 `data/pt.json` holds the summary destination (`eddy_pazmino@yahoo.com`). Automatic Thursday email to the PT is **not wired yet** (manual / deferred). Check-in recording in the app works independently.
 
 
+## Log after — cardio / Hyrox (beta, p15)
+
+Routines whose moves are mostly Cardio (or with the per-routine **Log after** toggle on in Edit) show a "Just train — log after"
+banner in Hit it. **Finish & log after** (also in the Finish sheet and on each History entry of such routines) opens a sheet with a
+big dictation-friendly text box + photo upload (camera/library). Saving finishes the session with
+`logAfter {status:'pending', text, hasPhoto, photoPath, sendToTrainer, queueId}` and enqueues
+`trainerQueue/{id} {type:'logParse', status:'pending', uid, sessionId, workoutId, name, text, photoPath, plannedMoves, sendToTrainer}`.
+History shows "Processing your log…" until it's parsed, then the rounds per move.
+
+Photos: Firebase Storage is not provisioned on eddy-s-hell (no default bucket), so photos are downscaled in the browser
+(≤1600px JPEG, <900 KB) and stored at `users/{uid}/logPhotos/{sessionId}` `{dataUrl, contentType, sessionId, createdAt}`
+(Firestore rules: owner only, size-capped).
+
+The 15-min trainer routine: `node scripts/trainer-queue.mjs list` prints logParse items **last** with `relay:false, handTo:"parent"`.
+Never send those to Arni or `mark` them (mark refuses) — hand them to the parent bot, which runs:
+
+```
+node scripts/log-parse.mjs list                    # pending items; photo saved to /workspace/logparse/<id>.jpg (photoFile)
+node scripts/log-parse.mjs apply --id <id> --json-file /workspace/logparse/<id>.json [--dry-run] [--no-push] [--no-trainer]
+node scripts/log-parse.mjs delete --id <id> --yes  # test cleanup only (queue item + session + photo + la-<id> relay)
+```
+
+apply JSON (every round field optional, ≥1 per round; time_s = seconds or "m:ss"/"h:mm:ss"):
+
+```json
+{
+  "moves": [
+    { "name": "Assault runner", "notes": "optional",
+      "rounds": [ { "distance_m": 500, "time_s": "1:52", "reps": null, "cals": null, "pace": "1:52/500m",
+                    "weight": null, "weightUnit": null, "notes": "" } ] }
+  ],
+  "note": "optional overall note",
+  "durationMin": 34
+}
+```
+
+apply writes `logAfter.status='parsed'` + `logAfter.parsed {moves, movesText, note, roundCount, durationMin, parsedAt}`, marks the
+logParse item `parsed`, and — when "Send to Arni" was ticked — writes `trainerQueue/la-<id>` `{type:'session', status:'pending', summary{source:'logAfter', movesText, …}}`
+so the normal routine relays it to Arni and marks it sent (unchanged confirmation flow). Push goes only to Santiago's uid:
+"Your <Routine> log is in" → `/?log=<sessionId>` (opens that routine's History).
+
+### Circuits (p18)
+
+Routine `structure`: absent/null = Straight sets (default, all existing routines); or
+`{ "type": "circuit", "rounds": 5, "restBetweenRounds": 90, "restBetweenMoves": 0 }` (Editor → Structure). In circuit mode
+moves show only Target + Setup. The Hyrox/Cardio template defaults to Circuit · 5 rounds, 90s between rounds:
+Assault runner 500m, Row 500m, Slam ball 15, Wall ball 20, Box jump 10, Farmers carry 40m, Burpee broad jump 20m, KB swing 15.
+Hit it: with Log after it shows "Round N of M", a round tracker, and "✓ Round N done" (this starts the between-rounds rest); without
+Log after the logger goes move by move, round by round. Arni's summary: `Circuit · N rounds (…): A → B …` then `Round k: A …, B …`.
+The logParse queue item carries `structure`. `apply` also accepts a **rounds-first** JSON (the moves-first shape above still works):
+
+```json
+{
+  "rounds": [
+    { "round": 1, "time_s": "6:40", "notes": "",
+      "moves": [ { "name": "Assault runner", "distance_m": 500, "time_s": "1:52" },
+                 { "name": "Row", "distance_m": 500, "time_s": "1:58" },
+                 { "name": "Wall ball", "reps": 20 } ] }
+  ],
+  "totalTime_s": "35:10", "restBetweenRounds_s": 90, "note": "optional", "durationMin": 38
+}
+```
+Move fields are the same as round fields above (distance_m, time_s, reps, cals, pace, weight, weightUnit, notes). The relay text is
+`Circuit · 5 rounds (total 35:10), 90s rest between rounds` then `Round 1 (6:40): Assault runner 500m 1:52, Row 500m 1:58, …`.
+History shows it by round.
+
 ## YouTube (this week’s video)
 
 `data/this-week.json` may include optional `youtubeId` and `youtubeUrl`.

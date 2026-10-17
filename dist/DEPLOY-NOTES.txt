@@ -437,3 +437,72 @@ Passkeys are per-domain: register Face ID separately on prod.
   never re-fetched; a not-yet-ready cloud handle silently returned the empty local mirror).
 - Fix: re-fetch coach notes on app resume (visibilitychange) + retry 3s after load if empty; match notes by workoutId, falling
   back to routine name when the note's workoutId isn't one of the user's routines.
+
+## 2026-10-14 ~8:05 PM ET — beta-steal-p15 Log after (build 20261014-steal-p15-logafter, BETA hosting + shared Firestore rules)
+- Mine: "Log after" for cardio/Hyrox. Auto-on when ≥50% of moves are Cardio or the routine name says Hyrox/cardio/…; per-routine
+  toggle in Edit (workout.logAfter true/false). Hit it shows "Just train — log after" banner; per-set entry still works.
+  Sheet (from banner, Finish sheet, or History entry): big dictation-friendly text box + photo (camera/library) + "Send to Arni" tick.
+  Saves session.logAfter {status:'pending', text, hasPhoto, photoPath, sendToTrainer, queueId} + trainerQueue {type:'logParse'}.
+  History: "Processing your log…" → parsed rounds per move. Deep link ?log=<sessionId> opens that History.
+- Photos: Firebase Storage has no bucket on this project → photos downscaled client-side (≤1600px JPEG <900 KB) into Firestore
+  users/{uid}/logPhotos/{sessionId}; new owner-only, size-capped rule (shared rules deployed; additive, unused by prod code).
+- scripts/log-parse.mjs list | apply --id --json-file [--dry-run|--no-push|--no-trainer] | delete --id --yes. apply re-queues
+  trainerQueue/la-<id> {type:'session'} for the normal Arni relay; push only to Santiago "Your <Routine> log is in".
+- trainer-queue.mjs list: logParse items listed last with relay:false/handTo:'parent'; mark refuses them. README section added.
+- E2E on live Firestore with fake uid zz-test-logparse (seed → list → apply dry-run → apply → relay item → delete): all cleaned up.
+
+## 2026-10-14 ~8:15 PM ET — beta-steal-p15b (build 20261014-steal-p15b-logafter, BETA hosting only)
+- Log-after routines: Hit it no longer shows any per-set logging. It shows a read-only move list (name, planned sets × target, rest),
+  a "Rest Ns" button per move (same rest bar/timer), and a big "Finish & log after". To log sets during a workout, turn off Log after in Edit.
+
+## 2026-10-14 ~8:20 PM ET — beta-steal-p15c (build 20261014-steal-p15c-logafter, BETA hosting only)
+- Built-in split template "Hyrox" renamed "Hyrox/Cardio" (steal-data.js SPLITS). Santiago has no saved routine named Hyrox in
+  Firestore (only Push, Efficient Pull Day, Legs), so there was nothing to rename there. Log-after name auto-detect matches "Hyrox/Cardio".
+
+## 2026-10-14 ~8:15 PM ET — beta-steal-p16 (build 20261014-steal-p16-minehome, BETA hosting only)
+- Bug: tapping Mine reopened the last routine. Cause: viewing a routine persisted it as a "draft", and load / tab switch restored the editor.
+- Fix: the Mine bottom-bar tap always goes to Mine home (list) and resets the sub-view: editor, history, sheets, replace, plan. This
+  includes tapping Mine while already on Mine. An active Hit it session is kept, with a "Resume workout ›" banner. If the editor has
+  unsaved changes, it asks "Leave “X” without saving your changes?" (Cancel = stay). Load never reopens the editor; a dirty draft
+  shows an "Unsaved changes · X — Discard / Continue editing" banner. Deep links ?coach= / ?log= still open the routine.
+
+## 2026-10-15 ~7:45 AM ET — beta-steal-p17 (build 20261015-steal-p17-discard, BETA hosting only)
+- Hit it (normal + Log after): "✕ Discard" at the top and a "Discard workout" button at the bottom. Confirm "Discard this workout?
+  Nothing will be saved or sent to Arni." clears the active session, rest timer, Finish/Log after sheets, and the local active
+  mirror, then returns to Mine home. There is no session save, no History entry, no trainerQueue item, and no Resume banner, and the
+  saved routine is not touched. Cancel keeps the workout.
+
+## 2026-10-15 ~9:00 AM ET — beta-steal-p18 (build 20261015-steal-p18-circuit, BETA hosting only)
+- Routine `structure`: null = Straight sets (default, existing routines unchanged), or {type:'circuit', rounds, restBetweenRounds,
+  restBetweenMoves}. Editor "Structure" section with big −/+ for rounds and both rests. Circuit hides per-move Sets/Rest.
+- The Hyrox/Cardio template is now Circuit · 5 rounds with 90s between rounds: runner 500m, row 500m, slam 15, wall ball 20, box jump 10,
+  farmers 40m, burpee broad jump 20m, KB swing 15.
+- Hit it, Log after on: "Round N of M" tracker with dots, a read-only target list, "✓ Round N done" (starts the between-rounds rest)
+  plus Undo, Finish & log after, and Discard. Log after off: the session is one alternating group, so the logger goes move by move,
+  round by round. Rest comes after each round (and between moves if set).
+- Summary/relay: "Circuit · N rounds (…)" + "Round k: A …, B …". The logParse item carries structure. log-parse.mjs apply also accepts
+  a rounds-first JSON ({rounds:[{round,time_s,moves:[…]}], totalTime_s, restBetweenRounds_s}); History shows it by round. README updated.
+
+## 2026-10-17 ~12:45 PM ET — beta-steal-p19 (build 20261017-steal-p19-savebar, BETA hosting only)
+- Problem: in the routine editor the only save button ("Save for later" for a template, "Save changes" for a saved routine)
+  sat at the very bottom, under every move card, "Add a move", Hit it and Send plan. On an 8-move Hyrox/Cardio template the top
+  only showed "‹ Back · don't save", so there was no visible way to save. Log after could only be set on an already-saved routine.
+- Fix: sticky Save bar fixed above the bottom tab bar, always visible in the editor: primary "Save routine" + "Save & Hit it".
+  Template/new → new routine in Mine named after the editor title (e.g. "Hyrox/Cardio"), note "Saves to Mine as “X”".
+  Saved routine → saves in place; "Save as new" link in the bar (adds " (copy)" if the name is taken). If a template has the same
+  name as a saved routine, the bar turns into the PR #5 choice: Update X / Save as new / Cancel (Save & Hit it continues after the choice).
+- Saved: name, notes, exercises (targets, weights, setup, supersetGroup), structure (circuit rounds + rest between rounds/moves),
+  logAfter (explicit toggle; for a new routine the value the editor showed). Log after toggle now also shows on template/new drafts.
+- After save: floating toast ("Saved “X” to Mine" / "X updated") + editor closes to Mine home with the routine listed;
+  Save & Hit it starts the session on the saved routine. Bottom of editor: "Try once without saving" (template only), Send plan,
+  Discard / Back to Mine, Remove. Mine-tab unsaved-changes confirm and Hit it Discard unchanged (tested).
+- Unsaved drafts from p18 (localStorage "draft") still restore via the "Unsaved changes · X — Continue editing" banner and Save routine
+  saves exactly what is in the editor (tested with 8 rounds / 90s / 30s / 5 moves across a reload).
+
+## 2026-10-17 ~3:05 PM ET — promote beta p15–p19 to prod (build prod-steal-20261017a, beta + prod)
+- Since prod-steal-20261014a: Log after for cardio/Hyrox (text + photo, pending parse → History rounds; logPhotos rules),
+  Log-after Hit it hides per-set logging (move list + rest + Finish & log after), template "Hyrox" → "Hyrox/Cardio",
+  bottom-bar Mine always opens Mine home (Resume banner, unsaved-changes prompt), Discard workout in Hit it,
+  Circuit structure (rounds + rest between rounds/moves, round tracker, by-round relay/History), sticky editor Save bar
+  (Save routine / Save & Hit it / Save as new / Update-vs-new choice).
+- Same build on both sites. BETA badge stays beta-host-only (auth.js isBetaHost). Firestore rules: deployed if changed.

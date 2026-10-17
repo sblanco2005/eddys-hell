@@ -121,6 +121,13 @@ service cloud.firestore {
       match /sessions/{sessionId} {
         allow read, write: if isOwner();
       }
+      // Log after photos (p15): base64 JPEG ≤ ~900 KB, owner only; read by scripts/log-parse.mjs (admin creds).
+      match /logPhotos/{sessionId} {
+        allow read, delete: if isOwner();
+        allow create, update: if isOwner()
+          && request.resource.data.dataUrl is string
+          && request.resource.data.dataUrl.size() < 1000000;
+      }
       // Coach notes from Arni (written by scripts/coach-note.mjs with admin creds).
       // Owner can read and may only stamp readAt; no client create/delete.
       match /coachNotes/{noteId} {

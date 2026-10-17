@@ -6,6 +6,8 @@
  * Usage:
  *   node scripts/trainer-queue.mjs list
  *     → prints a JSON array of pending items ({id, type, workoutId, sessionId, ...doc}; type 'plan'|'session', missing → 'session') oldest first, or NONE (exit 0)
+ *     p15: pending type 'logParse' items come LAST with relay:false + handTo:'parent' — never relay/mark them; hand to the parent
+ *     (node scripts/log-parse.mjs list / apply). Their parsed result is re-queued here as a normal 'session' item (id la-<logParseId>).
  *   node scripts/trainer-queue.mjs mark <id> sent|failed [reason...]
  *     → trainerQueue/<id>: status, sentAt (ISO), reason (if given), updatedAt
  *       and users/{uid}/sessions/{sid} (from sessionPath): trainerStatus, trainerSentAt
@@ -65,7 +67,17 @@ async function list(token) {
       return relayFormat({ id: r.document.name.split("/").pop(), type: d.type || "session", ...d, ...(d.type ? {} : { type: "session" }), ...ids(d) });
     })
     .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
-  console.log(items.length ? JSON.stringify(items, null, 2) : "NONE");
+  // p15: logParse items are NOT for Arni — hand them to the parent bot to parse (scripts/log-parse.mjs). Listed last, flagged.
+  const relay = items.filter((x) => x.type !== "logParse");
+  const parse = items
+    .filter((x) => x.type === "logParse")
+    .map((x) => ({
+      id: x.id, type: "logParse", relay: false, handTo: "parent",
+      instruction: "DO NOT send to Arni and DO NOT mark. Hand to the parent bot: it runs `node scripts/log-parse.mjs list`, reads text/photo, then `node scripts/log-parse.mjs apply --id <id> --json-file <path>`.",
+      name: x.name || null, sessionId: x.sessionId || null, workoutId: x.workoutId || null, text: x.text || "", hasPhoto: !!x.hasPhoto, createdAt: x.createdAt || null,
+    }));
+  const all = [...relay, ...parse];
+  console.log(all.length ? JSON.stringify(all, null, 2) : "NONE");
 }
 
 /** Relay-facing formatting: each move's `name` becomes its `label` when present
@@ -119,6 +131,7 @@ async function mark(token, id, status, reason) {
   const docUrl = `${BASE}/trainerQueue/${encodeURIComponent(id)}`;
   const doc = await api("GET", docUrl, token);
   const cur = fromFields(doc.fields);
+  if (cur.type === "logParse") throw new Error(`${id} is a logParse item — use scripts/log-parse.mjs apply, not mark`);
   const fields = { status: str(status), sentAt: { timestampValue: now }, updatedAt: { timestampValue: now } };
   const mask = ["status", "sentAt", "updatedAt"];
   if (reason) {

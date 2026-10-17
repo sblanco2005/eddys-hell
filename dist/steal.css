@@ -406,3 +406,88 @@ body.tab-gym .foot { display: none !important; }
 .coach-hist { margin: 0 0 18px; }
 .coach-hist-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 10px; }
 .coach-hist-item { padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg-elev); }
+
+/* p15 — Log after (cardio / Hyrox) */
+.la-banner { margin: 4px 0 14px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--accent, #e4572e); background: var(--bg-elev); }
+.la-banner-title { margin: 0 0 4px; font-weight: 800; font-size: 1.05rem; }
+.la-banner-sub { margin: 0 0 12px; font-size: 0.98rem; line-height: 1.45; color: var(--text-muted, inherit); }
+.la-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
+.la-toggle-title { margin: 0 0 2px; font-weight: 700; }
+.la-toggle-row .hint { margin: 0; }
+.la-card { max-height: 92vh; overflow-y: auto; }
+.la-text { width: 100%; box-sizing: border-box; min-height: 150px; font-size: 17px; line-height: 1.45; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); color: inherit; resize: vertical; }
+.la-tip { margin: 6px 0 12px; }
+.la-photo-row { margin: 0 0 12px; }
+.la-photo-btn { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.la-thumb { display: flex; align-items: center; gap: 12px; }
+.la-thumb img { width: 84px; height: 112px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
+.la-send { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; font-size: 1rem; }
+.la-send input { width: 20px; height: 20px; }
+.la-err { color: #ff6b6b; margin: 0 0 10px; }
+.la-hist-btn { margin-top: 8px; }
+.la-pending { display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; padding: 10px 12px; border-radius: 10px; background: var(--bg-elev); }
+.la-pending-title { margin: 0 0 2px; font-weight: 700; }
+.la-raw { margin: 0; font-size: 0.92rem; opacity: 0.8; }
+.la-spin { flex: none; width: 18px; height: 18px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent, #e4572e); animation: la-spin 0.9s linear infinite; }
+@keyframes la-spin { to { transform: rotate(360deg); } }
+.la-moves { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.la-move-name { margin: 0 0 4px; font-weight: 700; }
+.la-rounds { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.la-rounds li { display: flex; gap: 10px; align-items: baseline; font-size: 0.98rem; }
+.la-rn { min-width: 1.4em; text-align: right; opacity: 0.6; }
+.la-note, .la-src { margin: 8px 0 0; }
+/* p15b — Log-after Hit it (no per-set logging) */
+.la-plan { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 8px; }
+.la-plan-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
+.la-plan-n { opacity: 0.6; min-width: 1.2em; }
+.la-plan-body { flex: 1; min-width: 0; }
+.la-plan-name { margin: 0 0 2px; font-weight: 700; font-size: 1.05rem; }
+.la-plan-meta { margin: 0; font-size: 0.95rem; opacity: 0.85; }
+.la-finish { margin: 6px 0 20px; }
+.la-big { min-height: 56px; font-size: 1.1rem; }
+.la-finish .hint { text-align: center; margin: 8px 0 0; }
+/* p17 — Discard workout */
+.sess-head > .sess-head-actions { display: flex; flex-direction: row; flex-wrap: nowrap; flex-shrink: 0; gap: 6px; align-items: flex-start; white-space: nowrap; }
+.sess-discard { opacity: 0.8; }
+.sess-discard-row { margin: 10px 0 20px; }
+.sess-discard-bottom { margin-top: 8px; color: var(--text-muted, inherit); border-color: var(--border); }
+/* p18 — Circuit structure */
+.st-section { margin: 4px 0 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-card); }
+.st-seg { display: flex; margin: 6px 0 10px; }
+.st-seg .seg-btn { flex: 1; }
+.st-row { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 6px; }
+.st-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.stepper.big button { min-width: 48px; min-height: 44px; font-size: 1.3rem; }
+.stepper.big .mono { min-width: 3.2em; text-align: center; font-size: 1.1rem; }
+.ex-list.circuit .ex-sets, .ex-list.circuit .ex-rest, .ex-list.circuit .ss-link-row { display: none !important; }
+.circ-tracker { margin: 6px 0 10px; padding: 12px 14px; border-radius: var(--radius); border: 1px solid var(--accent, #e4572e); background: var(--bg-elev); }
+.circ-round { margin: 0 0 8px; font-size: 1.35rem; font-weight: 800; }
+.circ-dots { display: flex; gap: 6px; margin-bottom: 6px; }
+.circ-dot { flex: 1; height: 8px; border-radius: 4px; background: var(--border); }
+.circ-dot.on { background: var(--accent, #e4572e); }
+.circ-dot.cur { background: var(--accent, #e4572e); opacity: 0.45; }
+.circ-tracker .hint { margin: 0; }
+.circ-actions { display: flex; gap: 8px; align-items: center; margin: 4px 0 10px; }
+.la-mn { min-width: 7.5em; font-weight: 600; }
+.la-circ-k { margin: 8px 0 0; }
+
+/* p19: sticky Save bar in the routine editor — always reachable, sits right above the bottom tab bar. */
+.save-bar-spacer { height: 132px; }
+.save-bar {
+  position: fixed; left: 0; right: 0; bottom: calc(62px + var(--safe-b)); z-index: 55;
+  max-width: 560px; margin: 0 auto; padding: 10px 14px 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: rgba(11, 15, 20, 0.96); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border-strong, var(--border)); box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+}
+body:not(.has-bnav) .save-bar { bottom: 0; padding-bottom: calc(10px + var(--safe-b)); }
+.save-bar-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 18px; }
+.save-bar-note { font-size: 0.78rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.save-bar-note.dirty { color: var(--accent); font-weight: 600; }
+.save-bar-link { background: none; border: 0; padding: 2px 0; color: var(--text); font: inherit; font-size: 0.85rem; font-weight: 600; text-decoration: underline; cursor: pointer; white-space: nowrap; }
+.save-bar-link:disabled { opacity: 0.4; }
+.save-bar-row { display: grid; grid-template-columns: 1fr 1.25fr; gap: 8px; }
+.save-bar-row .btn { min-height: 50px; font-size: 1rem; font-weight: 700; width: 100%; }
+.save-bar.choice { border-top-color: #ff5a36; }
+.save-bar-q { margin: 0; font-size: 0.95rem; font-weight: 600; }
+.save-bar-cancel { align-self: center; }

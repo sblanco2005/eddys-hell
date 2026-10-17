@@ -318,7 +318,20 @@
   }
 
   /** Deterministic split auto-fill: per slot, first move your kit supports (no dup names). */
+  // p18: real-Hyrox circuit template (each move once per round), independent of kit marks.
+  const HYROX_CIRCUIT = [["assault-run", "500m"], ["row", "500m"], ["slam", "15"], ["wall-ball", "20"], ["box-jump", "10"], ["farmers-kb", "40m"], ["bb-jump", "20m"], ["kb-swing", "15"]];
+  const CIRCUIT_DEFAULT = () => ({ type: "circuit", rounds: 5, restBetweenRounds: 90, restBetweenMoves: 0 });
+  function splitStructure(split) {
+    return split === "hyrox" ? CIRCUIT_DEFAULT() : null;
+  }
   function fillSplit(split, gear) {
+    if (split === "hyrox")
+      return HYROX_CIRCUIT.map(([id]) => LIB_BY_ID.get(id)).filter(Boolean).map((m) => {
+        const e = normalizeEx(toExercise(m), true);
+        e.reps = (HYROX_CIRCUIT.find((x) => x[0] === m.id) || [])[1] || e.reps;
+        e.sets = 5;
+        return e;
+      });
     const used = new Set();
     const out = [];
     for (const slot of D.SPLIT_RULES[split] || []) {
@@ -457,7 +470,7 @@
     else if (HOOKS.renderView && (html = HOOKS.renderView(S.view))) {
       /* session / history (phase 3) */
     } else html = renderMineList();
-    return html + renderClip() + (HOOKS.renderReplace ? HOOKS.renderReplace() : "") + (HOOKS.renderPlanModal ? HOOKS.renderPlanModal() : "") + `<p class="steal-status" id="steal-status" hidden></p>`;
+    return html + renderClip() + (HOOKS.renderReplace ? HOOKS.renderReplace() : "") + (HOOKS.renderPlanModal ? HOOKS.renderPlanModal() : "") + (HOOKS.renderLogAfter ? HOOKS.renderLogAfter() : "") + `<p class="steal-status" id="steal-status" hidden></p>`;
   }
 
   function sortedWorkouts() {
@@ -565,7 +578,7 @@
     const hint = last ? `last: ${fmtNum(toDisp(last.weightLb, unit))}` : bw ? "optional" : "";
     return `
         <div class="ex-targets">
-          <div class="ex-field">
+          <div class="ex-field ex-sets">
             <span class="ex-lbl">Sets</span>
             <div class="stepper">
               <button type="button" data-act="sets" data-d="-1" data-ex="${esc(ex.id)}" aria-label="Fewer sets">−</button>
@@ -605,7 +618,7 @@
   function renderFreeTargets(ex) {
     return `
         <div class="ex-targets free">
-          <div class="ex-field">
+          <div class="ex-field ex-sets">
             <span class="ex-lbl">Sets</span>
             <div class="stepper">
               <button type="button" data-act="sets" data-d="-1" data-ex="${esc(ex.id)}" aria-label="Fewer sets">−</button>
@@ -673,8 +686,10 @@
           : "";
       })()}
       ${HOOKS.coachCard && existing ? HOOKS.coachCard(d.id) : ""}
+      ${HOOKS.logAfterToggle && !empty ? HOOKS.logAfterToggle(d) : ""}
+      ${!empty && HOOKS.structureSection ? HOOKS.structureSection(d) : ""}
       ${splitPicker}
-      <ul class="ex-list">${(() => {
+      <ul class="ex-list${d.structure && d.structure.type === "circuit" ? " circuit" : ""}">${(() => {
         const labels = ssLabels(d.exercises);
         return d.exercises
           .map((ex, i) => {
@@ -694,16 +709,31 @@
       })()}</ul>
       ${add}
       <div class="editor-actions">
-        ${HOOKS.hitItDraftButton ? HOOKS.hitItDraftButton(d) : ""}
-        <button type="button" class="btn ${HOOKS.hitItDraftButton ? "secondary" : "accent"} wide-btn" data-act="save" ${empty ? "disabled" : ""}>${existing ? "Save changes" : "Save for later"}</button>
-        ${(() => {
-          const tw = S.saveChoice && nameTwin(d);
-          return tw
-            ? `<div class="save-choice" role="dialog" aria-label="Save choice"><p>You already have “${esc(tw.name)}”.</p><button type="button" class="btn accent wide-btn" data-act="save-update">Update ${esc(tw.name)}</button><button type="button" class="btn secondary wide-btn" data-act="save-new">Save as new</button><button type="button" class="btn ghost wide-btn" data-act="save-cancel">Cancel</button></div>`
-            : "";
-        })()}
+        ${HOOKS.hitItDraftButton ? HOOKS.hitItDraftButton(d, existing) : ""}
         <button type="button" class="btn ghost wide-btn" data-act="back">${existing ? "Back to Mine" : "Discard"}</button>
         ${existing ? `<button type="button" class="btn ghost wide-btn danger" data-act="remove-draft">${S.confirmRemove === d.id ? "Tap to confirm remove" : "Remove workout"}</button>` : ""}
+      </div>
+      <div class="save-bar-spacer" aria-hidden="true"></div>
+      ${renderSaveBar(d, existing, empty)}`;
+  }
+  /** p19: sticky Save bar (always reachable, above the bottom tab bar). Template/new → saves a new routine in Mine;
+   * existing → saves in place (+ Save as new). A same-name saved routine → Update X / Save as new / Cancel (PR #5). */
+  function renderSaveBar(d, existing, empty) {
+    const tw = S.saveChoice && nameTwin(d);
+    if (tw)
+      return `<div class="save-bar choice" role="dialog" aria-label="Save choice"><p class="save-bar-q">You already have “${esc(tw.name)}”. Update it or keep both?</p>
+        <div class="save-bar-row"><button type="button" class="btn secondary" data-act="save-new">Save as new</button><button type="button" class="btn accent" data-act="save-update">Update ${esc(tw.name)}</button></div>
+        <button type="button" class="btn ghost btn-sm save-bar-cancel" data-act="save-cancel">Cancel</button></div>`;
+    const dirty = draftDirty(d);
+    const note = empty ? "Add a move to save" : existing ? (dirty ? "Unsaved changes" : "No changes yet") : `Saves to Mine as “${esc((d.name || "").trim() || "My workout")}”`;
+    return `<div class="save-bar" role="region" aria-label="Save routine">
+        <div class="save-bar-top"><span class="save-bar-note${dirty && !empty ? " dirty" : ""}">${note}</span>${
+          existing ? `<button type="button" class="save-bar-link" data-act="save-copy" ${empty ? "disabled" : ""}>Save as new</button>` : ""
+        }</div>
+        <div class="save-bar-row">
+          <button type="button" class="btn secondary" data-act="save-hit" ${empty ? "disabled" : ""}>Save &amp; Hit it</button>
+          <button type="button" class="btn accent" data-act="save" ${empty ? "disabled" : ""}>Save routine</button>
+        </div>
       </div>`;
   }
 
@@ -724,8 +754,37 @@
   function persistDraft() {
     Store.writeLocal("draft", S.view === "edit" ? S.draft : null);
   }
+  const draftSig = (d) => JSON.stringify([d.name || "", d.notes || "", d.exercises || [], d.structure || null].concat(typeof d.logAfter === "boolean" ? [d.logAfter] : []));
+  function draftDirty(d) {
+    if (!d) return false;
+    return d._orig ? draftSig(d) !== d._orig : !!(d.exercises && d.exercises.length);
+  }
+  /** p16: bottom-bar Mine always lands on Mine home (routine list). Active session kept (Resume banner);
+   * an editor with unsaved changes asks first; otherwise the draft is dropped like "‹ Back · don't save". */
+  function goMineHome() {
+    if (S.view === "edit" && S.draft && draftDirty(S.draft)) {
+      const nm = (S.draft.name || "this workout").trim();
+      if (!window.confirm(`Leave “${nm}” without saving your changes?`)) return false;
+    }
+    if (S.view === "edit" || (S.draft && !draftDirty(S.draft))) S.draft = null;
+    S.view = "list";
+    S.historyFor = null;
+    S.addOpen = false;
+    S.confirmRemove = null;
+    S.saveChoice = null;
+    S.clip = null;
+    S.la = null;
+    S.finishOpen = false;
+    S.plan = null;
+    if (S.repl) S.repl = null;
+    Store.writeLocal("draft", null);
+    render();
+    window.scrollTo(0, 0);
+    return true;
+  }
   function openDraft(d) {
     d.exercises = (d.exercises || []).map((e) => normalizeEx(e, true));
+    d._orig = draftSig(d);
     S.draft = d;
     S.view = "edit";
     S.addOpen = false;
@@ -758,44 +817,62 @@
     const k = nameKey(d.name);
     return (k && S.workouts.find((w) => nameKey(w.name) === k)) || null;
   }
-  async function saveDraft(mode) {
+  async function saveDraft(mode, opts) {
     const d = S.draft;
     if (!d || !d.exercises.length) return;
+    const hit = !!(opts && opts.hit) || (!!mode && !!S.saveThenHit);
     const twin = nameTwin(d);
     if (twin && !mode) {
       S.saveChoice = twin.id;
+      S.saveThenHit = hit;
       return render();
     }
     S.saveChoice = null;
+    S.saveThenHit = false;
     if (twin && mode === "update") d.id = twin.id;
-    if (mode === "new") d.id = null;
+    if (mode === "new" || mode === "copy") d.id = null;
+    if (mode === "copy") {
+      const k = nameKey(d.name);
+      if (S.workouts.some((w) => nameKey(w.name) === k)) d.name = `${(d.name || "").trim() || "My workout"} (copy)`;
+    }
     const now = new Date().toISOString();
     const idx = d.id ? S.workouts.findIndex((w) => w.id === d.id) : -1;
     if (idx < 0 && S.workouts.length >= MAX_WORKOUTS) {
       setStatus(`You have ${MAX_WORKOUTS} saved workouts — remove one first.`, "err");
-      return;
+      toast(`You have ${MAX_WORKOUTS} saved workouts — remove one first.`, "err");
+      return render();
     }
     const prev = idx >= 0 ? S.workouts[idx] : null;
+    // p19: keep the Log after setting with the routine. Explicit toggle wins; a new routine keeps what the editor showed.
+    const la = typeof d.logAfter === "boolean" ? d.logAfter : prev ? prev.logAfter : HOOKS.logAfterFor ? HOOKS.logAfterFor(d) : undefined;
     const w = {
       ...(prev || {}),
       id: d.id || uuid(),
       name: (d.name || "").trim() || "My workout",
       notes: d.notes || "",
       exercises: d.exercises.map((e) => ({ ...e, setup: e.setup || "", reps: String(e.reps || "") })),
+      structure: d.structure && d.structure.type === "circuit" ? { ...d.structure } : null,
       createdAt: (prev && prev.createdAt) || d.createdAt || now,
       savedAt: now,
       lastDoneAt: (prev && prev.lastDoneAt) || null,
     };
-    let toast = prev ? `${w.name} updated` : `Saved “${w.name}”`;
+    if (typeof la === "boolean") w.logAfter = la;
+    let msg = prev ? `${w.name} updated` : `Saved “${w.name}” to Mine`;
     S.workouts = idx >= 0 ? S.workouts.map((x) => (x.id === w.id ? w : x)) : [w, ...S.workouts];
     closeEditor();
-    setStatus(toast, "ok");
+    if (hit) startSession(w, w.id);
+    setStatus(msg, "ok");
+    toast(msg, "ok");
     try {
       const where = await Store.saveWorkout(w, S.workouts);
-      setStatus(where === "cloud" ? toast : `${toast} on this device`, "ok");
+      if (where !== "cloud") {
+        setStatus(`${msg} on this device`, "ok");
+        toast(`${msg} on this device`, "ok");
+      }
     } catch (err) {
       console.warn("[mine] save failed", err);
       setStatus("Couldn’t save to your account — kept on this device.", "err");
+      toast("Couldn’t save to your account — kept on this device.", "err");
     }
     return w;
   }
@@ -821,13 +898,13 @@
         return setTab("gym");
       case "new-split": {
         const sp = el.dataset.split;
-        return openDraft({ id: null, name: splitLabel(sp), notes: "", exercises: fillSplit(sp, S.gym) });
+        return openDraft({ id: null, name: splitLabel(sp), notes: "", exercises: fillSplit(sp, S.gym), structure: splitStructure(sp) });
       }
       case "new-blank":
         return openDraft({ id: null, name: "My workout", notes: "", exercises: [] });
       case "edit": {
         const w = S.workouts.find((x) => x.id === el.dataset.id);
-        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt })));
+        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt, structure: w.structure || null })));
         return;
       }
       case "remove":
@@ -848,6 +925,7 @@
       case "fill":
         if (!d) return;
         d.exercises = fillSplit(el.dataset.split, S.gym);
+        d.structure = splitStructure(el.dataset.split);
         if (!d.name || d.name === "My workout") d.name = splitLabel(el.dataset.split);
         if (!d.exercises.length) setStatus("Nothing in that split fits your kit — mark more in Gym.", "err");
         break;
@@ -902,20 +980,37 @@
       }
       case "save":
         return saveDraft();
+      case "save-hit":
+        return saveDraft(null, { hit: true });
+      case "save-copy":
+        return saveDraft("copy");
       case "save-update":
         return saveDraft("update");
       case "save-new":
         return saveDraft("new");
       case "save-cancel":
         S.saveChoice = null;
+        S.saveThenHit = false;
         return render();
       case "open-twin": {
         const w = S.workouts.find((x) => x.id === el.dataset.id);
-        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt })));
+        if (w) openDraft(JSON.parse(JSON.stringify({ id: w.id, name: w.name, notes: w.notes || "", exercises: w.exercises || [], createdAt: w.createdAt, structure: w.structure || null })));
         return;
       }
       case "back":
         return closeEditor();
+      case "draft-continue":
+        if (S.draft) {
+          S.view = "edit";
+          persistDraft();
+          render();
+          window.scrollTo(0, 0);
+        }
+        return;
+      case "draft-discard":
+        S.draft = null;
+        Store.writeLocal("draft", null);
+        return render();
       case "clip":
         S.clip = { videoId: el.dataset.vid, start: Number(el.dataset.start) || 0, name: el.dataset.name || "" };
         return render();
@@ -1051,6 +1146,12 @@
 
   function startSession(w, workoutId) {
     if (!w || !w.exercises || !w.exercises.length) return;
+    const circ = w.structure && w.structure.type === "circuit" ? { ...w.structure, rounds: Math.max(1, Math.min(20, Number(w.structure.rounds) || 1)) } : null;
+    if (circ) {
+      // p18: circuit = one big alternating group → logger goes move by move, round by round; rest after each round.
+      const n = w.exercises.length;
+      w = { ...w, exercises: w.exercises.map((e, i) => ({ ...e, sets: circ.rounds, supersetGroup: n > 1 ? "circuit" : undefined, restSeconds: i === n - 1 ? Number(circ.restBetweenRounds) || 0 : Number(circ.restBetweenMoves) || 0 })) };
+    }
     const unit = Store.readLocal("unit", "lb");
     const { map } = lastLogsFor(workoutId);
     const sess = {
@@ -1084,7 +1185,11 @@
         };
       }),
     };
-    if (!workoutId) sess.draft = { name: sess.name, notes: (w && w.notes) || "", exercises: w.exercises };
+    if (circ) {
+      sess.structure = circ;
+      sess.round = 1;
+    }
+    if (!workoutId) sess.draft = { name: sess.name, notes: (w && w.notes) || "", exercises: w.exercises, structure: circ || null };
     S.active = sess;
     S.sessIdx = 0;
     S.rest = null;
@@ -1158,6 +1263,7 @@
   function renderSession() {
     const sess = S.active;
     if (!sess) return "";
+    if (HOOKS.logAfterOn && HOOKS.logAfterOn(sess) && HOOKS.renderLogAfterSession) return HOOKS.renderLogAfterSession(sess);
     const exs = sess.exercises;
     const idx = Math.min(S.sessIdx, exs.length - 1);
     const ex = exs[idx];
@@ -1235,9 +1341,10 @@
           <p class="steal-kicker">${doneMoves}/${exs.length} · <span class="mono" id="sess-clock">${fmtDur(Date.now() - new Date(sess.startedAt).getTime())}</span></p>
           <h2 class="sess-title">${esc(sess.name)}</h2>
         </div>
-        <button type="button" class="btn ghost btn-sm" data-act="sess-finish">Finish</button>
+        <div class="sess-head-actions"><button type="button" class="btn ghost btn-sm sess-discard" data-act="sess-discard">✕ Discard</button><button type="button" class="btn ghost btn-sm" data-act="sess-finish">Finish</button></div>
       </header>
       ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
+      ${HOOKS.logAfterBanner ? HOOKS.logAfterBanner(sess) : ""}
       ${
         kind === "lift"
           ? `<div class="seg-row">
@@ -1289,7 +1396,8 @@
             ? `<button type="button" class="btn accent" data-act="sess-next">Next move</button>`
             : `<button type="button" class="btn accent" data-act="sess-finish">Done</button>`
         }
-      </div>`;
+      </div>
+      <div class="sess-discard-row"><button type="button" class="btn ghost wide-btn sess-discard-bottom" data-act="sess-discard">Discard workout</button></div>`;
   }
 
   function renderHistory() {
@@ -1301,7 +1409,7 @@
       ? `<ul class="hist-list">${list
           .map((x) => {
             const dur = fmtDur(new Date(x.finishedAt) - new Date(x.startedAt));
-            const sets = x.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
+            const sets = x.logAfter && x.logAfter.parsed ? x.logAfter.parsed.roundCount || 0 : x.exercises.reduce((n, e) => n + e.logs.filter((l) => l.done).length, 0);
             const lines = x.exercises
               .map((e) => {
                 const done = e.logs.filter((l) => l.done);
@@ -1316,7 +1424,7 @@
             return `<li class="hist-item">
                 <p class="hist-when">${esc(new Date(x.finishedAt).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }))}
                   <span class="hint">· ${dur} · ${sets} sets · ${esc(x.unit)}</span></p>
-                <ul class="hist-moves">${lines || `<li><span class="hint">No sets logged</span></li>`}</ul></li>`;
+                ${HOOKS.histLogAfter ? HOOKS.histLogAfter(x, lines) : `<ul class="hist-moves">${lines || `<li><span class="hint">No sets logged</span></li>`}</ul>`}</li>`;
           })
           .join("")}</ul>`
       : `<p class="hint">No finished sessions yet. Hit it, then Finish to log one.</p>`;
@@ -1382,6 +1490,14 @@
     }
     const end = finishedAt || new Date().toISOString();
     const supersets = ssSummary(moves, unit);
+    const circ = sess.structure && sess.structure.type === "circuit" ? sess.structure : null;
+    if (circ)
+      for (const g of supersets) {
+        const n = g.rounds.length;
+        g.title = `Circuit · ${n} round${n === 1 ? "" : "s"} (each move once per round${circ.restBetweenRounds ? `, ${circ.restBetweenRounds}s rest between rounds` : ""}): ${g.moves.join(" → ")}`;
+        g.rounds = g.rounds.map((r) => r.replace(/ → /g, ", "));
+        g.text = [g.title, ...g.rounds].join("\n");
+      }
     const movesText = movesTextFor(moves, supersets, (m) => `${m.label || m.name}: ${m.sets.map((st) => st.txt || shortSet(st, unit)).join(", ")}`);
     return {
       movesText,
@@ -1392,6 +1508,7 @@
       unit,
       moves, // only moves with ≥1 logged set; only logged sets (planned/unlogged excluded)
       supersets,
+      ...(circ ? { structure: { type: "circuit", rounds: circ.rounds, restBetweenRounds: circ.restBetweenRounds || 0, restBetweenMoves: circ.restBetweenMoves || 0 } } : {}),
       totalSets,
       loggedSetCount: totalSets,
       totalVolume: Math.round(totalVolume),
@@ -1453,6 +1570,7 @@
                  <textarea id="fin-note" class="fin-note" data-fn="note" rows="3" maxlength="1000" placeholder="Optional — energy, pain, what to change…">${esc(S.finishNote || "")}</textarea>`
           }
           <div class="fin-actions">
+            ${HOOKS.logAfterFinishBtn ? HOOKS.logAfterFinishBtn(sess, empty) : ""}
             ${
               empty
                 ? `<button type="button" class="btn accent wide-btn" data-act="fin-only">Discard session</button>`
@@ -1511,7 +1629,7 @@
     let w = sess.workoutId ? S.workouts.find((x) => x.id === sess.workoutId) : null;
     if (!w && draft && S.workouts.length < MAX_WORKOUTS) {
       // Finishing an unsaved build logs it as a workout (same as Steal).
-      w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
+      w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, structure: draft.structure || null, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
       S.workouts = [w, ...S.workouts];
       sess.workoutId = w.id;
     }
@@ -1575,13 +1693,17 @@
       const n = S.sessions.filter((x) => x.finishedAt && x.workoutId === w.id).length;
       return `<button type="button" class="btn ghost btn-sm" data-act="history" data-id="${esc(w.id)}">History${n ? ` · ${n}` : ""}</button>`;
     },
-    hitItDraftButton: (d) =>
-      `<button type="button" class="btn accent wide-btn" data-act="hit-draft" ${d.exercises.length ? "" : "disabled"}>Hit it</button>` +
+    hitItDraftButton: (d, existing) =>
+      (existing ? "" : `<button type="button" class="btn ghost wide-btn" data-act="hit-draft" ${d.exercises.length ? "" : "disabled"}>Try once without saving</button>`) +
       `<button type="button" class="btn secondary wide-btn" data-act="plan-open" data-src="draft" ${d.exercises.length ? "" : "disabled"}>Send plan to trainer</button>`,
     renderPlanModal: () => renderPlanModal(),
     resumeBanner: () =>
       S.active
-        ? `<button type="button" class="resume-banner" data-act="sess-resume"><span>In progress · ${esc(S.active.name)}</span><strong>Resume ›</strong></button>`
+        ? `<button type="button" class="resume-banner" data-act="sess-resume"><span>In progress · ${esc(S.active.name)}</span><strong>Resume workout ›</strong></button>`
+        : S.draft && S.view !== "edit" && draftDirty(S.draft)
+        ? `<div class="resume-banner draft-banner"><span>Unsaved changes · ${esc(S.draft.name || "Workout")}</span>
+            <span><button type="button" class="btn ghost btn-sm" data-act="draft-discard">Discard</button>
+            <button type="button" class="btn accent btn-sm" data-act="draft-continue">Continue editing</button></span></div>`
         : "",
     renderView: (v) => (v === "session" && S.active ? renderSession() + renderFinishModal() : v === "history" && S.historyFor ? renderHistory() : ""),
     async afterLoad() {
@@ -1680,6 +1802,31 @@
           S.view = "list";
           render();
           return true;
+        case "sess-discard": {
+          // p17: tapped Hit it by mistake → drop the session entirely. No save, no History, no trainer queue, no Resume banner.
+          if (!S.active) return true;
+          if (!window.confirm("Discard this workout? Nothing will be saved or sent to Arni.")) return true;
+          const wid = S.active.workoutId;
+          S.active = null;
+          S.rest = null;
+          S.finishOpen = false;
+          S.finishBusy = false;
+          S.finishNote = "";
+          S.la = null;
+          S.repl = null;
+          Store.writeLocal("active", null);
+          S.view = "list";
+          S.historyFor = null;
+          render();
+          window.scrollTo(0, 0);
+          if (wid) {
+            const card = document.querySelector(`.mine-item [data-id="${CSS.escape(wid)}"]`);
+            const li = card && card.closest(".mine-item");
+            if (li && li.scrollIntoView) li.scrollIntoView({ block: "center" });
+          }
+          toast("Workout discarded — nothing saved.", "");
+          return true;
+        }
         case "sess-finish":
           if (!S.active) return true;
           S.finishOpen = true;
@@ -1766,7 +1913,8 @@
             const roundDone = !nx || nx.set > l.set;
             if (nx) S.sessIdx = nx.i;
             const rs = sess.exercises[run.end].restSeconds ?? 60;
-            S.rest = roundDone && rs > 0 ? { until: Date.now() + rs * 1000 } : null;
+            const rm = sess.structure && Number(sess.structure.restBetweenMoves) > 0 ? Number(sess.structure.restBetweenMoves) : 0;
+            S.rest = roundDone && rs > 0 ? { until: Date.now() + rs * 1000 } : !roundDone && rm > 0 && l.done ? { until: Date.now() + rm * 1000 } : null;
           } else if (l.done && (ex.restSeconds ?? 60) > 0) S.rest = { until: Date.now() + (ex.restSeconds ?? 60) * 1000 };
           if (l.done) {
             // carry weight/reps forward to the next untouched set
@@ -2012,10 +2160,10 @@
     render();
     S.workouts = Store.readLocal("workouts", []) || [];
     const draft = Store.readLocal("draft", null);
-    if (draft && Array.isArray(draft.exercises)) {
-      S.draft = draft;
-      S.view = "edit";
-    }
+    // p16: never reopen the editor on load — Mine home first; unsaved changes are offered via a banner.
+    if (draft && Array.isArray(draft.exercises) && draftDirty(draft)) S.draft = draft;
+    else Store.writeLocal("draft", null);
+    if (S.view === "edit") S.view = "list";
     render();
     try {
       S.workouts = await Store.loadWorkouts(S.workouts);
@@ -2502,6 +2650,13 @@
     const nav = e.target.closest(".bnav-btn");
     if (nav) {
       e.preventDefault();
+      const wasEdit = S.view === "edit" && tab === "mine";
+      if (nav.dataset.tab === "mine") {
+        if (wasEdit && !goMineHome()) return; // kept editing (cancelled the prompt)
+        setTab("mine");
+        if (!wasEdit) goMineHome();
+        return;
+      }
       setTab(nav.dataset.tab);
       return;
     }
@@ -2758,6 +2913,466 @@
             S.view = "list";
             setTab("mine");
             onMineClick({ dataset: { act: "edit", id: wid } });
+          }
+        }
+      } catch (_) {}
+    };
+  })();
+
+
+  // ——— p15: Log after (cardio / Hyrox). Free text (dictation) + photo → pending parse → scripts/log-parse.mjs apply ———
+  (function logAfter() {
+    S.la = null; // { mode: 'active'|'session', sid, text, photo (dataUrl), send, busy }
+    const isCardio = (e) => {
+      if (!e) return false;
+      if (e.muscle === "cardio") return true;
+      const m = e.libId && LIB_BY_ID.get(e.libId);
+      return !!(m && m.muscle === "cardio");
+    };
+    const autoOn = (exs) => {
+      const xs = exs || [];
+      return xs.length > 0 && xs.filter(isCardio).length * 2 >= xs.length;
+    };
+    const workoutOf = (sess) => (sess && sess.workoutId ? S.workouts.find((w) => w.id === sess.workoutId) : null);
+    function onFor(w, exs) {
+      if (w && w.logAfter === true) return true;
+      if (w && w.logAfter === false) return false;
+      if (w && CARDIO_NAME.test(w.name || "")) return true;
+      return autoOn(exs || (w && w.exercises));
+    }
+    const CARDIO_NAME = /\b(hyrox|cardio|conditioning|metcon|wod|intervals?|run|row(ing)?\s+day)\b/i;
+    const sessOn = (sess) => onFor(workoutOf(sess) || { name: sess.name }, (workoutOf(sess) || {}).exercises || sess.exercises);
+    HOOKS.logAfterOn = sessOn;
+
+    // p18: routine Structure — Straight sets | Circuit · N rounds (+ rest between rounds / moves).
+    HOOKS.structureSection = (d) => {
+      const c = d.structure && d.structure.type === "circuit" ? d.structure : null;
+      const step = (act, val, unit, lbl) => `<div class="st-field"><span class="ex-lbl">${lbl}</span><div class="stepper big">
+          <button type="button" data-act="${act}" data-d="-1" aria-label="Less ${lbl}">−</button><span class="mono">${val}${unit}</span>
+          <button type="button" data-act="${act}" data-d="1" aria-label="More ${lbl}">+</button></div></div>`;
+      return `<section class="st-section" aria-label="Structure">
+          <p class="steal-kicker">Structure</p>
+          <div class="seg-pair st-seg" role="group">
+            <button type="button" class="seg-btn${c ? "" : " on"}" data-act="st-type" data-t="straight" aria-pressed="${!c}">Straight sets</button>
+            <button type="button" class="seg-btn${c ? " on" : ""}" data-act="st-type" data-t="circuit" aria-pressed="${!!c}">Circuit${c ? ` · ${c.rounds} rounds` : ""}</button>
+          </div>
+          ${c ? `<div class="st-row">${step("st-rounds", c.rounds, "", "Rounds")}${step("st-rbr", c.restBetweenRounds || 0, "s", "Rest between rounds")}${step("st-rbm", c.restBetweenMoves || 0, "s", "Rest between moves")}</div>
+            <p class="hint">Each move once per round, then repeat. Set each move's target below.</p>` : `<p class="hint">Each move: all its sets, then the next move.</p>`}
+        </section>`;
+    };
+    // p15b: Log-after mode = no per-set logging at all; read-only move list + rest timer + Finish & log after.
+    HOOKS.renderLogAfterSession = (sess) => {
+      const exs = sess.exercises || [];
+      const circ = sess.structure && sess.structure.type === "circuit" ? sess.structure : null;
+      const rnd = Math.min((circ && circ.rounds + 1) || 1, sess.round || 1);
+      const done = !!circ && rnd > circ.rounds;
+      const rest = S.rest
+        ? `<div class="rest-bar" id="rest-bar"><span>Rest</span><strong class="mono" id="rest-left">${mmssX(Math.max(0, Math.ceil((S.rest.until - Date.now()) / 1000)))}</strong>
+             <button type="button" class="btn ghost btn-sm" data-act="rest-add">+15s</button><button type="button" class="btn ghost btn-sm" data-act="rest-skip">Skip</button></div>`
+        : "";
+      return `
+      <header class="sess-head">
+        <div>
+          <button type="button" class="steal-back" data-act="sess-leave">‹ Mine</button>
+          <p class="steal-kicker">Log after · <span class="mono" id="sess-clock">${mmssX((Date.now() - new Date(sess.startedAt).getTime()) / 1000)}</span></p>
+          <h2 class="sess-title">${esc(sess.name)}</h2>
+        </div>
+        <button type="button" class="btn ghost btn-sm sess-discard" data-act="sess-discard">✕ Discard</button>
+      </header>
+      ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
+      <p class="la-banner-sub">Just train. When you're done, tap <strong>Finish &amp; log after</strong> and type, dictate, or snap your AlphaFit screen.</p>
+      ${circ ? `<div class="circ-tracker"><p class="circ-round">${done ? `All ${circ.rounds} rounds done` : `Round ${rnd} of ${circ.rounds}`}</p>
+          <div class="circ-dots">${Array.from({ length: circ.rounds }, (_, k) => `<span class="circ-dot${k + 1 < rnd ? " on" : k + 1 === rnd ? " cur" : ""}"></span>`).join("")}</div>
+          <p class="hint">Each move once, then ${circ.restBetweenRounds ? `${circ.restBetweenRounds}s rest` : "straight into the next round"}${circ.restBetweenMoves ? ` · ${circ.restBetweenMoves}s between moves` : ""}.</p></div>` : ""}
+      <ol class="la-plan">${exs
+        .map((e, i) => {
+          if (circ) return `<li class="la-plan-item"><span class="la-plan-n mono">${i + 1}</span><div class="la-plan-body"><p class="la-plan-name">${esc(e.name)}</p>
+              <p class="la-plan-meta mono">${esc(e.reps || "")}</p>${e.setup ? `<p class="hint">${esc(e.setup)}</p>` : ""}</div></li>`;
+          const n = e.logs ? e.logs.length : Number(e.sets) || 1;
+          const r = e.restSeconds ?? 60;
+          return `<li class="la-plan-item"><span class="la-plan-n mono">${i + 1}</span><div class="la-plan-body">
+              <p class="la-plan-name">${esc(e.name)}</p>
+              <p class="la-plan-meta mono">${n} × ${esc(e.reps || "")}${r > 0 ? ` · ${r}s rest` : ""}</p>
+              ${e.setup ? `<p class="hint">${esc(e.setup)}</p>` : ""}</div>
+              ${r > 0 ? `<button type="button" class="btn ghost btn-sm" data-act="la-rest" data-s="${r}">Rest ${r}s</button>` : ""}</li>`;
+        })
+        .join("")}</ol>
+      ${rest}
+      ${circ && !done ? `<div class="circ-actions"><button type="button" class="btn secondary wide-btn la-big" data-act="la-round">✓ Round ${rnd} done</button>
+          ${rnd > 1 ? `<button type="button" class="btn ghost btn-sm" data-act="la-round-undo">Undo</button>` : ""}</div>` : ""}
+      <div class="la-finish"><button type="button" class="btn accent wide-btn la-big" data-act="la-open-active">Finish &amp; log after</button>
+        <button type="button" class="btn ghost wide-btn sess-discard-bottom" data-act="sess-discard">Discard workout</button>
+        <p class="hint">To log sets as you go, turn off Log after in this routine's Edit.</p></div>`;
+    };
+    HOOKS.logAfterBanner = (sess) =>
+      sessOn(sess)
+        ? `<section class="la-banner" aria-label="Log after">
+            <p class="la-banner-title">Just train — log after</p>
+            <p class="la-banner-sub">No need to enter numbers per set. When you're done, tap <strong>Log after</strong> and type, dictate, or snap your AlphaFit screen. Logging sets below still works if you want.</p>
+            <button type="button" class="btn accent wide-btn" data-act="la-open-active">Finish &amp; log after</button>
+          </section>`
+        : "";
+    HOOKS.logAfterFor = (d) => onFor(d, d.exercises);
+    HOOKS.logAfterToggle = (d) => {
+      const saved = S.workouts.find((x) => x.id === d.id);
+      const w = typeof d.logAfter === "boolean" || !saved ? d : saved;
+      const on = onFor(w, d.exercises);
+      const auto = w.logAfter == null;
+      return `<div class="la-toggle-row"><div><p class="la-toggle-title">Log after</p><p class="hint">${
+        auto ? (on ? "On automatically — mostly cardio moves." : "Off — log sets as you go.") : on ? "On — you turned it on." : "Off — you turned it off."
+      } Type or snap your results when you finish.</p></div>
+        <button type="button" class="seg-btn${on ? " on" : ""}" data-act="la-toggle" data-id="${esc(d.id || "")}" aria-pressed="${on}">${on ? "✓ On" : "Off"}</button></div>`;
+    };
+    HOOKS.logAfterFinishBtn = (sess, empty) =>
+      sessOn(sess) || empty
+        ? `<button type="button" class="btn ${sessOn(sess) ? "accent" : "secondary"} wide-btn" data-act="la-open-active">Log after — text or photo</button>`
+        : "";
+
+    // ——— History ———
+    const mmssX = (t) => {
+      const n = Math.round(Number(t) || 0);
+      const h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), s2 = n % 60;
+      return h ? `${h}:${String(m).padStart(2, "0")}:${String(s2).padStart(2, "0")}` : `${m}:${String(s2).padStart(2, "0")}`;
+    };
+    const roundTxt = (r) =>
+      [
+        r.distance_m != null ? (r.distance_m >= 1000 && r.distance_m % 100 === 0 ? `${r.distance_m / 1000}km` : `${r.distance_m}m`) : "",
+        r.reps != null ? `${r.reps} reps` : "",
+        r.cals != null ? `${r.cals} cal` : "",
+        r.weight != null ? `${r.weight}${r.weightUnit ? " " + r.weightUnit : ""}` : "",
+        r.time_s != null ? mmssX(r.time_s) : "",
+        r.pace ? `@ ${r.pace}` : "",
+      ].filter(Boolean).join(" · ");
+    HOOKS.histLogAfter = (x, lines) => {
+      const la = x.logAfter;
+      const manual = lines ? `<ul class="hist-moves">${lines}</ul>` : "";
+      if (!la) return (manual || `<ul class="hist-moves"><li><span class="hint">No sets logged</span></li></ul>`) + (!sessOn(x) ? "" :
+        `<button type="button" class="btn ghost btn-sm la-hist-btn" data-act="la-open-session" data-sid="${esc(x.id)}">Log after — text or photo</button>`);
+      const raw = la.text ? `<p class="la-raw">“${esc(la.text.length > 160 ? la.text.slice(0, 158) + "…" : la.text)}”${la.hasPhoto ? " · 📷 photo" : ""}</p>` : la.hasPhoto ? `<p class="la-raw">📷 photo</p>` : "";
+      if (la.status !== "parsed" || !la.parsed) {
+        return `<div class="la-pending" role="status"><span class="la-spin" aria-hidden="true"></span><div><p class="la-pending-title">Processing your log…</p>${raw}</div></div>${manual}`;
+      }
+      const p = la.parsed;
+      if (Array.isArray(p.rounds) && p.rounds.length) {
+        const rs = p.rounds
+          .map((r, k) => `<li class="la-move"><p class="la-move-name">Round ${r.round || k + 1}${r.time_s != null ? ` <span class="hint mono">· ${mmssX(r.time_s)}</span>` : ""}</p>
+              <ol class="la-rounds">${(r.moves || []).map((m) => `<li><span class="la-mn">${esc(m.name)}</span><span class="mono">${esc(roundTxt(m) || "done")}</span>${m.notes ? `<em class="hint"> ${esc(m.notes)}</em>` : ""}</li>`).join("")}</ol>
+              ${r.notes ? `<p class="hint">${esc(r.notes)}</p>` : ""}</li>`)
+          .join("");
+        return `<p class="steal-kicker la-circ-k">Circuit · ${p.rounds.length} round${p.rounds.length === 1 ? "" : "s"}${p.totalTime_s != null ? ` · ${mmssX(p.totalTime_s)}` : ""}</p><ul class="la-moves">${rs}</ul>${p.note ? `<p class="hint la-note">${esc(p.note)}</p>` : ""}${manual}
+          <p class="hint la-src">Logged after${la.hasPhoto ? " from your photo" : ""}${la.text ? (la.hasPhoto ? " + text" : " from your text") : ""}</p>`;
+      }
+      const moves = (p.moves || [])
+        .map((m) => `<li class="la-move"><p class="la-move-name">${esc(m.name)}${m.rounds && m.rounds.length > 1 ? ` <span class="hint">· ${m.rounds.length} rounds</span>` : ""}</p>
+            <ol class="la-rounds">${(m.rounds || []).map((r, i) => `<li><span class="la-rn mono">${m.rounds.length > 1 ? i + 1 : "✓"}</span><span class="mono">${esc(roundTxt(r) || "done")}</span>${r.notes ? `<em class="hint"> ${esc(r.notes)}</em>` : ""}</li>`).join("")}</ol>
+            ${m.notes ? `<p class="hint">${esc(m.notes)}</p>` : ""}</li>`)
+        .join("");
+      return `<ul class="la-moves">${moves}</ul>${p.note ? `<p class="hint la-note">${esc(p.note)}</p>` : ""}${manual}
+        <p class="hint la-src">Logged after${la.hasPhoto ? " from your photo" : ""}${la.text ? (la.hasPhoto ? " + text" : " from your text") : ""}</p>`;
+    };
+
+    // ——— Sheet ———
+    HOOKS.renderLogAfter = () => {
+      const la = S.la;
+      if (!la) return "";
+      const sess = la.mode === "active" ? S.active : S.sessions.find((x) => x.id === la.sid);
+      if (!sess) return "";
+      return `
+      <div class="eh-modal la-modal" role="dialog" aria-modal="true" aria-labelledby="la-title">
+        <div class="eh-modal-backdrop" data-act="la-cancel"></div>
+        <div class="eh-modal-card la-card">
+          <p class="steal-kicker">Log after</p>
+          <h3 id="la-title" class="fin-title">${esc(sess.name)}</h3>
+          <label class="field-label" for="la-text">What did you do?</label>
+          <textarea id="la-text" class="la-text" rows="6" maxlength="4000" autocapitalize="sentences" enterkeyhint="done"
+            placeholder="Tap the mic and talk — e.g. “Runner 5×500m: 1:52, 1:55, 1:58, 2:01, 1:59. Row 4×250m…”">${esc(la.text || "")}</textarea>
+          <p class="hint la-tip">Tip: tap 🎤 on the keyboard to dictate. Times, distances, reps, cals — any order is fine.</p>
+          <div class="la-photo-row">
+            ${la.photo
+              ? `<div class="la-thumb"><img src="${la.photo}" alt="Your workout photo" /><button type="button" class="btn ghost btn-sm" data-act="la-photo-clear">Remove photo</button></div>`
+              : `<label class="btn secondary wide-btn la-photo-btn" for="la-file">📷 Add photo or screenshot</label>`}
+            <input id="la-file" class="la-file" type="file" accept="image/*" hidden />
+          </div>
+          <label class="la-send"><input type="checkbox" id="la-send" ${la.send ? "checked" : ""} /> Send to Arni once it's processed</label>
+          ${la.err ? `<p class="la-err">${esc(la.err)}</p>` : ""}
+          <div class="fin-actions">
+            <button type="button" class="btn accent wide-btn" data-act="la-save" ${la.busy ? "disabled" : ""}>${la.busy ? "Saving…" : "Save log"}</button>
+            <button type="button" class="btn ghost wide-btn" data-act="la-cancel">${la.mode === "active" ? "Keep going" : "Cancel"}</button>
+          </div>
+        </div>
+      </div>`;
+    };
+    document.addEventListener("input", (e) => {
+      if (S.la && e.target && e.target.id === "la-text") S.la.text = e.target.value;
+    });
+    document.addEventListener("change", async (e) => {
+      if (!S.la || !e.target) return;
+      if (e.target.id === "la-send") S.la.send = !!e.target.checked;
+      if (e.target.id === "la-file" && e.target.files && e.target.files[0]) {
+        try {
+          S.la.photo = await shrink(e.target.files[0]);
+          S.la.err = "";
+        } catch (err) {
+          console.warn("[logafter] photo", err);
+          S.la.err = "Couldn't read that photo — try a screenshot instead.";
+        }
+        render();
+      }
+    });
+    /** Downscale to ≤1600px JPEG; keep under ~900 KB of base64 (Firestore doc limit 1 MiB). */
+    async function shrink(file) {
+      const url = URL.createObjectURL(file);
+      try {
+        const img = await new Promise((ok, bad) => {
+          const i = new Image();
+          i.onload = () => ok(i);
+          i.onerror = bad;
+          i.src = url;
+        });
+        for (const [max, q] of [[1600, 0.8], [1400, 0.7], [1200, 0.6], [1000, 0.55], [800, 0.5]]) {
+          const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+          const c = document.createElement("canvas");
+          c.width = Math.round(img.naturalWidth * k);
+          c.height = Math.round(img.naturalHeight * k);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          const d = c.toDataURL("image/jpeg", q);
+          if (d.length < 900000) return d;
+        }
+        throw new Error("photo too large");
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    async function saveLog() {
+      const la = S.la;
+      const text = String(la.text || "").trim();
+      if (!text && !la.photo) {
+        la.err = "Type (or dictate) what you did, or add a photo.";
+        return render();
+      }
+      la.busy = true;
+      la.err = "";
+      render();
+      const c = await Store.cloud().catch(() => null);
+      if (!c) {
+        la.busy = false;
+        la.err = "You need to be online and signed in to save a log.";
+        return render();
+      }
+      const now = new Date().toISOString();
+      let sess;
+      let w = null;
+      if (la.mode === "active") {
+        sess = S.active;
+        if (!sess) return;
+        sess.finishedAt = now;
+        const draft = sess.draft;
+        delete sess.draft;
+        w = workoutOf(sess);
+        if (!w && draft && S.workouts.length < MAX_WORKOUTS) {
+          w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, structure: draft.structure || null, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
+          S.workouts = [w, ...S.workouts];
+          sess.workoutId = w.id;
+        }
+        if (w) w.lastDoneAt = now;
+      } else sess = S.sessions.find((x) => x.id === la.sid);
+      if (!sess) return;
+      try {
+        let photoPath = null;
+        if (la.photo) {
+          photoPath = `users/${c.uid}/logPhotos/${sess.id}`;
+          await c.fs.setDoc(c.fs.doc(c.db, "users", c.uid, "logPhotos", sess.id), {
+            sessionId: sess.id,
+            contentType: "image/jpeg",
+            dataUrl: la.photo,
+            createdAt: now,
+          });
+        }
+        sess.logAfter = { status: "pending", text, hasPhoto: !!la.photo, photoPath, submittedAt: now, sendToTrainer: !!la.send };
+        if (la.send) {
+          sess.shareWithTrainer = true;
+          sess.trainerStatus = "awaiting-parse";
+        }
+        const qid = await Store.queueForTrainer({
+          type: "logParse",
+          status: "pending",
+          email: (user && user.email) || "",
+          displayName: (user && user.displayName) || "",
+          sessionId: sess.id,
+          workoutId: sess.workoutId || null,
+          name: sess.name,
+          text,
+          photoPath,
+          hasPhoto: !!la.photo,
+          sendToTrainer: !!la.send,
+          structure: sess.structure || null,
+          plannedMoves: sess.exercises.map((e) => ({ name: e.name, sets: e.logs ? e.logs.length : Number(e.sets) || 1, target: String(e.reps || "") })),
+          startedAt: sess.startedAt,
+          finishedAt: sess.finishedAt,
+          createdAt: c.fs.serverTimestamp(),
+        });
+        sess.logAfter.queueId = qid;
+        S.sessions = [...S.sessions.filter((x) => x.id !== sess.id), sess];
+        await Store.saveSession(sess, S.sessions);
+        if (w) await Store.saveWorkout(w, S.workouts);
+      } catch (err) {
+        console.warn("[logafter] save failed", err);
+        la.busy = false;
+        la.err = "Couldn't save your log — check your connection and try again.";
+        return render();
+      }
+      const wid = sess.workoutId;
+      S.la = null;
+      if (la.mode === "active") {
+        S.active = null;
+        S.rest = null;
+        S.finishOpen = false;
+        persistActive();
+      }
+      if (wid) {
+        S.historyFor = wid;
+        S.view = "history";
+      } else S.view = "list";
+      render();
+      window.scrollTo(0, 0);
+      toast("Log saved — processing it now", "ok");
+      schedulePoll();
+    }
+
+    // Pending logs: re-fetch sessions on resume / every 20s while any are pending.
+    let pollT = null;
+    const anyPending = () => S.sessions.some((x) => x.logAfter && x.logAfter.status === "pending");
+    async function refresh() {
+      try {
+        const before = JSON.stringify(S.sessions.map((x) => [x.id, x.logAfter && x.logAfter.status]));
+        S.sessions = await Store.loadSessions();
+        if (JSON.stringify(S.sessions.map((x) => [x.id, x.logAfter && x.logAfter.status])) !== before && !S.la) render();
+      } catch (err) {
+        console.warn("[logafter] refresh", err);
+      }
+    }
+    function schedulePoll() {
+      clearTimeout(pollT);
+      if (!anyPending()) return;
+      pollT = setTimeout(async () => {
+        if (document.visibilityState === "visible") await refresh();
+        schedulePoll();
+      }, 20000);
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && user && anyPending()) refresh().then(schedulePoll);
+    });
+
+    const prevAction = HOOKS.onAction;
+    HOOKS.onAction = (act, el) => {
+      switch (act) {
+        case "la-open-active":
+          if (!S.active) return true;
+          S.finishOpen = false;
+          S.la = { mode: "active", sid: S.active.id, text: "", photo: null, send: true, busy: false };
+          rerenderKeep();
+          return true;
+        case "la-open-session":
+          S.la = { mode: "session", sid: el.dataset.sid, text: "", photo: null, send: true, busy: false };
+          render();
+          return true;
+        case "la-cancel":
+          S.la = null;
+          rerenderKeep();
+          return true;
+        case "st-type":
+        case "st-rounds":
+        case "st-rbr":
+        case "st-rbm": {
+          const d = S.draft;
+          if (!d) return true;
+          if (act === "st-type") d.structure = el.dataset.t === "circuit" ? d.structure || { type: "circuit", rounds: Math.max(1, ...d.exercises.map((e) => Number(e.sets) || 1)), restBetweenRounds: 90, restBetweenMoves: 0 } : null;
+          else if (d.structure) {
+            const k = { "st-rounds": ["rounds", 1, 1, 20], "st-rbr": ["restBetweenRounds", 15, 0, 600], "st-rbm": ["restBetweenMoves", 15, 0, 300] }[act];
+            d.structure[k[0]] = Math.max(k[2], Math.min(k[3], (Number(d.structure[k[0]]) || 0) + Number(el.dataset.d) * k[1]));
+          }
+          Store.writeLocal("draft", d);
+          rerenderKeep();
+          return true;
+        }
+        case "la-round": {
+          const sx = S.active;
+          if (!sx || !sx.structure) return true;
+          const n = sx.structure.rounds;
+          sx.round = Math.min(n + 1, (sx.round || 1) + 1);
+          const rr = Number(sx.structure.restBetweenRounds) || 0;
+          S.rest = sx.round <= n && rr > 0 ? { until: Date.now() + rr * 1000 } : null;
+          if (S.rest) startTicker();
+          persistActive();
+          rerenderKeep();
+          return true;
+        }
+        case "la-round-undo":
+          if (S.active && S.active.round > 1) {
+            S.active.round--;
+            persistActive();
+            rerenderKeep();
+          }
+          return true;
+        case "la-rest":
+          S.rest = { until: Date.now() + (Number(el.dataset.s) || 60) * 1000 };
+          startTicker();
+          rerenderKeep();
+          return true;
+        case "la-photo-clear":
+          if (S.la) S.la.photo = null;
+          render();
+          return true;
+        case "la-save":
+          if (S.la && !S.la.busy) saveLog();
+          return true;
+        case "la-toggle": {
+          const w = el.dataset.id && S.workouts.find((x) => x.id === el.dataset.id);
+          if (!w) {
+            // p19: template / new routine — keep it on the draft; it's saved with Save routine.
+            const d = S.draft;
+            if (!d) return true;
+            d.logAfter = !onFor(d, d.exercises);
+            Store.writeLocal("draft", d);
+            rerenderKeep();
+            return true;
+          }
+          w.logAfter = !onFor(w, w.exercises);
+          if (S.draft && S.draft.id === w.id) {
+            // already saved on the routine → not an unsaved change in the editor
+            S.draft.logAfter = w.logAfter;
+            try {
+              const o = JSON.parse(S.draft._orig);
+              o[4] = w.logAfter;
+              S.draft._orig = JSON.stringify(o);
+            } catch (_) {}
+            Store.writeLocal("draft", S.draft);
+          }
+          render();
+          Store.saveWorkout(w, S.workouts).catch((err) => console.warn("[logafter] toggle save", err));
+          return true;
+        }
+      }
+      return prevAction ? prevAction(act, el) : false;
+    };
+    const prevLoad = HOOKS.afterLoad;
+    HOOKS.afterLoad = async function () {
+      if (prevLoad) await prevLoad();
+      schedulePoll();
+      // Push deep link: ?log=<sessionId> → that routine's History.
+      try {
+        const q = new URLSearchParams(location.search);
+        const sid = q.get("log");
+        if (sid) {
+          q.delete("log");
+          history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : "") + location.hash);
+          const x = S.sessions.find((y) => y.id === sid);
+          if (x && x.workoutId && !S.active) {
+            setTab("mine");
+            S.historyFor = x.workoutId;
+            S.view = "history";
+            render();
           }
         }
       } catch (_) {}
