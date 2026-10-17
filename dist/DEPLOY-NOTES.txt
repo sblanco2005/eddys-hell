@@ -498,3 +498,11 @@ Passkeys are per-domain: register Face ID separately on prod.
   Discard / Back to Mine, Remove. Mine-tab unsaved-changes confirm and Hit it Discard unchanged (tested).
 - Unsaved drafts from p18 (localStorage "draft") still restore via the "Unsaved changes · X — Continue editing" banner and Save routine
   saves exactly what is in the editor (tested with 8 rounds / 90s / 30s / 5 moves across a reload).
+
+## 2026-10-17 ~3:05 PM ET — promote beta p15–p19 to prod (build prod-steal-20261017a, beta + prod)
+- Since prod-steal-20261014a: Log after for cardio/Hyrox (text + photo, pending parse → History rounds; logPhotos rules),
+  Log-after Hit it hides per-set logging (move list + rest + Finish & log after), template "Hyrox" → "Hyrox/Cardio",
+  bottom-bar Mine always opens Mine home (Resume banner, unsaved-changes prompt), Discard workout in Hit it,
+  Circuit structure (rounds + rest between rounds/moves, round tracker, by-round relay/History), sticky editor Save bar
+  (Save routine / Save & Hit it / Save as new / Update-vs-new choice).
+- Same build on both sites. BETA badge stays beta-host-only (auth.js isBetaHost). Firestore rules: deployed if changed.
