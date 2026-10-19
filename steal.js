@@ -479,13 +479,15 @@
   }
 
   function renderMineList() {
-    const splits = D.SPLITS.map(
-      (sp) => `
-        <button type="button" class="split-card${sp.id === "hyrox" ? " wide" : ""}" data-act="new-split" data-split="${esc(sp.id)}">
+    const splits = D.SPLITS.map((sp) => {
+      // p20: a template named like a saved routine (Legs, Push…) opens YOUR routine; the fresh template is one tap away inside.
+      const mine = S.workouts.find((w) => nameKey(w.name) === nameKey(sp.label));
+      return `
+        <button type="button" class="split-card${sp.id === "hyrox" ? " wide" : ""}${mine ? " has-mine" : ""}" data-act="new-split" data-split="${esc(sp.id)}">
           <span class="split-label">${esc(sp.label)}</span>
-          <span class="split-blurb">${esc(sp.blurb)}</span>
-        </button>`
-    ).join("");
+          <span class="split-blurb">${mine ? `Opens your saved ${esc(mine.name)}` : esc(sp.blurb)}</span>
+        </button>`;
+    }).join("");
     const list = sortedWorkouts();
     let items;
     if (!S.workoutsLoaded && !list.length) items = `<div class="mine-skel"></div>`;
@@ -496,7 +498,7 @@
           const meta = w.lastDoneAt ? ` · last ${shortDate(w.lastDoneAt)}` : w.savedAt ? ` · saved ${shortDate(w.savedAt)}` : "";
           const confirming = S.confirmRemove === w.id;
           return `
-          <li class="mine-item">
+          <li class="mine-item${S.flashId === w.id ? " flash" : ""}" data-wid="${esc(w.id)}">
             <button type="button" class="mine-item-main" data-act="edit" data-id="${esc(w.id)}">
               <span class="mine-item-name">${esc(w.name)}${HOOKS.coachBadge ? HOOKS.coachBadge(w) : ""}</span>
               <span class="mine-item-meta">${(w.exercises || []).length} moves${esc(meta)}</span>
@@ -514,7 +516,7 @@
       <header class="steal-head">
         <p class="steal-kicker">Builder</p>
         <h2 class="steal-title">Mine</h2>
-        <p class="steal-sub">Tap a split to try it. Save for later keeps notes, sets, and order.</p>
+        <p class="steal-sub">Your routines first. Templates below start a fresh copy.</p>
       </header>
       ${HOOKS.resumeBanner ? HOOKS.resumeBanner() : ""}
       ${
@@ -522,10 +524,11 @@
           ? `<button type="button" class="mine-nudge" data-act="go-gym">Mark the rack, bench, cables you actually have. Then a push day uses those, not a machine you don’t own.</button>`
           : ""
       }
+      <p class="steal-kicker mine-list-kicker">Your routines${list.length ? ` · ${list.length}/${MAX_WORKOUTS}` : ""}</p>
+      ${items}
+      <p class="steal-kicker mine-list-kicker">Templates · start fresh</p>
       <div class="split-grid">${splits}</div>
-      <button type="button" class="btn secondary mine-blank" data-act="new-blank">Blank workout</button>
-      <p class="steal-kicker mine-list-kicker">Workouts${list.length ? ` · ${list.length}/${MAX_WORKOUTS}` : ""}</p>
-      ${items}`;
+      <button type="button" class="btn secondary mine-blank" data-act="new-blank">Blank workout</button>`;
   }
 
   function renderExercise(ex, i, total) {
@@ -681,9 +684,11 @@
       </header>
       ${(() => {
         const tw = nameTwin(d);
-        return tw
-          ? `<div class="twin-note"><span>This is a fresh ${esc(d.name)} template — not your saved “${esc(tw.name)}”.</span><button type="button" class="btn ghost btn-sm" data-act="open-twin" data-id="${esc(tw.id)}">Open my ${esc(tw.name)}</button></div>`
-          : "";
+        if (tw)
+          return `<div class="twin-note warn"><span><strong>Fresh ${esc(d.name)} template</strong> — not your saved “${esc(tw.name)}”. Edits here don’t change yours unless you choose Replace when saving.</span><button type="button" class="btn accent btn-sm" data-act="open-twin" data-id="${esc(tw.id)}">Edit my ${esc(tw.name)} instead</button></div>`;
+        if (existing && d._fromSplit)
+          return `<div class="twin-note"><span>This is your saved “${esc(d.name)}”. Changes save to it.</span><button type="button" class="btn ghost btn-sm" data-act="new-split" data-split="${esc(d._fromSplit)}" data-fresh="1">Start from the ${esc(splitLabel(d._fromSplit))} template instead</button></div>`;
+        return "";
       })()}
       ${HOOKS.coachCard && existing ? HOOKS.coachCard(d.id) : ""}
       ${HOOKS.logAfterToggle && !empty ? HOOKS.logAfterToggle(d) : ""}
@@ -721,11 +726,18 @@
   function renderSaveBar(d, existing, empty) {
     const tw = S.saveChoice && nameTwin(d);
     if (tw)
-      return `<div class="save-bar choice" role="dialog" aria-label="Save choice"><p class="save-bar-q">You already have “${esc(tw.name)}”. Update it or keep both?</p>
-        <div class="save-bar-row"><button type="button" class="btn secondary" data-act="save-new">Save as new</button><button type="button" class="btn accent" data-act="save-update">Update ${esc(tw.name)}</button></div>
+      return `<div class="save-bar choice" role="dialog" aria-label="Save choice"><p class="save-bar-q">You already have “${esc(tw.name)}”. Replace it with this template version (its moves, order and targets), or keep both?</p>
+        <div class="save-bar-row"><button type="button" class="btn secondary" data-act="save-new">Keep both</button><button type="button" class="btn accent" data-act="save-update">Replace my ${esc(tw.name)}</button></div>
         <button type="button" class="btn ghost btn-sm save-bar-cancel" data-act="save-cancel">Cancel</button></div>`;
     const dirty = draftDirty(d);
-    const note = empty ? "Add a move to save" : existing ? (dirty ? "Unsaved changes" : "No changes yet") : `Saves to Mine as “${esc((d.name || "").trim() || "My workout")}”`;
+    const twin = !existing && nameTwin(d);
+    const note = empty
+      ? "Add a move to save"
+      : existing
+      ? (dirty ? `Unsaved changes · saves to your “${esc(d.name || "routine")}”` : "No changes yet")
+      : twin
+      ? `Template · you already have “${esc(twin.name)}”`
+      : `Saves to Mine as “${esc((d.name || "").trim() || "My workout")}”`;
     return `<div class="save-bar" role="region" aria-label="Save routine">
         <div class="save-bar-top"><span class="save-bar-note${dirty && !empty ? " dirty" : ""}">${note}</span>${
           existing ? `<button type="button" class="save-bar-link" data-act="save-copy" ${empty ? "disabled" : ""}>Save as new</button>` : ""
@@ -859,7 +871,18 @@
     if (typeof la === "boolean") w.logAfter = la;
     let msg = prev ? `${w.name} updated` : `Saved “${w.name}” to Mine`;
     S.workouts = idx >= 0 ? S.workouts.map((x) => (x.id === w.id ? w : x)) : [w, ...S.workouts];
+    S.flashId = w.id;
     closeEditor();
+    if (!hit) {
+      // p20: land on the saved routine in Mine home so the change is visible right away.
+      const li = document.querySelector(`.mine-item[data-wid="${w.id}"]`);
+      if (li && li.scrollIntoView) li.scrollIntoView({ block: "center" });
+      setTimeout(() => {
+        if (S.flashId === w.id) S.flashId = null;
+        const el = document.querySelector(`.mine-item.flash[data-wid="${w.id}"]`);
+        if (el) el.classList.remove("flash");
+      }, 2500);
+    }
     if (hit) startSession(w, w.id);
     setStatus(msg, "ok");
     toast(msg, "ok");
@@ -898,6 +921,13 @@
         return setTab("gym");
       case "new-split": {
         const sp = el.dataset.split;
+        if (el.dataset.fresh && S.view === "edit" && S.draft && draftDirty(S.draft) && !window.confirm(`Drop your unsaved changes to “${(S.draft.name || "this workout").trim()}” and start from the template?`)) return;
+        const mine = !el.dataset.fresh && S.workouts.find((w) => nameKey(w.name) === nameKey(splitLabel(sp)));
+        if (mine) {
+          openDraft(JSON.parse(JSON.stringify({ id: mine.id, name: mine.name, notes: mine.notes || "", exercises: mine.exercises || [], createdAt: mine.createdAt, structure: mine.structure || null })));
+          S.draft._fromSplit = sp;
+          return render();
+        }
         return openDraft({ id: null, name: splitLabel(sp), notes: "", exercises: fillSplit(sp, S.gym), structure: splitStructure(sp) });
       }
       case "new-blank":
