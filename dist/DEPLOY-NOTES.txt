@@ -506,3 +506,22 @@ Passkeys are per-domain: register Face ID separately on prod.
   Circuit structure (rounds + rest between rounds/moves, round tracker, by-round relay/History), sticky editor Save bar
   (Save routine / Save & Hit it / Save as new / Update-vs-new choice).
 - Same build on both sites. BETA badge stays beta-host-only (auth.js isBetaHost). Firestore rules: deployed if changed.
+
+## 2026-10-19 ~6:45 AM ET — beta-steal-p20 (build 20261019-steal-p20-legsave, BETA hosting only)
+- Bug (Santiago, prod-steal-20261017a, 6:07 AM): swapped calves → Dumbbell Bulgarian split squat on "Legs", Save routine, went
+  back, still saw calves. Root cause: he was in the built-in **Legs template**, not his saved Legs. The split cards sat at the top of Mine
+  above his routines and have the same names (Push, Legs…). The template save hit the PR #5 twin choice and "Update Legs" overwrote his saved
+  Legs doc (users/{uid}/workouts/bddf31c9…) with the template version + his swap. Firestore at 10:07:49Z has the Dumbbell Bulgarian split squat
+  at move 6, but now in template order (squat first; his Oct 12 Legs was deadlift first). Opening "Legs" again went to the template again,
+  which always starts with calves. The save, Replace, Firestore write and local merge all worked: no race, no lost write.
+- Fix: Mine home lists "Your routines" first, with "Templates · start fresh" below. A template card whose name matches a saved routine reads
+  "Opens your saved X" and opens YOUR routine (note + "Start from the X template instead", which confirms before dropping unsaved edits).
+  The fresh-template editor shows a warning card ("Fresh X template — not your saved X… / Edit my X instead"). The save bar says "Template · you
+  already have X", and the choice now reads "Replace it with this template version (its moves, order and targets), or keep both?" with
+  "Keep both" / "Replace my X". After save, Mine home scrolls to the saved routine and highlights it.
+- E2E (headless, fake Firestore, TEST routine only): Replace + sets + reps + add move → Save → Gym tab → Mine → reload, all persisted in place
+  (same id, order kept); circuit rounds/rest persisted across reload; Mine-tab unsaved prompt still works.
+
+## 2026-10-19 ~6:25 AM ET — promote Legs save fix to prod (build prod-steal-20261019a, beta + prod)
+- p20 on prod: saved routines listed before templates; a same-name template card opens your saved routine; template editor warning;
+  "Replace my X / Keep both" choice; highlight after save. Santiago's Legs data not modified. BETA badge stays beta-host-only.
