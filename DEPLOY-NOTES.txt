@@ -525,3 +525,20 @@ Passkeys are per-domain: register Face ID separately on prod.
 ## 2026-10-19 ~6:25 AM ET — promote Legs save fix to prod (build prod-steal-20261019a, beta + prod)
 - p20 on prod: saved routines listed before templates; a same-name template card opens your saved routine; template editor warning;
   "Replace my X / Keep both" choice; highlight after save. Santiago's Legs data not modified. BETA badge stays beta-host-only.
+
+## 2026-10-19 ~8:00 PM ET — beta-steal-p21 (build 20261019-steal-p21-hitit, BETA hosting only)
+- Bug (Santiago, prod, Legs 5:28–6:24 PM, session f192b0be…): "Bulgarian again, a repeat". Root cause is the routine itself, not
+  Save & Hit it. Legs (bddf31c9…) has 6 moves: DL, back squat, Bulgarian split squat (split-squat, #3), hip thrust, DB RDL, and
+  Dumbbell Bulgarian split squat (x-dumbbell-bulgarian-split-squat, #6). #6 is from the Oct 19 6:07 AM calves → Replace. The library has
+  the same movement under two names, and Replace/Add only hid exact-name matches, so "Dumbbell Bulgarian split squat" was offered while
+  "Bulgarian split squat" was already in the routine. Save & Hit it (21:27:59Z) saved those 6 moves in place and started the
+  session with the same 6 ids: one Legs doc, no appended or duplicated moves (reproduced in Playwright). "6 of 6" = that duplicate, left
+  unlogged (17/17 sets on moves 1–5). The "different display" at RDL is the normal dumbbell logger (Weight · lb + kg conversion, prefilled
+  with last time's 165), shown after the barbell plate logger on hip thrust. #6 also has no demo clip or last-time line.
+- Fix: same-movement guard (moveKey ignores equipment words, or matching libId). Replace hides moves already in the workout; Add tags
+  them "already in this workout" and asks "X is already move N. Add it again?"; the editor card shows "⚠ Same move as #N …".
+- Editor: the sticky bar is now [Save changes / Save routine] (secondary, disabled when nothing changed) + [Hit it] (primary). Hit it starts
+  right away from the current list with no save and no prompt. "Save & Hit it" and "Try once without saving" removed. Unsaved edits on a saved
+  routine are used for that workout only; after Finish, Mine shows "You changed “X” for this workout. Save those changes?
+  [Keep X as is] [Save changes]". Finishing a same-name template no longer auto-creates a second routine; it offers Keep both /
+  Replace my X / Not now instead.
