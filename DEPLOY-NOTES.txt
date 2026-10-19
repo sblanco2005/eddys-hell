@@ -521,3 +521,7 @@ Passkeys are per-domain: register Face ID separately on prod.
   "Keep both" / "Replace my X". After save, Mine home scrolls to the saved routine and highlights it.
 - E2E (headless, fake Firestore, TEST routine only): Replace + sets + reps + add move → Save → Gym tab → Mine → reload, all persisted in place
   (same id, order kept); circuit rounds/rest persisted across reload; Mine-tab unsaved prompt still works.
+
+## 2026-10-19 ~6:25 AM ET — promote Legs save fix to prod (build prod-steal-20261019a, beta + prod)
+- p20 on prod: saved routines listed before templates; a same-name template card opens your saved routine; template editor warning;
+  "Replace my X / Keep both" choice; highlight after save. Santiago's Legs data not modified. BETA badge stays beta-host-only.
