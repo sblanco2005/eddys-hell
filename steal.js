@@ -160,6 +160,21 @@
       ? crypto.randomUUID()
       : "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   const MAX_WORKOUTS = 50;
+  /** p21: same movement under another library name (e.g. "Bulgarian split squat" vs "Dumbbell Bulgarian split squat"). */
+  const EQUIP_WORDS = /\b(dumbbells?|db|barbell|bb|kettlebells?|kb|cables?|machine|smith|bands?|ez[- ]?bar|trap[- ]?bar)\b/g;
+  const moveKey = (m) => String((m && m.name) || "").toLowerCase().replace(EQUIP_WORDS, " ").replace(/[^a-z0-9]+/g, " ").trim();
+  function dupOf(m, exs, exceptId) {
+    if (!m) return null;
+    const k = moveKey(m);
+    const list = exs || [];
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (!e || (exceptId && e.id === exceptId)) continue;
+      if ((m.libId || m.id) && e.libId && e.libId === (m.libId || m.id) && e !== m) return { ex: e, i };
+      if (k && moveKey(e) === k) return { ex: e, i };
+    }
+    return null;
+  }
 
   // ——— Library helpers (ported from Steal) ———
   const LIB_BY_ID = new Map(D.LIB.map((m) => [m.id, m]));
@@ -555,6 +570,10 @@
             <button type="button" class="ex-x" data-act="rm-ex" data-ex="${esc(ex.id)}" aria-label="Remove move">×</button>
           </div>
         </div>
+        ${(() => {
+          const dup = S.draft && dupOf(ex, S.draft.exercises.slice(0, i), ex.id);
+          return dup ? `<p class="ex-dup" role="note">⚠ Same move as #${dup.i + 1} ${esc(dup.ex.name)}. Remove one, or Replace this with a different move.</p>` : "";
+        })()}
         ${editKind(ex) === "lift" ? renderLiftTargets(ex) : renderFreeTargets(ex)}
         <div class="ex-row ex-row-2">
           <div class="ex-field ex-rest">
@@ -732,19 +751,19 @@
     const dirty = draftDirty(d);
     const twin = !existing && nameTwin(d);
     const note = empty
-      ? "Add a move to save"
+      ? "Add a move to start"
       : existing
-      ? (dirty ? `Unsaved changes · saves to your “${esc(d.name || "routine")}”` : "No changes yet")
+      ? (dirty ? "Unsaved changes · Hit it uses them for this workout only" : `Your “${esc(d.name || "routine")}” · saved`)
       : twin
       ? `Template · you already have “${esc(twin.name)}”`
-      : `Saves to Mine as “${esc((d.name || "").trim() || "My workout")}”`;
+      : "Hit it to try it now, or save it to Mine";
     return `<div class="save-bar" role="region" aria-label="Save routine">
         <div class="save-bar-top"><span class="save-bar-note${dirty && !empty ? " dirty" : ""}">${note}</span>${
           existing ? `<button type="button" class="save-bar-link" data-act="save-copy" ${empty ? "disabled" : ""}>Save as new</button>` : ""
         }</div>
         <div class="save-bar-row">
-          <button type="button" class="btn secondary" data-act="save-hit" ${empty ? "disabled" : ""}>Save &amp; Hit it</button>
-          <button type="button" class="btn accent" data-act="save" ${empty ? "disabled" : ""}>Save routine</button>
+          <button type="button" class="btn secondary" data-act="save" ${empty || (existing && !dirty) ? "disabled" : ""}>${existing ? "Save changes" : "Save routine"}</button>
+          <button type="button" class="btn accent" data-act="hit-now" ${empty ? "disabled" : ""}>Hit it</button>
         </div>
       </div>`;
   }
@@ -1004,6 +1023,10 @@
       case "add-move": {
         const m = LIB_BY_ID.get(el.dataset.lib);
         if (!d || !m) return;
+        {
+          const dup = dupOf(m, d.exercises);
+          if (dup && !window.confirm(`${dup.ex.name} is already move ${dup.i + 1}. Add it again?`)) return;
+        }
         d.exercises = [...d.exercises, normalizeEx(toExercise(m), true)];
         setStatus(`Added ${m.name}`, "ok");
         break;
@@ -1048,6 +1071,7 @@
         S.clip = null;
         return render();
       default:
+        if (HOOKS.offerAction && HOOKS.offerAction(act)) return;
         if (HOOKS.onAction && HOOKS.onAction(act, el)) return;
         return;
     }
@@ -1657,7 +1681,8 @@
     const draft = sess.draft;
     delete sess.draft;
     let w = sess.workoutId ? S.workouts.find((x) => x.id === sess.workoutId) : null;
-    if (!w && draft && S.workouts.length < MAX_WORKOUTS) {
+    const twinName = !w && S.workouts.some((x) => nameKey(x.name) === nameKey(sess.name));
+    if (!w && draft && !twinName && S.workouts.length < MAX_WORKOUTS) {
       // Finishing an unsaved build logs it as a workout (same as Steal).
       w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, structure: draft.structure || null, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
       S.workouts = [w, ...S.workouts];
@@ -1672,6 +1697,8 @@
         return se ? { ...e, setup: se.setup || "", reps: String(se.reps || e.reps), sets: se.swappedFrom ? e.sets : se.logs.length } : e;
       });
     }
+    // p21: unsaved editor edits / same-name template → ask after Finish instead of saving or duplicating silently
+    offerAfterFinish(sess, twinName ? draft : null, w);
     S.sessions = [...S.sessions.filter((x) => x.id !== sess.id), sess];
     S.active = null;
     S.rest = null;
@@ -1715,6 +1742,86 @@
     }
   }
 
+  /** p21: snapshot of unsaved editor changes on a saved routine (used for "Save changes?" after Finish). */
+  function routineEditsOf(d) {
+    const e = {
+      name: (d.name || "").trim() || "My workout",
+      notes: d.notes || "",
+      exercises: JSON.parse(JSON.stringify(d.exercises || [])).map((x) => ({ ...x, setup: x.setup || "", reps: String(x.reps || "") })),
+      structure: d.structure && d.structure.type === "circuit" ? { ...d.structure } : null,
+    };
+    if (typeof d.logAfter === "boolean") e.logAfter = d.logAfter;
+    return e;
+  }
+  S.offer = Store.readLocal("offer", null);
+  function setOffer(o) {
+    S.offer = o;
+    Store.writeLocal("offer", o);
+  }
+  /** After Finish: edits made before Hit it (saved routine) or a template whose name you already have. */
+  function offerAfterFinish(sess, draft, w) {
+    if (sess.routineEdits && !w) delete sess.routineEdits;
+    if (sess.routineEdits && w) {
+      const byId = new Map(sess.exercises.map((e) => [e.id, e]));
+      const ed = sess.routineEdits;
+      delete sess.routineEdits;
+      ed.exercises = ed.exercises.map((e) => {
+        const se = byId.get(e.id);
+        return se ? { ...e, setup: se.setup || "", reps: String(se.reps || e.reps) } : e;
+      });
+      setOffer({ kind: "edits", workoutId: w.id, name: w.name, edits: ed });
+    } else if (draft && !w) {
+      const tw = S.workouts.find((x) => nameKey(x.name) === nameKey(sess.name));
+      setOffer({ kind: "template", twinId: tw ? tw.id : null, name: sess.name, sessionId: sess.id, edits: { name: sess.name, notes: draft.notes || "", exercises: draft.exercises.map((e) => routineCopy(e)), structure: draft.structure || null } });
+    }
+  }
+  function offerBanner() {
+    const o = S.offer;
+    if (!o) return "";
+    if (o.kind === "edits")
+      return `<section class="offer-banner" role="region" aria-label="Save changes"><p class="offer-q">You changed “${esc(o.name)}” for this workout. Save those changes to the routine?</p>
+        <div class="save-bar-row"><button type="button" class="btn secondary" data-act="offer-dismiss">Keep ${esc(o.name)} as is</button><button type="button" class="btn accent" data-act="offer-save">Save changes</button></div></section>`;
+    const tw = o.twinId && S.workouts.find((x) => x.id === o.twinId);
+    return `<section class="offer-banner" role="region" aria-label="Save as routine"><p class="offer-q">Save this “${esc(o.name)}” workout as a routine?${tw ? ` You already have “${esc(tw.name)}”.` : ""}</p>
+        <div class="save-bar-row">${tw ? `<button type="button" class="btn secondary" data-act="offer-new">Keep both</button><button type="button" class="btn accent" data-act="offer-replace">Replace my ${esc(tw.name)}</button>` : `<button type="button" class="btn secondary" data-act="offer-dismiss">Not now</button><button type="button" class="btn accent" data-act="offer-new">Save routine</button>`}</div>
+        ${tw ? `<button type="button" class="btn ghost btn-sm" data-act="offer-dismiss">Not now</button>` : ""}</section>`;
+  }
+  async function applyOffer(act) {
+    const o = S.offer;
+    setOffer(null);
+    if (!o || act === "offer-dismiss") return render();
+    const now = new Date().toISOString();
+    let w;
+    if (o.kind === "edits" || act === "offer-replace") {
+      const id = o.kind === "edits" ? o.workoutId : o.twinId;
+      const prev = S.workouts.find((x) => x.id === id);
+      if (!prev) return render();
+      w = { ...prev, ...o.edits, id: prev.id, createdAt: prev.createdAt, lastDoneAt: prev.lastDoneAt || null, savedAt: now };
+      S.workouts = S.workouts.map((x) => (x.id === w.id ? w : x));
+    } else {
+      if (S.workouts.length >= MAX_WORKOUTS) return toast(`You have ${MAX_WORKOUTS} saved workouts — remove one first.`, "err");
+      let name = o.edits.name;
+      if (S.workouts.some((x) => nameKey(x.name) === nameKey(name))) name = `${name} (2)`;
+      w = { ...o.edits, id: uuid(), name, createdAt: now, savedAt: now, lastDoneAt: now };
+      S.workouts = [w, ...S.workouts];
+      const sx = o.sessionId && S.sessions.find((x) => x.id === o.sessionId);
+      if (sx && !sx.workoutId) {
+        sx.workoutId = w.id;
+        Store.saveSession(sx, S.sessions).catch(() => {});
+      }
+    }
+    S.flashId = w.id;
+    render();
+    toast(o.kind === "edits" || act === "offer-replace" ? `${w.name} updated` : `Saved “${w.name}” to Mine`, "ok");
+    try {
+      await Store.saveWorkout(w, S.workouts);
+    } catch (err) {
+      console.warn("[mine] offer save failed", err);
+      toast("Couldn’t save to your account — kept on this device.", "err");
+    }
+  }
+  HOOKS.offerAction = (act) => (/^offer-/.test(act) ? (applyOffer(act), true) : false);
+
   Object.assign(HOOKS, {
     hitItButton: (w) =>
       `<button type="button" class="btn accent btn-sm" data-act="hit" data-id="${esc(w.id)}" ${(w.exercises || []).length ? "" : "disabled"}>Hit it</button>` +
@@ -1723,18 +1830,18 @@
       const n = S.sessions.filter((x) => x.finishedAt && x.workoutId === w.id).length;
       return `<button type="button" class="btn ghost btn-sm" data-act="history" data-id="${esc(w.id)}">History${n ? ` · ${n}` : ""}</button>`;
     },
-    hitItDraftButton: (d, existing) =>
-      (existing ? "" : `<button type="button" class="btn ghost wide-btn" data-act="hit-draft" ${d.exercises.length ? "" : "disabled"}>Try once without saving</button>`) +
+    hitItDraftButton: (d) =>
       `<button type="button" class="btn secondary wide-btn" data-act="plan-open" data-src="draft" ${d.exercises.length ? "" : "disabled"}>Send plan to trainer</button>`,
     renderPlanModal: () => renderPlanModal(),
     resumeBanner: () =>
-      S.active
+      offerBanner() +
+      (S.active
         ? `<button type="button" class="resume-banner" data-act="sess-resume"><span>In progress · ${esc(S.active.name)}</span><strong>Resume workout ›</strong></button>`
         : S.draft && S.view !== "edit" && draftDirty(S.draft)
         ? `<div class="resume-banner draft-banner"><span>Unsaved changes · ${esc(S.draft.name || "Workout")}</span>
             <span><button type="button" class="btn ghost btn-sm" data-act="draft-discard">Discard</button>
             <button type="button" class="btn accent btn-sm" data-act="draft-continue">Continue editing</button></span></div>`
-        : "",
+        : ""),
     renderView: (v) => (v === "session" && S.active ? renderSession() + renderFinishModal() : v === "history" && S.historyFor ? renderHistory() : ""),
     async afterLoad() {
       const a = Store.readLocal("active", null);
@@ -1805,11 +1912,19 @@
           }
           return true;
         }
+        case "hit-now":
         case "hit-draft": {
+          // p21: start right away from what's in the editor — no save, no prompt. Unsaved edits on a saved routine are
+          // used for this workout only; after Finish we offer to save them to the routine.
           const d = S.draft;
-          if (!d) return true;
+          if (!d || !d.exercises.length) return true;
           const existing = d.id && S.workouts.some((x) => x.id === d.id);
+          const edits = existing && draftDirty(d) ? routineEditsOf(d) : null;
           startSession(d, existing ? d.id : null);
+          if (S.active && edits) {
+            S.active.routineEdits = edits;
+            persistActive();
+          }
           return true;
         }
         case "history":
@@ -2364,7 +2479,9 @@
     if (pat) for (const m of D.LIB) if (patternOf(m) === pat) pattern.add(m.id);
     const muscle = (cur && cur.muscle) || ex.muscle;
     // hide the move being replaced and anything already in this workout
-    const inWorkout = ((S.repl && S.repl.ctx === "sess" ? S.active && S.active.exercises : S.draft && S.draft.exercises) || []).map((e) => String(e.name || "").toLowerCase());
+    const wexs = (S.repl && S.repl.ctx === "sess" ? S.active && S.active.exercises : S.draft && S.draft.exercises) || [];
+    const inWorkout = wexs.map((e) => String(e.name || "").toLowerCase());
+    const others = wexs.filter((e) => e.id !== ex.id);
     const seen = new Set([name, ...inWorkout]);
     const score = (m) => (fits(m, S.gym) ? 0 : 10) + (pattern.has(m.id) ? 0 : m.muscle === muscle ? 2 : 5);
     const ql = String(q || "").trim();
@@ -2376,7 +2493,7 @@
         const k = m.name.toLowerCase();
         if (seen.has(k)) return false;
         seen.add(k);
-        return true;
+        return !dupOf(m, others); // p21: no second copy of a move already in this workout
       });
     return list.map((m) => ({ m, have: fits(m, S.gym), similar: pattern.has(m.id) || m.muscle === muscle }));
   }
@@ -2414,6 +2531,8 @@
     const i = d ? d.exercises.findIndex((e) => e.id === S.repl.exId) : -1;
     if (i < 0) return;
     const old = d.exercises[i];
+    const dup = dupOf(m, d.exercises, old.id);
+    if (dup && !window.confirm(`${dup.ex.name} is already move ${dup.i + 1}. Add it again?`)) return;
     const nx = swapEx(old, m);
     d.exercises = d.exercises.map((e, j) => (j === i ? nx : e));
     S.repl = null;
@@ -2522,7 +2641,7 @@
         ? res
             .map(
               (m) => `<button type="button" class="add-move repl-opt${fits(m, S.gym) ? "" : " no-kit"}" data-act="add-move" data-lib="${esc(m.id)}">
-            <span class="repl-name">${esc(m.name)}<small>${esc(m.muscle)} · ${esc(m.equipment)}${fits(m, S.gym) ? "" : " · not in your Gym"}${inW.has(m.name.toLowerCase()) ? " · in this workout" : ""}</small></span></button>`
+            <span class="repl-name">${esc(m.name)}<small>${esc(m.muscle)} · ${esc(m.equipment)}${fits(m, S.gym) ? "" : " · not in your Gym"}${inW.has(m.name.toLowerCase()) || dupOf(m, (S.draft && S.draft.exercises) || []) ? " · already in this workout" : ""}</small></span></button>`
             )
             .join("")
         : `<p class="hint">No moves match “${esc(q)}”.</p>`) + offerCustom(q, "add", guessMuscle(q))
@@ -3200,12 +3319,14 @@
         const draft = sess.draft;
         delete sess.draft;
         w = workoutOf(sess);
-        if (!w && draft && S.workouts.length < MAX_WORKOUTS) {
+        const twinName = !w && S.workouts.some((x) => nameKey(x.name) === nameKey(sess.name));
+        if (!w && draft && !twinName && S.workouts.length < MAX_WORKOUTS) {
           w = { id: uuid(), name: sess.name, notes: draft.notes || "", exercises: draft.exercises, structure: draft.structure || null, createdAt: sess.startedAt, savedAt: now, lastDoneAt: null };
           S.workouts = [w, ...S.workouts];
           sess.workoutId = w.id;
         }
         if (w) w.lastDoneAt = now;
+        offerAfterFinish(sess, twinName ? draft : null, w);
       } else sess = S.sessions.find((x) => x.id === la.sid);
       if (!sess) return;
       try {
