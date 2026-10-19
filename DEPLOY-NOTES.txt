@@ -542,3 +542,8 @@ Passkeys are per-domain: register Face ID separately on prod.
   routine are used for that workout only; after Finish, Mine shows "You changed “X” for this workout. Save those changes?
   [Keep X as is] [Save changes]". Finishing a same-name template no longer auto-creates a second routine; it offers Keep both /
   Replace my X / Not now instead.
+
+## 2026-10-19 ~7:55 PM ET — promote p21 to prod (build prod-steal-20261019b, PROD hosting only; beta stays on 20261019-steal-p21-hitit, same code)
+- Same-movement duplicate guard (Replace hides, Add confirms, editor "⚠ Same move as #N"); editor Hit it is primary (no save or prompt),
+  Save is secondary; "Save changes?" offer after Finish; a same-name template no longer auto-creates a second routine.
+- No user data changed. Santiago's Legs still has Bulgarian split squat (#3) + Dumbbell Bulgarian split squat (#6); he'll fix move 6 himself.
