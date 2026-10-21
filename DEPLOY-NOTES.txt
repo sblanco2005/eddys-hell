@@ -547,3 +547,11 @@ Passkeys are per-domain: register Face ID separately on prod.
 - Same-movement duplicate guard (Replace hides, Add confirms, editor "⚠ Same move as #N"); editor Hit it is primary (no save or prompt),
   Save is secondary; "Save changes?" offer after Finish; a same-name template no longer auto-creates a second routine.
 - No user data changed. Santiago's Legs still has Bulgarian split squat (#3) + Dumbbell Bulgarian split squat (#6); he'll fix move 6 himself.
+
+## 2026-10-20 ~9:40 PM ET — promote p22 + p23 to prod (build prod-steal-20261020a, PROD hosting only; beta stays on 20261020-steal-p23-savecopy, same code)
+- p22 Hit it: "+ Add set" (prefilled from last set, removable, this workout only, in trainer summary); "Superset with next" / Unlink /
+  add next (A1/A2 alternation, rest after each round; offered in "Save those changes?"); per-move equipment (Barbell + bar /
+  Dumbbell per DB / Cable/Machine / Bodyweight) with name-based defaults; summary "X lb total (Y/side + 45 bar)" / "X lb DBs".
+- p23 editor: Save changes enables live on typed edits (target/setup/weight/name); cardio pieces at different targets aren't
+  flagged as duplicates (600 ≡ 600m); remove-routine confirm disarms on any other tap/typing.
+- Hosting only — no functions/rules changes. No user data changed.
