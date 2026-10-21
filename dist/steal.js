@@ -163,6 +163,9 @@
   /** p21: same movement under another library name (e.g. "Bulgarian split squat" vs "Dumbbell Bulgarian split squat"). */
   const EQUIP_WORDS = /\b(dumbbells?|db|barbell|bb|kettlebells?|kb|cables?|machine|smith|bands?|ez[- ]?bar|trap[- ]?bar)\b/g;
   const moveKey = (m) => String((m && m.name) || "").toLowerCase().replace(EQUIP_WORDS, " ").replace(/[^a-z0-9]+/g, " ").trim();
+  /** p23: cardio pieces at different targets (Hyrox ladder: row 1000m … row 200m) are intentional, not duplicates. */
+  const isCardioMove = (m) => !!m && m.muscle === "cardio";
+  const targetKey = (m) => String((m && m.reps) == null ? "" : m.reps).toLowerCase().replace(/\s+/g, "").replace(/^(\d+(?:\.\d+)?)m$/, "$1"); // 600 ≡ 600m
   function dupOf(m, exs, exceptId) {
     if (!m) return null;
     const k = moveKey(m);
@@ -170,6 +173,7 @@
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
       if (!e || (exceptId && e.id === exceptId)) continue;
+      if (isCardioMove(m) && isCardioMove(e) && targetKey(m) !== targetKey(e)) continue;
       if ((m.libId || m.id) && e.libId && e.libId === (m.libId || m.id) && e !== m) return { ex: e, i };
       if (k && moveKey(e) === k) return { ex: e, i };
     }
@@ -251,12 +255,28 @@
     return out;
   }
   const userUnit = () => Store.readLocal("unit", "lb");
-  /** Barbell move? Per-move override (ex.barbell, set from the Hit it switch) beats library data. */
+  /** p22: per-move equipment — 'barbell' (total = 2×side + bar) | 'dumbbell' (weight per DB) | 'cable' (cable/machine, plain
+   * weight) | 'bodyweight'. Explicit ex.equip (Hit it picker / saved routine) wins; legacy ex.barbell switch; then the name
+   * ('Dumbbell …' → dumbbell, 'Cable …' → cable, 'Barbell …' → barbell); then library data. */
+  const EQUIPS = ["barbell", "dumbbell", "cable", "bodyweight"];
+  const EQUIP_LABEL = { barbell: "Barbell", dumbbell: "Dumbbell", cable: "Cable/Machine", bodyweight: "Bodyweight" };
+  function equipOf(ex) {
+    if (!ex) return "cable";
+    if (EQUIPS.includes(ex.equip)) return ex.equip;
+    if (ex.barbell === true) return "barbell";
+    const n = String(ex.name || "");
+    if (/\b(dumbbells?|db)\b/i.test(n)) return "dumbbell";
+    if (ex.barbell !== false && /\b(barbell|bb|ez[- ]?bar|trap[- ]?bar)\b|deadlift|back squat|front squat/i.test(n)) return "barbell";
+    if (/\b(cables?|machine|smith|pulldown|pushdown|leg press|pec deck|leg extension|leg curl|lat pull)\b/i.test(n)) return "cable";
+    if (/\bkettlebells?\b|\bkb\b/i.test(n)) return "dumbbell";
+    if (isBodyweight(ex)) return "bodyweight";
+    if (ex.barbell !== false && (ex.isBarbell === true || ex.equipment === "barbell")) return "barbell";
+    if (/dumbbell|kettlebell/.test(String(ex.equipment || ""))) return "dumbbell";
+    return "cable";
+  }
+  /** Barbell move? (per move — each half of a superset has its own equipment). */
   function isBarbellEx(ex) {
-    if (!ex) return false;
-    if (typeof ex.barbell === "boolean") return ex.barbell;
-    if (typeof ex.isBarbell === "boolean") return ex.isBarbell;
-    return ex.equipment === "barbell" || /\bbarbell\b|deadlift|back squat|front squat/i.test(ex.name || "");
+    return !!ex && equipOf(ex) === "barbell";
   }
   const DEFAULT_BAR_LB = 45;
   const barLbOf = (ex) => (ex && ex.barLb != null && Number.isFinite(Number(ex.barLb)) ? Math.max(0, Number(ex.barLb)) : DEFAULT_BAR_LB);
@@ -935,6 +955,7 @@
   function onMineClick(el) {
     const act = el.dataset.act;
     const d = S.draft;
+    if (S.confirmRemove && act !== "remove" && act !== "remove-draft") S.confirmRemove = null; // p23: never stays armed
     switch (act) {
       case "go-gym":
         return setTab("gym");
@@ -1107,6 +1128,41 @@
       }
     }
     persistDraft();
+    refreshEditorLive();
+  }
+  /** p23: typing (name, target, setup, weight) doesn't re-render (focus/caret would be lost), so patch the parts that
+   * depend on the draft in place: the sticky Save bar (dirty → Save changes enabled) and the duplicate warnings. */
+  function refreshEditorLive() {
+    const d = S.draft;
+    if (!d || S.view !== "edit") return;
+    if (S.confirmRemove) {
+      S.confirmRemove = null;
+      const rb = document.querySelector('.editor-actions [data-act="remove-draft"]');
+      if (rb) rb.textContent = "Remove workout";
+    }
+    const existing = !!d.id && S.workouts.some((w) => w.id === d.id);
+    const bar = document.querySelector(".save-bar");
+    if (bar) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = renderSaveBar(d, existing, !d.exercises.length);
+      if (tmp.firstElementChild) bar.replaceWith(tmp.firstElementChild);
+    }
+    d.exercises.forEach((ex, i) => {
+      const card = document.querySelector(`.ex-card[data-ex="${CSS.escape(ex.id)}"]`);
+      if (!card) return;
+      const dup = dupOf(ex, d.exercises.slice(0, i), ex.id);
+      let w = card.querySelector(".ex-dup");
+      if (!dup) return w && w.remove();
+      if (!w) {
+        w = document.createElement("p");
+        w.className = "ex-dup";
+        w.setAttribute("role", "note");
+        const top = card.querySelector(".ex-top");
+        if (top) top.after(w);
+        else card.prepend(w);
+      }
+      w.textContent = `⚠ Same move as #${dup.i + 1} ${dup.ex.name}. Remove one, or Replace this with a different move.`;
+    });
   }
 
   /** Extension points for the session logger (phase 3). */
@@ -1220,7 +1276,8 @@
         const prior = map.get(e.name) || [];
         return {
           ...e,
-          barbell: isBarbellEx(e),
+          equip: equipOf(e),
+          barbell: undefined,
           barLb: barLbOf(e),
           setup: e.setup || "",
           logs: Array.from({ length: Math.max(1, Number(e.sets) || 1) }, (_, i) => {
@@ -1309,10 +1366,12 @@
     return [...c].map(([p, n]) => (n > 1 ? `${n}×${fmtNum(p)}` : fmtNum(p))).join(" + ");
   }
   /** Non-barbell: just the conversion ('= 22.7 kg'). */
-  function convHtml(l, unit) {
+  function convHtml(l, unit, ex) {
     if (!(l.weightLb > 0)) return "";
-    return `<p class="sess-conv mono">= ${fmtNum(disp1(l.weightLb, other(unit)))} ${other(unit)}</p>`;
+    const db = ex && equipOf(ex) === "dumbbell";
+    return `<p class="sess-conv mono">= ${fmtNum(disp1(l.weightLb, other(unit)))} ${other(unit)}${db ? ` each · pair ${fmtNum(disp1(2 * l.weightLb, unit))} ${unit}` : ""}</p>`;
   }
+  const MAX_SESS_SETS = 12;
 
   function renderSession() {
     const sess = S.active;
@@ -1337,6 +1396,9 @@
     const rowsFor = (ex, nextUp) => {
       const kind = kindOf(ex);
       const per = kind === "lift" && isBarbellEx(ex);
+      const eq = equipOf(ex);
+      const wLbl = per ? `One side · ${unit}` : eq === "dumbbell" ? `Each DB · ${unit}` : eq === "bodyweight" ? `Added · ${unit}` : `Weight · ${unit}`;
+      const wPh = per ? "per side" : eq === "bodyweight" || isBodyweight(ex) ? "BW" : eq === "dumbbell" ? "each" : unit;
       const X = `data-ex="${esc(ex.id)}"`;
       return ex.logs
       .map((l) => {
@@ -1348,19 +1410,53 @@
         else if (kind === "reps")
           inputs = `<input class="sess-input mono grow" inputmode="numeric" data-sf="reps" data-set="${l.set}" ${X} value="${l.reps || ""}" placeholder="reps" aria-label="Reps" />`;
         else
-          inputs = `<label class="sess-wfield grow"><span class="sess-flbl">${per ? `One side · ${unit}` : `Weight · ${unit}`}</span>
-              <input class="sess-input mono" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-sf="weight" data-set="${l.set}" ${X} value="${wDisp != null ? fmtNum(wDisp) : ""}" placeholder="${per ? "per side" : isBodyweight(ex) ? "BW" : unit}" aria-label="${per ? `Weight on one side in ${unit}` : `Weight in ${unit}`}" /></label>
+          inputs = `<label class="sess-wfield grow"><span class="sess-flbl">${wLbl}</span>
+              <input class="sess-input mono" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-sf="weight" data-set="${l.set}" ${X} value="${wDisp != null ? fmtNum(wDisp) : ""}" placeholder="${wPh}" aria-label="${per ? `Weight on one side in ${unit}` : eq === "dumbbell" ? `Weight of each dumbbell in ${unit}` : `Weight in ${unit}`}" /></label>
             <label class="sess-wfield reps"><span class="sess-flbl">Reps</span>
               <input class="sess-input mono" inputmode="numeric" enterkeyhint="done" data-sf="reps" data-set="${l.set}" ${X} value="${l.reps || ""}" placeholder="reps" aria-label="Reps" /></label>`;
         const plates =
-          kind !== "lift" ? "" : per ? `<div class="plate-wrap" data-pw="${esc(ex.id)}:${l.set}">${platesHtml(l, unit, ex)}</div>` : `<div class="plate-wrap" data-pw="${esc(ex.id)}:${l.set}">${convHtml(l, unit)}</div>`;
-        return `<li class="set-row${l.done ? " done" : ""}${nextUp && nextUp.id === ex.id && nextUp.set === l.set ? " next-up" : ""}">
+          kind !== "lift" ? "" : per ? `<div class="plate-wrap" data-pw="${esc(ex.id)}:${l.set}">${platesHtml(l, unit, ex)}</div>` : `<div class="plate-wrap" data-pw="${esc(ex.id)}:${l.set}">${convHtml(l, unit, ex)}</div>`;
+        return `<li class="set-row${l.done ? " done" : ""}${l.extra ? " extra" : ""}${nextUp && nextUp.id === ex.id && nextUp.set === l.set ? " next-up" : ""}">
             <div class="set-main"><span class="set-n mono">${l.set}</span>${inputs}
-              <button type="button" class="btn ${l.done ? "accent" : "secondary"} btn-sm set-log" data-act="log" data-set="${l.set}" ${X}>${l.done ? "Logged" : "Log"}</button></div>
+              <button type="button" class="btn ${l.done ? "accent" : "secondary"} btn-sm set-log" data-act="log" data-set="${l.set}" ${X}>${l.done ? "Logged" : "Log"}</button>
+              ${l.extra && ex.logs.length > 1 ? `<button type="button" class="set-rm" data-act="rm-set" data-set="${l.set}" ${X} aria-label="Remove added set ${l.set}">×</button>` : ""}</div>
+            ${l.extra ? `<p class="set-extra-tag">Added set · this workout only</p>` : ""}
             ${plates}</li>`;
       })
-      .join("");
+      .join("") + addSetBtn(ex);
     };
+    /** p22: '+ Add set' under a move's rows — copies the last set's weight/reps; logged like any other set. */
+    const addSetBtn = (ex) => {
+      if (ex.logs.length >= MAX_SESS_SETS) return "";
+      const last = ex.logs[ex.logs.length - 1];
+      const k = kindOf(ex);
+      const pre = !last ? "" : k === "time" ? "" : k === "reps" ? ` · ${last.reps || 0} reps` : last.weightLb > 0 ? ` · ${fmtNum(disp1(last.weightLb, unit))} ${unit}${equipOf(ex) === "dumbbell" ? " DBs" : ""} × ${last.reps || 0}` : ` · ${last.reps || 0} reps`;
+      return `<li class="add-set-row"><button type="button" class="btn secondary wide-btn add-set" data-act="add-set" data-ex="${esc(ex.id)}">+ Add set${esc(pre)}</button></li>`;
+    };
+    /** p22: per-move equipment picker (+ bar weight for barbell) — each half of a superset has its own. */
+    const equipHtml = (m) => {
+      if (kindOf(m) !== "lift") return "";
+      const eq = equipOf(m);
+      const X = `data-ex="${esc(m.id)}"`;
+      const b = barLbOf(m);
+      return `<div class="eq-row" role="group" aria-label="Equipment for ${esc(m.name)}">${EQUIPS.map(
+        (q) => `<button type="button" class="seg-btn sm eq-btn${eq === q ? " on" : ""}" data-act="equip" data-eq="${q}" ${X} aria-pressed="${eq === q}">${eq === q ? "✓ " : ""}${EQUIP_LABEL[q]}</button>`
+      ).join("")}</div>${
+        eq === "barbell"
+          ? `<div class="bar-row">
+              <label class="bar-lbl" for="bar-in-${esc(m.id)}">Bar</label>
+              <input id="bar-in-${esc(m.id)}" class="sess-input mono bar-in" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-sf="bar" ${X} value="${fmtNum(disp1(b, unit))}" aria-label="Bar weight in ${unit}" />
+              <span class="bar-unit">${unit}</span>
+              <button type="button" class="seg-btn sm${b === 45 ? " on" : ""}" data-act="bar" data-lb="45" ${X}>${unit === "kg" ? "20.4" : "45"}</button>
+              <button type="button" class="seg-btn sm${b === 35 ? " on" : ""}" data-act="bar" data-lb="35" ${X}>${unit === "kg" ? "15.9" : "35"}</button>
+              <button type="button" class="seg-btn sm${b === 0 ? " on" : ""}" data-act="bar" data-lb="0" ${X}>None</button>
+            </div>`
+          : eq === "dumbbell"
+          ? `<p class="hint eq-hint">Enter the weight of <strong>one</strong> dumbbell</p>`
+          : ""
+      }`;
+    };
+    const canSS = !sess.structure && exs.length > 1;
     const run = ssRunAt(exs, idx);
     const labels = ssLabels(exs);
     let setsHtml;
@@ -1378,12 +1474,22 @@
               <button type="button" class="ss-name" data-act="ss-focus" data-i="${i}">${esc(m.name)}</button>
               <button type="button" class="ex-swap" data-act="repl-open" data-ctx="sess" data-ex="${esc(m.id)}" aria-label="Replace ${esc(m.name)}">⇄</button></div>
             ${m.swappedFrom ? `<p class="hint sess-swapped">Swapped from ${esc(m.swappedFrom)}</p>` : ""}
+            ${equipHtml(m)}
             <ul class="set-list">${rowsFor(m, nextUp)}</ul></section>`;
       }
+      const after = exs[run.end + 1];
       setsHtml = `<div class="ss-block" style="--ss:${run.color}">
           <p class="ss-head"><strong>Superset ${run.letter}</strong> · ${rounds} round${rounds === 1 ? "" : "s"} · rest ${restS}s after each round${nx ? ` · next: <span class="mono">${labels.get(exs[nx.i].id).label} set ${nx.set}</span>` : " · done ✓"}</p>
+          ${canSS ? `<div class="ss-sess-tools"><button type="button" class="ss-link on" data-act="sess-ss-unlink" data-i="${run.start}">⛓ Superset ${run.letter} · <u>Unlink</u></button>${
+            after ? `<button type="button" class="ss-link" data-act="sess-ss" data-i="${run.end}">+ Add ${esc(after.name)}</button>` : ""
+          }</div>` : ""}
           ${parts}</div>`;
-    } else setsHtml = `<ul class="set-list">${rowsFor(ex, null)}</ul>`;
+    } else {
+      const nxt = exs[idx + 1];
+      setsHtml = `${equipHtml(ex)}<ul class="set-list">${rowsFor(ex, null)}</ul>${
+        canSS && nxt ? `<div class="ss-sess-tools"><button type="button" class="ss-link" data-act="sess-ss" data-i="${idx}">+ Superset with next · ${esc(nxt.name)}</button></div>` : ""
+      }`;
+    }
     const rest = S.rest
       ? `<div class="rest-bar" id="rest-bar"><span>Rest</span><strong class="mono" id="rest-left">${mmss(Math.ceil((S.rest.until - Date.now()) / 1000))}</strong>
            <button type="button" class="btn ghost btn-sm" data-act="rest-add">+15s</button><button type="button" class="btn ghost btn-sm" data-act="rest-skip">Skip</button></div>`
@@ -1400,26 +1506,14 @@
       ${HOOKS.coachCard && sess.workoutId ? HOOKS.coachCard(sess.workoutId) : ""}
       ${HOOKS.logAfterBanner ? HOOKS.logAfterBanner(sess) : ""}
       ${
-        kind === "lift"
+        kind === "lift" || (run && exs.slice(run.start, run.end + 1).some((m) => kindOf(m) === "lift"))
           ? `<div class="seg-row">
               <div class="seg-pair" role="group" aria-label="Units">
                 <button type="button" class="seg-btn${unit === "lb" ? " on" : ""}" data-act="unit" data-unit="lb" aria-pressed="${unit === "lb"}">lb</button>
                 <button type="button" class="seg-btn${unit === "kg" ? " on" : ""}" data-act="unit" data-unit="kg" aria-pressed="${unit === "kg"}">kg</button>
               </div>
-              <button type="button" class="seg-btn bb-switch${per ? " on" : ""}" data-act="barbell" aria-pressed="${per}">${per ? "✓ " : ""}Barbell</button>
-            </div>
-            ${
-              per
-                ? `<div class="bar-row">
-                    <label class="bar-lbl" for="bar-in">Bar</label>
-                    <input id="bar-in" class="sess-input mono bar-in" inputmode="decimal" enterkeyhint="done" autocomplete="off" data-sf="bar" value="${fmtNum(disp1(bar, unit))}" aria-label="Bar weight in ${unit}" />
-                    <span class="bar-unit">${unit}</span>
-                    <button type="button" class="seg-btn sm${bar === 45 ? " on" : ""}" data-act="bar" data-lb="45">${unit === "kg" ? "20.4" : "45"}</button>
-                    <button type="button" class="seg-btn sm${bar === 35 ? " on" : ""}" data-act="bar" data-lb="35">${unit === "kg" ? "15.9" : "35"}</button>
-                    <button type="button" class="seg-btn sm${bar === 0 ? " on" : ""}" data-act="bar" data-lb="0">None</button>
-                  </div>`
-                : ""
-            }`
+              <span class="hint eq-note">Equipment is set per move below</span>
+            </div>`
           : ""
       }
       <article class="sess-card">
@@ -1523,12 +1617,15 @@
           ? { label: `${ssl.get(e.id) ? ssl.get(e.id).label + " " : ""}${e.name}${e.swappedFrom ? ` (swapped from ${e.swappedFrom})` : ""}` }
           : {}),
         kind: k,
+        ...(k === "lift" ? { equip: equipOf(e) } : {}),
+        ...(done.some((l) => l.extra) ? { addedSets: done.filter((l) => l.extra).length } : {}),
         sets: done.map((l) => {
-          if (k === "time") return { t: l.timeSeconds || 0 };
-          if (k === "reps") return { r: l.reps || 0 };
+          if (k === "time") return { t: l.timeSeconds || 0, ...(l.extra ? { extra: true } : {}) };
+          if (k === "reps") return { r: l.reps || 0, ...(l.extra ? { extra: true } : {}) };
           const w = disp1(l.weightLb, unit);
-          totalVolume += w * (l.reps || 0);
-          const st = { w, r: l.reps || 0, totalLb: l.weightLb || 0 };
+          const eq = equipOf(e);
+          totalVolume += w * (l.reps || 0) * (eq === "dumbbell" ? 2 : 1);
+          const st = { w, r: l.reps || 0, totalLb: l.weightLb || 0, equip: eq, ...(l.extra ? { extra: true } : {}) };
           if (isBarbellEx(e) && l.weightLb > 0) {
             // per side + bar in the unit he typed them in (falls back to the summary unit)
             const pu = l.perSide != null && (l.unit === "kg" || l.unit === "lb") ? l.unit : unit;
@@ -1537,7 +1634,9 @@
             st.psUnit = pu;
             const tail = pu === unit ? `${fmtNum(st.ps)}/side + ${fmtNum(st.bar)} bar` : `${fmtNum(st.ps)} ${pu}/side + ${fmtNum(st.bar)} ${pu} bar`;
             st.txt = `${fmtNum(w)} ${unit} total (${tail}) × ${st.r}`;
-          } else st.txt = `${w ? fmtNum(w) + " " + unit : "BW"} × ${st.r}`;
+          } else if (eq === "dumbbell" && w) st.txt = `${fmtNum(w)} ${unit} DBs × ${st.r}`;
+          else if (eq === "bodyweight") st.txt = `${w ? `BW + ${fmtNum(w)} ${unit}` : "BW"} × ${st.r}`;
+          else st.txt = `${w ? fmtNum(w) + " " + unit : "BW"} × ${st.r}`;
           return st;
         }),
       });
@@ -1578,7 +1677,7 @@
     return [...by].map(([letter, ms]) => {
       const n = Math.max(...ms.map((m) => m.sets.length));
       const rounds = [];
-      for (let r = 0; r < n; r++) rounds.push(`Round ${r + 1}: ` + ms.filter((m) => m.sets[r]).map((m) => `${m.name} ${shortSet(m.sets[r], unit)}`).join(" → "));
+      for (let r = 0; r < n; r++) rounds.push(`Round ${r + 1}: ` + ms.filter((m) => m.sets[r]).map((m) => `${m.name} ${m.sets[r].txt || shortSet(m.sets[r], unit)}`).join(" → "));
       const title = SS_HEAD(letter, ms.map((m) => m.name));
       return { letter, moves: ms.map((m) => m.name), title, rounds, text: [title, ...rounds].join("\n") };
     });
@@ -1597,7 +1696,7 @@
     return out;
   }
   const setTxt = (st, unit) =>
-    st.t != null ? mmss(st.t) : st.w != null ? `${st.w ? fmtNum(st.w) + unit : "BW"}${st.ps != null ? ` (${fmtNum(st.ps)}${st.psUnit && st.psUnit !== unit ? " " + st.psUnit : ""}/side)` : ""} × ${st.r}` : `${st.r} reps`;
+    st.t != null ? mmss(st.t) : st.w != null ? `${st.w ? fmtNum(st.w) + unit + (st.equip === "dumbbell" ? " DBs" : "") : "BW"}${st.ps != null ? ` (${fmtNum(st.ps)}${st.psUnit && st.psUnit !== unit ? " " + st.psUnit : ""}/side)` : ""} × ${st.r}` : `${st.r} reps`;
 
   function renderFinishModal() {
     const sess = S.active;
@@ -1680,7 +1779,9 @@
     }
     const draft = sess.draft;
     delete sess.draft;
+    if (draft && Array.isArray(draft.exercises)) draft.exercises = ssNormalize(draft.exercises.map((e) => withSessStructure(e, sess)));
     let w = sess.workoutId ? S.workouts.find((x) => x.id === sess.workoutId) : null;
+    const structEdits = w ? sessStructureEdits(sess, w) : false;
     const twinName = !w && S.workouts.some((x) => nameKey(x.name) === nameKey(sess.name));
     if (!w && draft && !twinName && S.workouts.length < MAX_WORKOUTS) {
       // Finishing an unsaved build logs it as a workout (same as Steal).
@@ -1694,8 +1795,15 @@
       const byId = new Map(sess.exercises.map((e) => [e.id, e]));
       w.exercises = (w.exercises || []).map((e) => {
         const se = byId.get(e.id);
-        return se ? { ...e, setup: se.setup || "", reps: String(se.reps || e.reps), sets: se.swappedFrom ? e.sets : se.logs.length } : e;
+        // p22: '+ Add set' sets are this workout only (the − / + stepper still sets the routine's target)
+        return se ? { ...e, setup: se.setup || "", reps: String(se.reps || e.reps), sets: se.swappedFrom ? e.sets : Math.max(1, se.logs.filter((l) => !l.extra).length) } : e;
       });
+      // p22: supersets linked/unlinked or equipment changed during Hit it → include in "Save those changes?"
+      if (structEdits) {
+        const base = sess.routineEdits || routineEditsOf(w);
+        base.exercises = ssNormalize(base.exercises.map((e) => withSessStructure(e, sess)));
+        sess.routineEdits = base;
+      }
     }
     // p21: unsaved editor edits / same-name template → ask after Finish instead of saving or duplicating silently
     offerAfterFinish(sess, twinName ? draft : null, w);
@@ -1742,6 +1850,33 @@
     }
   }
 
+  /** p22: routine move + what Hit it changed on it (equipment, bar, superset link). */
+  function withSessStructure(e, sess) {
+    const se = sess.exercises.find((x) => x.id === e.id);
+    if (!se) return e;
+    const out = { ...e };
+    delete out.barbell;
+    if (kindOf(se) === "lift") out.equip = equipOf(se);
+    if (out.equip === "barbell") out.barLb = barLbOf(se);
+    if (sess.ssEdited && !sess.structure) {
+      if (se.supersetGroup) out.supersetGroup = se.supersetGroup;
+      else delete out.supersetGroup;
+    }
+    return out;
+  }
+  /** Did this Hit it change supersets or equipment vs the saved routine? */
+  function sessStructureEdits(sess, w) {
+    const wex = w.exercises || [];
+    const ids = new Set(wex.map((e) => e.id));
+    const sig = (exs) => ssRuns(exs).map((r) => exs.slice(r.start, r.end + 1).map((e) => e.id).join("+")).join("|");
+    const ssChanged = !!sess.ssEdited && !sess.structure && sig(sess.exercises.filter((e) => ids.has(e.id))) !== sig(wex);
+    const eqChanged = sess.exercises.some((se) => {
+      const we = wex.find((e) => e.id === se.id);
+      if (!we || kindOf(se) !== "lift") return false;
+      return equipOf(se) !== equipOf(we) || (equipOf(se) === "barbell" && barLbOf(se) !== barLbOf(we));
+    });
+    return ssChanged || eqChanged;
+  }
   /** p21: snapshot of unsaved editor changes on a saved routine (used for "Save changes?" after Finish). */
   function routineEditsOf(d) {
     const e = {
@@ -1994,7 +2129,7 @@
           return true;
       }
       if (!sess) return false;
-      const ex = sessEx();
+      const ex = (el.dataset.ex && sess.exercises.find((e) => e.id === el.dataset.ex)) || sessEx();
       switch (act) {
         case "ss-focus":
           S.sessIdx = Number(el.dataset.i) || 0;
@@ -2024,13 +2159,77 @@
           Store.writeLocal("unit", sess.unit);
           break;
         case "barbell":
-          ex.barbell = !isBarbellEx(ex);
+          ex.equip = isBarbellEx(ex) ? "cable" : "barbell";
+          delete ex.barbell;
           break;
+        case "equip": {
+          // p22: per-move equipment. Open sets keep their total; per-side plates are re-derived (barbell) or dropped.
+          const q = el.dataset.eq;
+          if (!EQUIPS.includes(q) || equipOf(ex) === q) return true;
+          ex.equip = q;
+          delete ex.barbell;
+          for (const l of ex.logs)
+            if (!l.done) {
+              delete l.perSide;
+              delete l.barLb;
+            }
+          break;
+        }
+        case "add-set": {
+          // p22: one more set for this move, this workout only — prefilled from the last set
+          if (ex.logs.length >= MAX_SESS_SETS) return true;
+          const last = ex.logs[ex.logs.length - 1];
+          const nl = { set: ex.logs.length + 1, weightLb: last ? last.weightLb || 0 : 0, reps: last ? last.reps : migrateReps(ex.reps), timeSeconds: last && last.timeSeconds ? last.timeSeconds : null, done: false, extra: true };
+          if (last && last.perSide != null && isBarbellEx(ex)) Object.assign(nl, { perSide: last.perSide, unit: last.unit, barLb: last.barLb });
+          ex.logs.push(nl);
+          ex.sets = ex.logs.length;
+          if (!ssRunAt(sess.exercises, sess.exercises.indexOf(ex))) S.sessIdx = sess.exercises.indexOf(ex);
+          persistActive();
+          rerenderKeep();
+          toast(`Set ${nl.set} added to ${ex.name}`, "ok");
+          return true;
+        }
+        case "rm-set": {
+          const n = Number(el.dataset.set);
+          const l = ex.logs.find((x) => x.set === n);
+          if (!l || !l.extra || ex.logs.length <= 1) return true;
+          ex.logs = ex.logs.filter((x) => x !== l).map((x, k) => ({ ...x, set: k + 1 }));
+          ex.sets = ex.logs.length;
+          break;
+        }
+        case "sess-ss": {
+          // p22: link this move with the next one for this workout (A1/A2, alternate, rest after each round)
+          const i = Number(el.dataset.i);
+          const exs = sess.exercises;
+          if (sess.structure || !exs[i] || !exs[i + 1]) return true;
+          if (exs[i].supersetGroup && exs[i].supersetGroup === exs[i + 1].supersetGroup) return true;
+          ssToggle(exs, i);
+          sess.ssEdited = true;
+          const r = ssRunAt(exs, i);
+          const nx = r && ssNext(exs, r);
+          S.sessIdx = nx ? nx.i : r ? r.start : i;
+          S.rest = null;
+          persistActive();
+          rerenderKeep();
+          toast(`Superset ${r ? r.letter : ""}: ${exs.slice(r.start, r.end + 1).map((e) => e.name).join(" + ")}`, "ok");
+          return true;
+        }
+        case "sess-ss-unlink": {
+          const exs = sess.exercises;
+          const r = ssRunAt(exs, Number(el.dataset.i));
+          if (!r || sess.structure) return true;
+          for (let j = r.start; j <= r.end; j++) delete exs[j].supersetGroup;
+          sess.ssEdited = true;
+          S.sessIdx = Math.min(Math.max(S.sessIdx, r.start), r.end);
+          S.rest = null;
+          break;
+        }
         case "bar":
           changeBar(ex, Number(el.dataset.lb), sess.unit);
           break;
         case "sess-sets": {
-          const n = Math.min(8, Math.max(1, ex.logs.length + Number(el.dataset.d)));
+          const d = Number(el.dataset.d);
+          const n = d > 0 ? Math.min(MAX_SESS_SETS, ex.logs.length + 1) : Math.max(1, ex.logs.length - 1);
           if (n > ex.logs.length) {
             const last = ex.logs[ex.logs.length - 1];
             const nl = { set: n, weightLb: last ? last.weightLb : 0, reps: last ? last.reps : 8, timeSeconds: null, done: false };
@@ -2051,6 +2250,11 @@
             l.barLb = barLbOf(ex);
           }
           if (l.done && kindOf(ex) === "lift") l.unit = sess.unit;
+          if (l.done && !isBarbellEx(ex)) {
+            delete l.perSide;
+            delete l.barLb;
+          }
+          if (l.done && kindOf(ex) === "lift") l.equip = equipOf(ex);
           const run = ssRunAt(sess.exercises, sess.exercises.indexOf(ex));
           if (run && l.done) {
             // superset: jump to the next move's same set; rest only once the round is complete
@@ -2118,7 +2322,7 @@
           l.unit = unit;
         }
         const pw = document.querySelector(`[data-pw="${ex.id}:${l.set}"]`);
-        if (pw) pw.innerHTML = per ? platesHtml(l, unit, ex) : convHtml(l, unit); // in place — a re-render would eat the Log tap
+        if (pw) pw.innerHTML = per ? platesHtml(l, unit, ex) : convHtml(l, unit, ex); // in place — a re-render would eat the Log tap
       } else if (f === "bar" && per) {
         const v = t.value.trim().replace(",", ".");
         if (v === "" || Number.isNaN(Number(v))) return true;
@@ -2127,7 +2331,7 @@
           const pw = document.querySelector(`[data-pw="${ex.id}:${x.set}"]`);
           if (pw) pw.innerHTML = platesHtml(x, unit, ex);
         }
-        document.querySelectorAll('[data-act="bar"]').forEach((b) => b.classList.toggle("on", Number(b.dataset.lb) === barLbOf(ex)));
+        document.querySelectorAll(`[data-act="bar"][data-ex="${CSS.escape(ex.id)}"]`).forEach((b) => b.classList.toggle("on", Number(b.dataset.lb) === barLbOf(ex)));
       }
       persistActive();
       return true;
@@ -2166,6 +2370,7 @@
         targetReps: lift ? migrateReps(e.reps) : String(e.reps || ""),
         restSec: e.restSeconds ?? 60,
         note: e.setup || "",
+        ...(lift ? { equip: equipOf(e) } : {}),
       };
       const sl = ssl.get(e.id);
       if (sl) Object.assign(m, { superset: sl.letter, ssLabel: sl.label, label: `${sl.label} ${e.name}` });
@@ -2554,7 +2759,8 @@
     const nx = {
       ...nx0,
       sets: remaining,
-      barbell: isBarbellEx(nx0),
+      equip: equipOf(nx0),
+      barbell: undefined,
       barLb: barLbOf(nx0),
       setup: "",
       swappedFrom: old.swappedFrom && !partial ? old.swappedFrom : old.name,
