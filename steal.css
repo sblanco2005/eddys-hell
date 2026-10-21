@@ -502,3 +502,18 @@ body:not(.has-bnav) .save-bar { bottom: 0; padding-bottom: calc(10px + var(--saf
 .offer-banner { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; border: 1px solid var(--accent); background: rgba(255, 77, 46, 0.08); }
 .offer-q { margin: 0; font-size: 0.98rem; font-weight: 600; }
 .offer-banner .save-bar-row .btn { min-height: 46px; }
+
+/* p22: per-move equipment, + Add set, Superset with next (Hit it) */
+.eq-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.eq-row .eq-btn { min-width: 0; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eq-hint { margin: 0; font-size: 0.9rem; }
+.eq-note { font-size: 0.85rem; }
+.ss-move .eq-row, .ss-move .bar-row { margin: 6px 0; }
+.add-set-row { list-style: none; }
+.add-set { min-height: 48px; font-size: 1.05rem; font-weight: 700; border-style: dashed; }
+.set-row.extra { border-style: dashed; }
+.set-extra-tag { margin: 4px 0 0 30px; font-size: 0.8rem; color: var(--text-dim); }
+.set-rm { appearance: none; font: inherit; font-size: 1.3rem; line-height: 1; width: 34px; height: 44px; flex: 0 0 34px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); cursor: pointer; }
+.ss-sess-tools { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 4px 0; }
+.ss-sess-tools .ss-link { font-size: 1rem; min-height: 44px; }
+.ss-block .ss-sess-tools .ss-link.on { border: 2px solid var(--ss); color: var(--text); background: color-mix(in srgb, var(--ss) 18%, transparent); }
