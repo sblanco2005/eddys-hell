@@ -163,6 +163,9 @@
   /** p21: same movement under another library name (e.g. "Bulgarian split squat" vs "Dumbbell Bulgarian split squat"). */
   const EQUIP_WORDS = /\b(dumbbells?|db|barbell|bb|kettlebells?|kb|cables?|machine|smith|bands?|ez[- ]?bar|trap[- ]?bar)\b/g;
   const moveKey = (m) => String((m && m.name) || "").toLowerCase().replace(EQUIP_WORDS, " ").replace(/[^a-z0-9]+/g, " ").trim();
+  /** p23: cardio pieces at different targets (Hyrox ladder: row 1000m … row 200m) are intentional, not duplicates. */
+  const isCardioMove = (m) => !!m && m.muscle === "cardio";
+  const targetKey = (m) => String((m && m.reps) == null ? "" : m.reps).toLowerCase().replace(/\s+/g, "").replace(/^(\d+(?:\.\d+)?)m$/, "$1"); // 600 ≡ 600m
   function dupOf(m, exs, exceptId) {
     if (!m) return null;
     const k = moveKey(m);
@@ -170,6 +173,7 @@
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
       if (!e || (exceptId && e.id === exceptId)) continue;
+      if (isCardioMove(m) && isCardioMove(e) && targetKey(m) !== targetKey(e)) continue;
       if ((m.libId || m.id) && e.libId && e.libId === (m.libId || m.id) && e !== m) return { ex: e, i };
       if (k && moveKey(e) === k) return { ex: e, i };
     }
@@ -951,6 +955,7 @@
   function onMineClick(el) {
     const act = el.dataset.act;
     const d = S.draft;
+    if (S.confirmRemove && act !== "remove" && act !== "remove-draft") S.confirmRemove = null; // p23: never stays armed
     switch (act) {
       case "go-gym":
         return setTab("gym");
@@ -1123,6 +1128,41 @@
       }
     }
     persistDraft();
+    refreshEditorLive();
+  }
+  /** p23: typing (name, target, setup, weight) doesn't re-render (focus/caret would be lost), so patch the parts that
+   * depend on the draft in place: the sticky Save bar (dirty → Save changes enabled) and the duplicate warnings. */
+  function refreshEditorLive() {
+    const d = S.draft;
+    if (!d || S.view !== "edit") return;
+    if (S.confirmRemove) {
+      S.confirmRemove = null;
+      const rb = document.querySelector('.editor-actions [data-act="remove-draft"]');
+      if (rb) rb.textContent = "Remove workout";
+    }
+    const existing = !!d.id && S.workouts.some((w) => w.id === d.id);
+    const bar = document.querySelector(".save-bar");
+    if (bar) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = renderSaveBar(d, existing, !d.exercises.length);
+      if (tmp.firstElementChild) bar.replaceWith(tmp.firstElementChild);
+    }
+    d.exercises.forEach((ex, i) => {
+      const card = document.querySelector(`.ex-card[data-ex="${CSS.escape(ex.id)}"]`);
+      if (!card) return;
+      const dup = dupOf(ex, d.exercises.slice(0, i), ex.id);
+      let w = card.querySelector(".ex-dup");
+      if (!dup) return w && w.remove();
+      if (!w) {
+        w = document.createElement("p");
+        w.className = "ex-dup";
+        w.setAttribute("role", "note");
+        const top = card.querySelector(".ex-top");
+        if (top) top.after(w);
+        else card.prepend(w);
+      }
+      w.textContent = `⚠ Same move as #${dup.i + 1} ${dup.ex.name}. Remove one, or Replace this with a different move.`;
+    });
   }
 
   /** Extension points for the session logger (phase 3). */
